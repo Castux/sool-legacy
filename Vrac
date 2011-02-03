@@ -1,0 +1,29 @@
+Motivation
+==========
+
+- Make and use own language is fun and rewarding
+- Main use: games. Need some of the flexibility (and ease of coding) of Lua (for rapid coding of game logic), and speed of compiled languages (for performance on data)
+- Simple design, lightweight syntax: less to know, easier to use
+- Built-in useful types like variable sized array, vector2d/3d, hash table, list, with appropriate syntactic sugar for quick use
+- Automatic glue for calling C libraries: access to libc, SDL, OpenGL, etc.
+
+Design
+======
+
+- Object oriented: everything is an object, all functions are methods (<- Ruby), except the basic type "number"
+- All operators (binary and unary) are in fact syntactic sugar for method calls, and are therefore user definable, except for numbers
+- Introspection: objects know their own class, which methods they answer to, etc, which allows for late binding when type is not known at compile time, and "true" virtual methods (-> SmallTalk, ObjC). The only time we know type is when the object has been created in the same function. Otherwise it could be a child of the "apparent" type. (But it can be checked at linking whether the given class has children or not for more optimisation)
+- No globals
+- Variable declaration is automaticly done at first assignment, and type is infered from it
+- Class definition and implementation are separate: "natural" private and public members.
+- "import" command includes only class definitions from given file, while "include" is pure text insertion. Allows class def. and impl. to be in the same file without inclusion dependencies problems.
+- Arrays/Lists are homogenous: can contain different types only if they are children of the base type
+- for loops are either numeric, or iterative over arrays/lists/user defined classes
+- Methods can return several values (<- Lua), but it is part of their signature. Methods with similar names can have a different number of return values (ex: iterators with just values or index(es) + value)
+- Multivalued assignments (<- Lua) (?? Not so useful, except for swap and multi return values, that can be handled separately)
+- Variables are always references to objects (except for numbers, which are not objects). Method parameters and return values are always by reference.
+- Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. ) When passing to functions, to final value of the local ref is passed back automatically to the caller (incl. if it has been nil-ed by destruction or storage somewhere else).
+
+This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference, or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil"
+
+That also means, no superfluous copying all the time like in C++, except when needed.
