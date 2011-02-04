@@ -1,0 +1,19 @@
+Class definition and implementation
+-----------------------------------
+
+def Classname : Parent
+	
+	type membername
+	
+	[type,...] methodname([type [argname],...])
+	
+end
+
+impl Classname
+
+	type privatemember name
+	
+	[type,type...] methodname(type argname,...)
+		
+	end
+end

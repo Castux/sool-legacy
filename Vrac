@@ -13,6 +13,7 @@ Design
 - Object oriented: everything is an object, all functions are methods (<- Ruby), except the basic type "number"
 - All operators (binary and unary) are in fact syntactic sugar for method calls, and are therefore user definable, except for numbers
 - Introspection: objects know their own class, which methods they answer to, etc, which allows for late binding when type is not known at compile time, and "true" virtual methods (-> SmallTalk, ObjC). The only time we know type is when the object has been created in the same function. Otherwise it could be a child of the "apparent" type. (But it can be checked at linking whether the given class has children or not for more optimisation)
+- Classes know their name as a string
 - No globals
 - Variable declaration is automaticly done at first assignment, and type is infered from it
 - Class definition and implementation are separate: "natural" private and public members.
@@ -24,6 +25,13 @@ Design
 - Variables are always references to objects (except for numbers, which are not objects). Method parameters and return values are always by reference.
 - Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. ) When passing to functions, to final value of the local ref is passed back automatically to the caller (incl. if it has been nil-ed by destruction or storage somewhere else).
 
-This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference, or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil"
+This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference, or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
 
-That also means, no superfluous copying all the time like in C++, except when needed.
+This forced ownership gives memory a natural tree-like structure (which is what I do most of the time anyway). Deleting an object automatically deletes all the objects it references, and so on. Similarly, copying an object forces a deep copy (otherwise, the copied object would have all its members set to nil). There is even no need to overload the copy method, since it's always done the same way (?)
+
+For the few cases where we actually need multiple references to objects (ie: graphs structures), have one vector own them all, and use the indices for referencing.
+
+Plus, it allows über optimisations at compilation: within a LLMS function, there can be only one "variable" holding the object, even if the high level variable changes.
+
+- Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
+- Can use as scripts: automatically enclosed in main() if none found
