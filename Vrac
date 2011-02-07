@@ -35,3 +35,9 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 
 - Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
 - Can use as scripts: automatically enclosed in main() if none found
+- Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)
+
+- "symbols": internized string for quick comparison (<- Ruby, Lua)
+- hash tables?
+- numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
+- 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
