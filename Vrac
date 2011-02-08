@@ -41,3 +41,7 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 - hash tables?
 - numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
 - 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
+- Possibility to extend existing classes, notably built-in (compensate the absence of functions that would act on these)
+- Have a root class to allow total polymorphism by defining methods there (?). Also has the interface for init, copy, == (automaticly deep and built-in!), class, isa, etc.
+- self and super keywords (<- Objective-C) with the interesting possibility of doing self = nil and commiting suicide, while niling the outside reference (self is passed as double-ref argument too!). Or self = other. Maybe give them restricted use, like assignment only at end of method to avoid "object change" mid-method. Or make it possible and that's fun.
+- No variable shadowing (<- C#). Fits well that there is no declaration syntax either. If it already exists, it's the outside one, else, it's a new local one. Lexical scoping, though (lose stuff at block end).
