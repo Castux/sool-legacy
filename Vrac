@@ -16,16 +16,16 @@ Design
 - Classes know their name as a string
 - No globals
 - Variable declaration is automaticly done at first assignment, and type is infered from it
-- Class definition and implementation are separate: "natural" private and public members.
-- "import" command includes only class definitions from given file, while "include" is pure text insertion. Allows class def. and impl. to be in the same file without inclusion dependencies problems.
+- Class definition and implementation are combined: more "script" like and avoids multiple files per class
+- "import" command includes class definitions from other files, Lua like: run the interpreter/compiler on the main file, and everything else is included textually.
 - Arrays/Lists are homogenous: can contain different types only if they are children of the base type
 - for loops are either numeric, or iterative over arrays/lists/user defined classes
 - Methods can return several values (<- Lua), but it is part of their signature. Methods with similar names can have a different number of return values (ex: iterators with just values or index(es) + value)
-- Multivalued assignments (<- Lua) (?? Not so useful, except for swap and multi return values, that can be handled separately)
+- Multivalued assignments (<- Lua)
 - Variables are always references to objects (except for numbers, which are not objects). Method parameters and return values are always by reference.
-- Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. ) When passing to functions, the final value of the local ref is passed back automatically to the caller (incl. if it has been nil-ed by destruction or storage somewhere else).
+- Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. ) When passing to functions, the final value of the local ref is passed back automatically to the caller (incl. if it has been nil-ed by destruction or storage somewhere else. In other words, objects are in fact passed by ref-to-ref. We can modify the outside variable, not only the object it points to).
 
-This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference, or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
+This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference (normally caught by compiler), or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
 
 This forced ownership gives memory a natural tree-like structure (which is what I do most of the time anyway). Deleting an object automatically deletes all the objects it references, and so on. Similarly, copying an object forces a deep copy (otherwise, the copied object would have all its members set to nil). There is even no need to overload the copy method, since it's always done the same way (?)
 
@@ -46,7 +46,7 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 - Have a root class to allow total polymorphism by defining methods there (?). Also has the interface for init, copy, == (automaticly deep and built-in!), class, isa, etc.
 - self and super keywords (<- Objective-C) with the interesting possibility of doing self = nil and commiting suicide, while niling the outside reference (self is passed as double-ref argument too!). Or self = other. Maybe give them restricted use, like assignment only at end of method to avoid "object change" mid-method. Or make it possible and that's fun.
 - No variable shadowing (<- C#). Fits well that there is no declaration syntax either. If it already exists, it's the outside one, else, it's a new local one. Lexical scoping, though (lose stuff at block end).
-- Fancy var-in-string replacement with light syntax. No ${aha}.
+- Fancy var-in-string replacement with light syntax. No ${aha}, more like #expr, whitespace delimited: "5 + 5 = #5+5"
 
 - Collections provide the iter() method that returns an iterator object, that itself answers to next(). Return type of iter() tells the compiler which object it is, and return type(s) of next() for the local variables. next() itself can have several forms (like returns value or index + value).
 	for a in v do ... end
@@ -71,7 +71,7 @@ Lexing
 
 - Keywords are fixed, of course
 - Class names start with a capital letter
-- Variables are alpha num + underscore (start with small alpha or underscore)
+- Variables are alpha num + underscore (start with lowercase or underscore)
 - Method names are operators or like var names
 - Rest should be numbers: decimal, hexa (0x), scientific
 - Strings with var replacement are in "...", raw unescaped strings in '...'

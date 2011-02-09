@@ -43,6 +43,8 @@ local Operators =
 local ClassName = token( 'ClassName', R'AZ' * R('AZ','az','09','__') ^ 0 )
 local Name = token( 'Name', Operators + R('az','__') * R('AZ','az','09','__') ^ 0 )
 
+local Symbol = token( 'Symbol', P'@' * (1 - Blank)^1 )
+
 local Digit = R'09'
 
 local Decimal = Digit ^ 1
@@ -53,7 +55,7 @@ local Number = token('Number', Hexadecimal + Float + Decimal)
 
 local Comment = token('Comment', P'--' * (1 - P'\n') ^ 0 )
 
-local AnyToken = Comment + Specials + Name +
+local AnyToken = Comment + Specials + Symbol + Name +
 	ClassName + Number
 
 test = [[
@@ -76,6 +78,8 @@ methods
 		priv = a.getPriv() -- same thing!
 		
 		a,b = <1,3,4>,<2,4,5>
+		
+		sym = @aoisj_%&¤
 		
 		c = a x b -- cross product ~ c = a.x(b)
 		c = a * b -- dot product
