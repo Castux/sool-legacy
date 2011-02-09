@@ -1,0 +1,19 @@
+chunk := 		block |
+				{ class_def }
+			
+class_def :=	'class' ClassName [ ':' ClassName ]
+				{ type Name }
+				[ 'methods' { meth_def } ]
+				'end'
+				
+meth_def :=		[ type { ',' type } ]
+				( operator | Name )
+				'(' { type Name [ ',' ] } ')'
+				block
+				'end'
+
+type :=			'num' | 'vec' | 'str' |
+				ClassName |
+				'[' type ']' |
+				'/' type '/' |
+				'{' { type  [ ',' ] } '}'

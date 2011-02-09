@@ -1,22 +1,16 @@
 Class definition and implementation
 -----------------------------------
 
-class Classname : Parent
+class A : B
 	
-	type membername
-	
+	type name
+
+methods	
 	[type,...] methodname([type [argname],...])
 	
 end
 
-impl Classname
-
-	type privatemembername
-	
-	[type,type...] methodname(type argname,...)
-		
-	end
-end
+(private attribute possibly to add later)
 
 Expression (anything that has a value)
 ======================================

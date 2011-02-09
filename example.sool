@@ -1,17 +1,37 @@
-class Blah : Bloh
+class Blah : Root
     
     num i
     vec v
+    {num vec} somePack
+    str s
     
-    num,num getSomething(vec)
-    voidfunc()
-end
+    -- type try-outs
+    
+    num arr someArray
+    num arr arr grid
+    Blah list someList
+    vec list arr hum
+    
+	[num] someArray
+	[[num]] grid
+	/Blah/ someList			<-- these win for now
+	[/vec/] hum
+	
+	num* someArray
+	num** grid
+	Blah^ someList
+	vec^* hum
+	
+	*num someArray
+	**num grid
+	^Blah someList
+	*^vec hum
+	
+    private num priv
 
-impl Blah
+methods
     
-    num priv
-    
-    num,num getSomething(vec v)
+    num,num getSomething(vec v) -- haha local variable shadows member! bad!
         return v.x, v.y
     end
     
@@ -19,11 +39,12 @@ impl Blah
         return priv
     end
     
-    voidfunc()
+    private voidfunc()
         -- do things
     end
 end
 
+class Root methods    -- meh, not so nice
 num main([str])
     
     a = Blah()
@@ -40,6 +61,8 @@ num main([str])
     
     d = [1,2,3,a*b] -- array
     
+    l = /1,2,3,4/	-- list
+           
     e = {1,Blah(),<3,4,5>}  -- pack
     
     somenum = 5.+(4) -- blah
@@ -49,8 +72,10 @@ num main([str])
     n += 3 -- n.+=(3)
     
     for i,v in d do
-        print v     -- v.print()
-    end
+        print "#i,#v"     -- Root:print("%s,%s".format(i.to_s(),v.to_s()))
+    end    				  -- Or something like that
+    
     
     return x*y
+end
 end
