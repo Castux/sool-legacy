@@ -42,3 +42,16 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 - hash tables?
 - numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
 - 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
+
+- Fancy var-in-string replacement with light syntax. No ${aha}
+
+Lexing
+======
+
+- Keywords are fixed, of course
+- Class names start with a capital letter
+- Variables are alpha num + underscore (start with small alpha or underscore)
+- Method names are operators or like var names
+- Rest should be numbers: decimal, hexa (0x), scientific
+- Strings with var replacement are in "...", raw unescaped strings in '...'
+- Internized symbols as @blah (or something)

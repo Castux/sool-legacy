@@ -1,17 +1,13 @@
-class Blah : Bloh
+class Blah : Root
     
     num i
     vec v
     
-    num,num getSomething(vec)
-    voidfunc()
-end
+    private num priv
 
-impl Blah
+methods
     
-    num priv
-    
-    num,num getSomething(vec v)
+    num,num getSomething(vec v) -- haha local variable shadows member! bad!
         return v.x, v.y
     end
     
@@ -19,11 +15,12 @@ impl Blah
         return priv
     end
     
-    voidfunc()
+    private voidfunc()
         -- do things
     end
 end
 
+class Root methods    -- meh, not so nice
 num main([str])
     
     a = Blah()
@@ -53,4 +50,5 @@ num main([str])
     end
     
     return x*y
+end
 end
