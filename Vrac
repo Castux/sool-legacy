@@ -38,12 +38,29 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 - A "pack". Kind of struct without named fields, that can be used without declaring it. Still type checked when adding it to arrays or passing to functions. Always copied (like numbers), cannot be refered to. Allows tight packing in arrays without the class overhead (pointer to class). Accessed using numerical indexes (like would do for heterogenous lists in Lua). Anything "bigger" or which needs named fields or pass by reference should be a class (even a methodless class, which would still inherit init, and copy and such)
 - "unreachable" return function.
 - Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)
-- "symbols": internized string for quick comparison (<- Ruby, Lua)
-- hash tables?
+- "symbols": hashed string casted to num for quick comparison (<- Ruby, Lua). For instance FVN-32. Regular strings can be hashed if need be but there are character restrictions
+- association tables?
 - numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
 - 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
+- Fancy var-in-string replacement with light syntax. No ${aha}.
 
-- Fancy var-in-string replacement with light syntax. No ${aha}
+- Collections provide the iter() method that returns an iterator object, that itself answers to next(). Return type of iter() tells the compiler which object it is, and return type(s) of next() for the local variables. next() itself can have several forms (like returns value or index + value).
+	for a in v do ... end
+	--->
+	it = iter v
+	a = next it
+	while a do
+		...
+		a = next it
+	end
+
+Multi iterator solution: if the given object answers to next() consider it the iterator. Else, look for iter().
+
+	for l in lines file do end
+	for l in words file do end
+	for c in chars file do end
+
+- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
 
 Lexing
 ======
