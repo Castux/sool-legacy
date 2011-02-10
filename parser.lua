@@ -62,13 +62,20 @@ function chunk()
 	
 	local t = { node = 'chunk' }
 	
+	-- block
+	
+	if peek() ~= 'class' then
+		t.block = block()
+	
 	-- { class_def }
 	
-	while( peek() == 'class' ) do
-		local cl = class()
-		t[#t+1] = cl
+	else
+		while( peek() == 'class' ) do
+			local cl = class()
+			t[#t+1] = cl
+		end
 	end
-	
+
 	debug'Leaving chunk'
 	
 	return t
@@ -187,6 +194,12 @@ function type()
 	end
 	
 	debug'Leaving type'
+	
+	return t
+end
+
+function block()
+	local t = { node = 'block' }
 	
 	return t
 end
