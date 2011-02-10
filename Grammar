@@ -17,3 +17,15 @@ type :=			'num' | 'vec' | 'str' |
 				'[' type ']' |
 				'/' type '/' |
 				'{' { type  [ ',' ] } '}'
+
+block :=		{ stat [ ';' ] }
+				[ break | continue | return { exp [ ',' ] } ]
+
+stat :=			'do' block 'end' |
+				'while' exp 'dö́' block 'end' |
+				'if' exp 'then' block
+					{ 'elseif' exp 'then' block }
+					[ 'else' block ]
+				'end' |
+				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
+				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'

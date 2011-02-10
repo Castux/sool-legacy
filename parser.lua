@@ -1,11 +1,13 @@
 local tokens
 
 -- look ahead
-local function peek()
-	if #tokens == 0 then
+local function peek(n)
+	local n = n or 1
+
+	if not tokens[n] then
 		return nil
 	else
-		return tokens[1][1]
+		return tokens[n][1]
 	end
 end
 
@@ -49,7 +51,7 @@ end
 -- Grammar rules --
 -------------------
 
-local chunk, class, type, block, method
+local chunk, class, type, block, method, stat, exp
 
 --[[
 chunk := 		block |
@@ -262,8 +264,145 @@ method = function()
 	return t
 end
 
+--[[
+block :=		{ stat [ ';' ] }
+				[ break | continue | return { exp [ ',' ] } ]
+]]
+
 block = function()
+	
+	debug'Entering block'
+	
 	local t = { node = 'block' }
+	
+	-- { stat }
+	while peek() ~= 'end' and peek() ~= 'else' and peek() ~= 'elseif' and 
+		peek() ~= 'break' and peek() ~= 'continue' and peek() ~= 'return' and
+		peek() ~= ';' do
+		
+		t[#t+1] = stat()
+		accept ';'
+	end
+	
+	-- [ break | continue | return { exp [ ',' ] } ]
+	if accept 'break' then
+		t[#t+1] = { node = 'break' }
+	
+	elseif accept 'continue' then
+		t[#t+1] = { node = 'continue' }
+	
+	-- return { exp [ ',' ] }
+	elseif accept 'return' then
+		local n = { node = 'return', vals = {} }
+		
+		while peek() ~= 'end' do
+			n.vals[#n.vals+1] = exp()
+			accept ','
+		end
+		
+		t[#t+1] = n
+	end
+		
+	debug'Leaving block'
+	
+	return t
+end
+
+stat = function()
+	
+	local t = {}
+	
+	debug'Entering stat'
+	
+	-- 'do' block 'end'
+	if accept 'do' then
+		t = block()
+		expect 'end'
+	
+	-- 'while' exp 'dö́' block 'end'
+	elseif accept 'while' then
+		t.node = 'while'
+		
+		t.exp = exp()
+		expect 'do'
+		t.body = block()
+		expect 'end'
+	
+	-- 'if'
+	elseif accept 'if' then
+		t.node = 'if'
+		t.tests = {}
+		
+		-- exp 'then' block
+		-- { 'elseif' exp 'then' block }
+		repeat
+			local test = {}
+			test.cond = exp()
+			expect 'then'
+			test.body = block()
+			
+			t.tests[#t.tests+1] = test	
+		until not accept 'elseif'
+	
+		-- [ 'else' block ]
+		if accept 'else' then
+			t.default = block()
+		end
+		
+		expect 'end'
+	
+	-- 'for' Name '=' exp ',' exp [ ',' exp ] do block end
+	elseif peek() == 'for' and peek(3) == '=' then
+		t.node = 'num_for'
+				
+		expect 'for'
+		t.var = expect 'Name'
+		expect '='
+		
+		t[1] = exp()
+		expect ','
+		t[2] = exp()
+		
+		if accept ',' then
+			t[3] = exp()
+		end
+		
+		expect 'do'
+		t.body = block()
+		expect 'end'
+	
+	-- 'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
+	elseif accept 'for' then
+		t.node = 'generic_for'
+		
+		t[1] = expect 'Name'
+		
+		while peek() ~= 'in' do
+			accept ','
+			t[#t+1] = expect 'Name'
+		end
+		
+		expect 'in'
+		t.exp = exp()
+		expect 'do'
+		t.body = block()
+		expect 'end'
+	
+	-- no empty statement
+	else
+		error("Malformed statement: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+	end
+	
+	debug'Leaving stat'
+	
+	return t
+end
+
+exp = function()
+	
+	local t = { node = 'exp' }
+	
+	t.blah = expect 'Number'
 	
 	return t
 end

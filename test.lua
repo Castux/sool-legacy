@@ -76,17 +76,13 @@ end
 
 parse_test = [[
 
-class Blah : Root
-	
-	num i
-	
+class Blah 
 methods
 
-	num,{vec,str},num fuck(num i num j, /vec/ v)
-		-- yay
-	end
-	
-	yay() end
+fuck(num a num b vec c)	
+	do end
+	do end
+end
 	
 end
 ]]

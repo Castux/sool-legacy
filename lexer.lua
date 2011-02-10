@@ -15,7 +15,9 @@ end
 local Specials = Ct(C(
 	P'class' + P'methods' + P'end' +
 	P'num' + P'vec' + P'str' + P'return' +
-	P'private' + S':.,()[]{}/<>='
+	P'do' + P'if' + P'then' + P'elseif' + P'else' +
+	P'while' + P'for' + P'in' + P'break' + P'continue' +
+	P'private' + S':.,;()[]{}/<>='
 )) * Space
 
 local Operators =
