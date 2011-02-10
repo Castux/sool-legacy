@@ -49,26 +49,24 @@ end
 -- Grammar rules --
 -------------------
 
-local chunk, class, type
+local chunk, class, type, block, method
 
 --[[
 chunk := 		block |
 				{ class_def }
 ]]
 
-function chunk()
+chunk = function()
 	
 	debug'Entering chunk'
 	
 	local t = { node = 'chunk' }
 	
 	-- block
-	
 	if peek() ~= 'class' then
 		t.block = block()
 	
-	-- { class_def }
-	
+	-- { class }
 	else
 		while( peek() == 'class' ) do
 			local cl = class()
@@ -82,13 +80,13 @@ function chunk()
 end
 
 --[[
-class_def :=	'class' ClassName [ ':' ClassName ]
+class :=		'class' ClassName [ ':' ClassName ]
 				{ [ 'private' ] type Name }
-				[ 'methods' { meth_def } ]
+				[ 'methods' { method } ]
 				'end'
 ]]
 
-function class()
+class = function()
 	
 	debug'Entering class'
 	
@@ -123,8 +121,12 @@ function class()
 	end
 	
 	-- [ 'methods' { meth_def } ]
-	if accept 'methods' then
+	t.methods = {}
 	
+	if accept 'methods' then
+		while peek() ~= 'end' do
+			t.methods[#t.methods+1] = method()
+		end
 	end
 	
 	-- 'end'
@@ -143,7 +145,7 @@ type :=			'num' | 'vec' | 'str' |
 				'{' { type  [ ',' ] } '}'
 ]]
 
-function type()
+type = function()
 	
 	debug'Entering type'
 	
@@ -170,10 +172,10 @@ function type()
 		t.array = type()
 		expect ']'
 		
-	-- '[' type ']'
+	-- '/' type '/'
 	
 	elseif accept '/' then
-		t.array = type()
+		t.list = type()
 		expect '/'
 	
 	-- '{' { type  [ ',' ] } '}'
@@ -198,7 +200,69 @@ function type()
 	return t
 end
 
-function block()
+--[[
+method :=		[ 'private' ] [ type { ',' type } ]
+				Name
+				'(' { type Name [ ',' ] } ')'
+				block
+				'end'
+]]
+
+method = function()
+	
+	debug'Entering method'
+	
+	local t = { node = 'method' }
+	
+	-- [ 'private' ]
+	if accept 'private' then
+		t.private = true
+	end
+	
+	-- [ type { ',' type } ]
+	t.ret = {}
+	
+	if peek() ~= 'Name' then
+		
+		t.ret[#t.ret+1] = type()
+		
+		while peek() == ',' do
+			expect ','
+			t.ret[#t.ret+1] = type()
+		end
+	end	
+	
+	-- Name
+	t.name = expect 'Name'
+	
+	-- '(' { type Name [ ',' ] } ')'
+	t.args = {}
+	
+	expect '('
+	while peek() ~= ')' do
+		local arg = { node = 'arg' }
+		
+		arg.type = type()
+		arg.name = expect 'Name'
+		
+		accept ','
+		
+		t.args[#t.args+1] = arg
+	end
+	expect ')'
+	
+	-- block
+	t.body = block()
+	
+	-- 'end'
+	expect 'end'
+	
+	debug'Leaving method'
+	
+	return t
+end
+
+block = function()
 	local t = { node = 'block' }
 	
 	return t

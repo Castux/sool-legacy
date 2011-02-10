@@ -1,12 +1,12 @@
 chunk := 		block |
-				{ class_def }
+				{ class }
 			
-class_def :=	'class' ClassName [ ':' ClassName ]
+class :=		'class' ClassName [ ':' ClassName ]
 				{ [ 'private' ] type Name }
-				[ 'methods' { meth_def } ]
+				[ 'methods' { method } ]
 				'end'
 				
-meth_def :=		[ 'private' ] [ type { ',' type } ]
+method :=		[ 'private' ] [ type { ',' type } ]
 				Name
 				'(' { type Name [ ',' ] } ')'
 				block

@@ -33,6 +33,8 @@ end
 
 
 lex_test = [[
+
+
 class Blah : Root
 	num a
 	vec v
@@ -73,20 +75,20 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
+
 class Blah : Root
-    
-    vec youpi
-    private Blah good
-    {str str} double_str
-    
+	
+	num i
+	
 methods
 
+	num,{vec,str},num fuck(num i num j, /vec/ v)
+		-- yay
+	end
+	
+	yay() end
+	
 end
-
-class Meh
-    num i
-end
-
 ]]
 
 tokens = lex(parse_test)

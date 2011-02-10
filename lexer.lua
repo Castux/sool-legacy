@@ -43,5 +43,5 @@ local AnyToken = Comment + Specials + Symbol + Name +
 	ClassName + Number
 
 lex = function(s)
-	return Ct( AnyToken^0 ):match(s)
+	return Ct( Space * AnyToken^0 ):match(s)
 end
