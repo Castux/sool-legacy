@@ -51,7 +51,8 @@ end
 -- Grammar rules --
 -------------------
 
-local chunk, class, type, block, method, stat, exp
+local chunk, class, type, block, method, stat, listexp, exp, atomicexp,
+	exptail
 
 --[[
 chunk := 		block |
@@ -266,7 +267,7 @@ end
 
 --[[
 block :=		{ stat [ ';' ] }
-				[ break | continue | return { exp [ ',' ] } ]
+				[ break | continue | return [ listexp ] ]
 ]]
 
 block = function()
@@ -291,13 +292,12 @@ block = function()
 	elseif accept 'continue' then
 		t[#t+1] = { node = 'continue' }
 	
-	-- return { exp [ ',' ] }
+	-- return { return [ listexp ] }
 	elseif accept 'return' then
-		local n = { node = 'return', vals = {} }
+		local n = { node = 'return' }
 		
-		while peek() ~= 'end' do
-			n.vals[#n.vals+1] = exp()
-			accept ','
+		if peek() ~= 'end' then
+			n.vals = listexp()
 		end
 		
 		t[#t+1] = n
@@ -398,11 +398,119 @@ stat = function()
 	return t
 end
 
+--[[
+listexp :=		exp { ',' exp }
+]]
+
+listexp = function()
+	
+	local t = { node = 'listexp', exps = {} }
+	
+	t.exps[1] = exp()
+	
+	while accept ',' do
+		t.exps[#t.exps+1] = exp()
+	end
+	
+	return t
+end
+
+local function begin_exp(s)
+	
+	local toks = {'Name','Number','String','nil','false','true',
+		'(','[','/','<' }
+	
+	for i,v in ipairs(toks) do
+		if s ==  v then return true end
+	end
+	
+	return false	
+end
+
+--[[
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
+				'(' exp ')' |
+				'{' [ listexp ] '}' |
+				'[' [ listexp ] ']' |
+				'/' [ listexp ] '/' |
+				'<' [ listexp ] '>'
+]]
+
+atomicexp = function()
+	
+	local t = {}
+	
+	local val = peekval()
+	
+	-- Name | Number | String | 'nil' | 'false' | 'true'
+	if accept 'Name' then
+		t.node = 'var'
+		t.name = val
+		
+	elseif accept 'Number' then
+		t.node = 'number'
+		t.val = val
+		
+	elseif accept 'String' then
+		t.node = 'string'
+		t.val = val
+	
+	elseif accept 'nil' then
+		t.node = 'nil'
+	
+	elseif accept 'true' then
+		t.node = 'true'
+	
+	elseif accept 'false' then
+		t.node = 'false'
+	
+	-- '(' exp ')'
+	elseif accept '(' then
+		t = exp()
+		expect ')'
+		
+	-- '{' [ listexp ] '}'
+	elseif accept '{' then
+		t.node = 'pack'
+		if peek() ~= '}' then
+			t.vals = listexp()
+		end
+		expect '}'
+	
+	-- '[' [ listexp ] ']'
+	elseif accept '[' then
+		t.node = 'array'
+		if peek() ~= ']' then
+			t.vals = listexp()
+		end
+		expect ']'
+		
+	-- '/' [ listexp ] '/'
+	elseif accept '/' then
+		t.node = 'list'
+		if peek() ~= '/' then
+			t.vals = listexp()
+		end
+		expect '/'
+		
+	-- '<' [ listexp ] '>'
+	elseif accept '<' then
+		t.node = 'vector'
+		if peek() ~= '>' then
+			t.vals = listexp()
+		end
+		expect '>'
+		
+	end
+	
+	return t
+end
+
 exp = function()
 	
 	local t = { node = 'exp' }
 	
-	t.blah = expect 'Number'
+	t = atomicexp()
 	
 	return t
 end

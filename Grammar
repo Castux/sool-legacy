@@ -19,7 +19,7 @@ type :=			'num' | 'vec' | 'str' |
 				'{' { type  [ ',' ] } '}'
 
 block :=		{ stat [ ';' ] }
-				[ break | continue | return { exp [ ',' ] } ]
+				[ break | continue | return [ listexp ] ]
 
 stat :=			'do' block 'end' |
 				'while' exp 'dö́' block 'end' |
@@ -29,3 +29,18 @@ stat :=			'do' block 'end' |
 				'end' |
 				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
 				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
+
+listexp :=		exp { ',' exp }
+
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
+				'(' exp ')' |
+				'{' [ listexp ] '}' |
+				'[' [ listexp ] ']' |
+				'/' [ listexp ] '/' |
+				'<' [ listexp ] '>'
+
+exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
+				'[' exp ']'
+
+exp :=			atomicexp { exptail } [ Name exp ] |
+				Name exp 	# because of this, an expression cannot be followed by another exp

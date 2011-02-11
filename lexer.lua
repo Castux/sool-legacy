@@ -17,6 +17,7 @@ local Specials = Ct(C(
 	P'num' + P'vec' + P'str' + P'return' +
 	P'do' + P'if' + P'then' + P'elseif' + P'else' +
 	P'while' + P'for' + P'in' + P'break' + P'continue' +
+	P'nil' + P'false' + P'true' +
 	P'private' + S':.,;()[]{}/<>='
 )) * Space
 

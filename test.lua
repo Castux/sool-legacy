@@ -76,12 +76,12 @@ end
 
 parse_test = [[
 
-class Blah 
+class Blah
 methods
 
 fuck(num a num b vec c)	
-	do end
-	do end
+	return <>
+	
 end
 	
 end
