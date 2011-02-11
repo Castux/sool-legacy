@@ -81,46 +81,12 @@ end
 -- Advanced lexical rules --
 ----------------------------
 
-local binop, unop
-
-unop = function(only_peek)
-	local ops = {'not','-','#'}
-	local digr = {'++','--'}
-	
-	if only_peek then
-		for i,v in ipairs(digr) do
-			if peek2() == v then
-				return true
-			end
-		end
-		
-		for i,v in ipairs(ops) do
-			if peek() == v then
-				return true
-			end
-		end
-	else
-		for i,v in ipairs(digr) do
-			if accept2(v) then
-				return v
-			end
-		end
-		
-		for i,v in ipairs(ops) do
-			if accept(v) then
-				return v
-			end
-		end
-		
-		error("Malformed unary operator: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
-	end
-
-end
+local binop
 
 binop = function(only_peek)
 
 	local ops = {'+','-','*','/','%','<','>','^','|','xor','and','or'}
-	local digr = {'+=','-=','*=','/=','%=','<=','>=','==','<<','>>',
+	local digr = {'+=','-=','*=','/=','%=','<=','>=','==','~=','<<','>>',
 		'^=','|=' }
 	
 	if only_peek then
@@ -671,12 +637,6 @@ basicexp = function()
 	
 	debug'Entering basicexp'
 	
-	-- [ Unop ]
-	local un_op
-	if unop(true) then	-- true for only peek
-		un_op = unop()
-	end
-	
 	-- atomicexp
 	local t = atomicexp()
 	
@@ -708,12 +668,6 @@ basicexp = function()
 		
 	end
 	
-	-- Wrap in unop
-	if un_op then
-		t = { node = 'unop', var = t }
-		t.unop = un_op 
-	end
-	
 	debug'Leaving basicexp'
 	
 	return t
@@ -721,7 +675,6 @@ end
 
 --[[
 exp := 			basicexp { Binop basicexp }
-				Unop basicexp
 ]]
 
 -- Happily produces a leftmost derivation! Operators are naturally

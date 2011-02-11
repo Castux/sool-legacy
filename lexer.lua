@@ -25,7 +25,7 @@ local Specials = Ct(C(
 	P'nil' + P'false' + P'true' + P'private' + 
 	
 	-- operators
-	P'and' + P'or' + P'not' + P'xor' + S'~+-*/%^|#=<>' +
+	P'and' + P'or' + P'xor' + S'~+-*/%^|#=<>' +
 	
 	-- other punctuation	
 	S':.,;()[]{}/<>='
