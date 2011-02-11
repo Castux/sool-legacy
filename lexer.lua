@@ -33,7 +33,7 @@ local Specials = Ct(C(
 )) * Space
 
 local ClassName = token( 'ClassName', R'AZ' * R('AZ','az','09','__') ^ 0 )
-local Name = token( 'Name', R('az','__') * R('AZ','az','09','__') ^ 0 )
+local Name = token( 'Name', R('az','__') * R('AZ','az','09','__') ^ 0 * S'!?' ^ -1 )
 
 local Symbol = token( 'Symbol', P'@' * (1 - Blank)^1 )
 

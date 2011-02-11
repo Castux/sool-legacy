@@ -75,7 +75,7 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
-a.not and b
+
 ]]
 
 tokens = lex(parse_test)
