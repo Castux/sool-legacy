@@ -55,30 +55,29 @@ methods
 		
 		a,b = <1,3,4>,<2,4,5>
 		
-		sym = @aoisj_%&¤
+		-- sym = @aoisj_%&¤
 		
-		c = a x b -- cross product ~ c = a.x(b)
+		-- c = a x b -- cross product ~ c = a.x(b)
 		c = a * b -- dot product
 		
-		d = [1,2,3,a*b] -- array
+		d = [1,2,3,b] -- array
 		
 		l = /1,2,3,4/	-- list
 			   
 		e = {1,Blah(),<3,4,5>}  -- pack
 		
-		somenum = 5.+(4) -- blah
+		--somenum = 5.+(4) -- blah
 		somenum = 5 + 4  -- better
 	end
 end
 ]]
 
--- pp(lex(lex_test))
-
-parse_test = [[
-blah.adoThat(SomeClass(1,2,3,{//}))
+lex_test = [[
+a,b,c = Yay(),3,<a,b>
+c.kill(/1,2,3/)
 ]]
 
-tokens = lex(parse_test)
+tokens = lex(lex_test)
 
 print "Tokens\n======"
 pp(tokens)

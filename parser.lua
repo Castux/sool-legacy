@@ -468,8 +468,23 @@ stat = function()
 		expect 'end'
 	
 	-- methodcall
+	-- listbasicexp '=' listexp
 	elseif begin_exp(peek()) then
-		t = basicexp(true)	-- true for expecting call
+		local lval = listbasicexp()
+		local rval
+		
+		if accept '=' then
+			rval = listexp()
+			t.node = 'assignment'
+			t.lval = lval
+			t.rval = rval
+		else
+			if #lval == 1 and lval[1].node == 'call' then
+				t = lval[1]
+			else
+				error("Malformed call: " .. peek())
+			end
+		end
 	
 	-- no empty statement
 	else
@@ -646,7 +661,7 @@ basicexp :=		atomicexp { exptail }
 -- Happily produces a leftmost derivation (good for access which is
 -- left associative, and indexing, which is suffix )
 
-basicexp = function(expect_call)
+basicexp = function()
 	
 	debug'Entering basicexp'
 	
@@ -680,12 +695,7 @@ basicexp = function(expect_call)
 		end
 		
 	end
-	
-	if expect_call and t.node ~= 'call' then
-		error("Malformed call near " .. peek())
-		return nil
-	end
-	
+
 	debug'Leaving basicexp'
 	
 	return t
