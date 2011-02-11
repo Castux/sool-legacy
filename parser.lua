@@ -1,34 +1,36 @@
 local tokens
 
+local current
+
 -- look ahead
 local function peek(n)
 	local n = n or 1
 
-	if not tokens[n] then
+	if not tokens[current + n - 1] then
 		return nil
 	else
-		return tokens[n][1]
+		return tokens[current + n - 1][1]
 	end
 end
 
 local function peekval()
-	if #tokens == 0 then
+	if not tokens[current] then
 		return nil
 	else
-		return tokens[1][2]
+		return tokens[current][2]
 	end
 end
 
 -- advance by one token
 local function consume()
-	debug('Consumed ' .. (tokens[1][2] or tokens[1][1]))
-	table.remove(tokens,1)
+	debug('Consumed ' .. (tokens[current][2] or tokens[current][1]))
+	current = current + 1
 end
 
 -- parse optionnal token
 local function accept(tok)
 	if peek() == tok then
-		local val = tokens[1][2] or tok
+		local val = tokens[current][2] or tok
 		consume()
 		return val
 	else
@@ -39,7 +41,7 @@ end
 -- parse mandatory token
 local function expect(tok)
 	if peek() == tok then
-		local val = tokens[1][2]
+		local val = tokens[current][2]
 		consume()
 		return val
 	else
@@ -51,7 +53,7 @@ end
 -- digraphs
 
 local function peek2()
-	return peek() or 'argh' .. peek(2) or 'argh'
+	return (peek() or 'argh') .. (peek(2) or 'argh')
 end
 
 local function accept2(s)
@@ -70,7 +72,7 @@ local function expect2(s)
 		consume()
 		return s
 	else
-		error("Parse error: expected digraph" .. s .. ", found " .. peek() .. " instead (value:" .. (tokens[1][2] or '') .. ")")
+		error("Parse error: expected digraph" .. s .. ", found " .. peek() .. " instead (value:" .. (tokens[current][2] or '') .. ")")
 		return nil
 	end
 end
@@ -81,23 +83,38 @@ end
 
 local binop, unop
 
-unop = function()
+unop = function(only_peek)
 	local ops = {'not','-','#'}
 	local digr = {'++','--'}
 	
-	for i,v in ipairs(ops) do
-		if accept(v) then
-			return v
+	if only_peek then
+		for i,v in ipairs(digr) do
+			if peek2() == v then
+				return true
+			end
 		end
-	end
-	
-	for i,v in ipairs(digr) do
-		if accept2(v) then
-			return v
+		
+		for i,v in ipairs(ops) do
+			if peek() == v then
+				return true
+			end
 		end
+	else
+		for i,v in ipairs(digr) do
+			if accept2(v) then
+				return v
+			end
+		end
+		
+		for i,v in ipairs(ops) do
+			if accept(v) then
+				return v
+			end
+		end
+		
+		error("Malformed unary operator: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
-	
-	error("Malformed unary operator: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+
 end
 
 binop = function(only_peek)
@@ -108,36 +125,38 @@ binop = function(only_peek)
 	
 	if only_peek then
 	-- don't consume
-			
+		
+		-- test digraphs first, or they never get used
+		for i,v in ipairs(digr) do
+			if peek2() == v then
+				return true
+			end
+		end	
+		
 		for i,v in ipairs(ops) do
 			if peek() == v then
 				return true
 			end
 		end
 		
-		for i,v in ipairs(digr) do
-			if peek2() == v then
-				return true
-			end
-		end
-
 		return false
 	-- consume	
 	else
+		for i,v in ipairs(digr) do
+			if accept2(v) then
+				return v
+			end
+		end
+		
 		for i,v in ipairs(ops) do
 			if accept(v) then
 				return v
 			end
 		end
 		
-		for i,v in ipairs(digr) do
-			if accept2(v) then
-				return v
-			end
-		end
+		error("Malformed binary operator: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
-		
-	error("Malformed binary operator: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+
 end
 
 -------------------
@@ -289,7 +308,7 @@ type = function()
 		expect '}'
 		
 	else
-		error("Malformed type: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+		error("Malformed type: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
 	
 	debug'Leaving type'
@@ -487,7 +506,7 @@ stat = function()
 	
 	-- no empty statement
 	else
-		error("Malformed statement: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+		error("Malformed statement: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
 	
 	debug'Leaving stat'
@@ -544,7 +563,7 @@ end
 begin_exp = function(s)
 	
 	local toks = {'Name','Number','String','nil','false','true',
-		'(','[','/','<' }
+		'(','[','/','<','not','+','-'}
 	
 	for i,v in ipairs(toks) do
 		if s == v then return true end
@@ -630,7 +649,7 @@ atomicexp = function()
 		expect '>'
 	
 	else
-		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
 	
 	debug'Leaving atomicexp'
@@ -651,6 +670,12 @@ basicexp :=		atomicexp { exptail }
 basicexp = function()
 	
 	debug'Entering basicexp'
+	
+	-- [ Unop ]
+	local un_op
+	if unop(true) then	-- true for only peek
+		un_op = unop()
+	end
 	
 	-- atomicexp
 	local t = atomicexp()
@@ -683,6 +708,12 @@ basicexp = function()
 		
 	end
 	
+	-- Wrap in unop
+	if un_op then
+		t = { node = 'unop', var = t }
+		t.unop = un_op 
+	end
+	
 	debug'Leaving basicexp'
 	
 	return t
@@ -690,6 +721,7 @@ end
 
 --[[
 exp := 			basicexp { Binop basicexp }
+				Unop basicexp
 ]]
 
 -- Happily produces a leftmost derivation! Operators are naturally
@@ -699,9 +731,10 @@ exp = function()
 	
 	debug'Entering exp'
 	
-	-- basicexp { Binop basicexp }
+	local t
 	
-	local t = basicexp()
+	-- basicexp { Binop basicexp }
+	t = basicexp()
 	
 	while binop(true) do	-- true for only peeking
 		t = { node = 'binop', left = t }
@@ -716,6 +749,7 @@ end
 
 function parse(toks)
 	tokens = toks
+	current = 1
 	
 	-- add end mark
 	tokens[#tokens+1] = {'EOF'}

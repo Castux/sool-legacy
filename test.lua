@@ -75,7 +75,7 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
-
+a+b * a.name
 ]]
 
 tokens = lex(parse_test)
