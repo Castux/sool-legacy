@@ -467,8 +467,9 @@ stat = function()
 		t.body = block()
 		expect 'end'
 	
+	-- methodcall
 	elseif begin_exp(peek()) then
-		t = exp()
+		t = basicexp(true)	-- true for expecting call
 	
 	-- no empty statement
 	else
@@ -544,7 +545,8 @@ atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 				'{' [ listbasicexp ] '}' |
 				'[' [ listbasicexp ] ']' |
 				'/' [ listbasicexp ] '/' |
-				'<' [ listbasicexp ] '>'
+				'<' [ listbasicexp ] '>' |
+				ClassName [ '(' [ listexp ] ')' ]
 ]]
 
 atomicexp = function()
@@ -614,6 +616,17 @@ atomicexp = function()
 		end
 		expect '>'
 	
+	-- ClassName [ '(' [ listexp ] ')' ]
+	elseif accept 'ClassName' then
+		t.node = 'instanciation'
+		t.class = val
+		if accept '(' then
+			if peek() ~= ')' then
+				t.args = listexp()
+			end
+			expect ')'
+		end
+	
 	else
 		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
@@ -633,7 +646,7 @@ basicexp :=		atomicexp { exptail }
 -- Happily produces a leftmost derivation (good for access which is
 -- left associative, and indexing, which is suffix )
 
-basicexp = function()
+basicexp = function(expect_call)
 	
 	debug'Entering basicexp'
 	
@@ -666,6 +679,11 @@ basicexp = function()
 			end
 		end
 		
+	end
+	
+	if expect_call and t.node ~= 'call' then
+		error("Malformed call near " .. peek())
+		return nil
 	end
 	
 	debug'Leaving basicexp'

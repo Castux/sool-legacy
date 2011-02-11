@@ -28,14 +28,16 @@ stat :=			'do' block 'end' |
 					[ 'else' block ]
 				'end' |
 				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
-				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
+				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end' |
+				methodcall
 
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 				'(' exp ')' |
 				'{' [ listbasicexp ] '}' |
 				'[' [ listbasicexp ] ']' |
 				'/' [ listbasicexp ] '/' |
-				'<' [ listbasicexp ] '>'
+				'<' [ listbasicexp ] '>' |
+				ClassName [ '(' [ listexp ] ')' ]
 
 exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
 				'[' exp ']'
@@ -47,3 +49,5 @@ exp := 			basicexp { Binop basicexp }
 listexp :=		exp { ',' exp }
 
 listbasicexp :=	basicexp { ',' basicexp }
+
+methodcall :=	basicexp (with a 'call' as top node)

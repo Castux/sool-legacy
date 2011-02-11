@@ -75,7 +75,7 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
-
+blah.adoThat(SomeClass(1,2,3,{//}))
 ]]
 
 tokens = lex(parse_test)
@@ -88,3 +88,4 @@ print "Parsing\n======="
 
 par = parse(tokens)
 pp(par)
+print ''
