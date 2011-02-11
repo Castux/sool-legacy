@@ -75,15 +75,8 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
-
-class Blah
-methods
-
-fuck(num a num b vec c)	
-	return <>
-	
-end
-	
+for i = 1,5 do
+	print i
 end
 ]]
 

@@ -35,7 +35,7 @@ local Digit = R'09'
 
 local Decimal = Digit ^ 1
 local Hexadecimal = P '0' * S 'xX' * R('09', 'AF', 'af') ^ 1
-local Float = ( Digit^1 * (P'.' * Digit^0)^-1 + P'.' * Digit^1) *
+local Float = (Digit^1 * P'.' * Digit^1 + Digit^1) *
                      (S'eE' * S'-+'^-1 * Digit^1)^-1
 local Number = token('Number', Hexadecimal + Float + Decimal)
 
@@ -46,5 +46,5 @@ local AnyToken = Comment + Specials + Symbol + Name +
 	ClassName + Number
 
 lex = function(s)
-	return Ct( Space * AnyToken^0 ):match(s)
+	return Ct( Space * AnyToken^0 * -1 ):match(s)
 end

@@ -279,7 +279,7 @@ block = function()
 	-- { stat }
 	while peek() ~= 'end' and peek() ~= 'else' and peek() ~= 'elseif' and 
 		peek() ~= 'break' and peek() ~= 'continue' and peek() ~= 'return' and
-		peek() ~= ';' do
+		peek() ~= ';' and peek() ~= 'EOF' do
 		
 		t[#t+1] = stat()
 		accept ';'
@@ -402,14 +402,16 @@ end
 listexp :=		exp { ',' exp }
 ]]
 
+-- Does not return a node, just a list
+
 listexp = function()
 	
-	local t = { node = 'listexp', exps = {} }
+	local t = {}
 	
-	t.exps[1] = exp()
+	t[1] = exp()
 	
 	while accept ',' do
-		t.exps[#t.exps+1] = exp()
+		t[#t+1] = exp()
 	end
 	
 	return t
@@ -500,17 +502,74 @@ atomicexp = function()
 			t.vals = listexp()
 		end
 		expect '>'
-		
+	
+	else
+		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
 	end
 	
 	return t
 end
 
+--[[
+exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
+				'[' exp ']'
+				
+exp :=			atomicexp { exptail } [ Name exp ] |
+				Name exp
+]]
+
+
 exp = function()
 	
-	local t = { node = 'exp' }
+	-- Treat non left-factored Name first
+	if peek() == 'Name' and peek(2) == 'Name' and begin_exp(peek(3)) then	
+		-- Use the general expression later
+	elseif peek() == 'Name' and peek(2) ~= '[' and begin_exp(peek(2)) then
+		-- Name exp
+		local t = { node = 'unop' }
+		t.name = expect 'Name'
+		t.var = exp()
+		
+		return t
+	end
 	
-	t = atomicexp()
+	-- atomicexp
+	local t = atomicexp()
+	
+	-- { exptail }
+	while peek() == '.' or peek() == '[' do
+		t = { var = t }
+		
+		-- '[' exp ']'
+		if accept '[' then
+			t.node = 'index'
+			t.index = exp()
+			expect ']'
+		
+		-- '.' Name [ '(' [ listexp ] ')' ]
+		elseif accept '.' then
+			
+			t.name = expect 'Name'
+			
+			if accept '(' then
+				t.node = 'call'
+				if peek() ~= ')' then
+					t.args = listexp()
+				end
+				expect ')'
+			else
+				t.node = 'member_access'
+			end
+		end
+		
+	end
+	
+	-- [ Name exp ]
+	local val = peekval()
+	if accept 'Name' then
+		t = { left = t, binop = val }
+		t.right = exp()
+	end
 	
 	return t
 end

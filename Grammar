@@ -43,4 +43,4 @@ exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
 				'[' exp ']'
 
 exp :=			atomicexp { exptail } [ Name exp ] |
-				Name exp 	# because of this, an expression cannot be followed by another exp
+				Name exp 	# Except if exp starts in '['. Maybe semantic analyzer can catch it back if Name is not a var or does not answer to []
