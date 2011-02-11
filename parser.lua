@@ -314,8 +314,12 @@ method = function()
 		end
 	end	
 	
-	-- Name
-	t.name = expect 'Name'
+	-- ( Name | 'op' Binop )	
+	if accept 'op' then
+		t.name = binop()
+	else
+		t.name = expect 'Name'
+	end
 	
 	-- '(' { type Name [ ',' ] } ')'
 	t.args = {}

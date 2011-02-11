@@ -22,7 +22,7 @@ local Specials = Ct(C(
 	P'num' + P'vec' + P'str' + P'return' +
 	P'do' + P'if' + P'then' + P'elseif' + P'else' +
 	P'while' + P'for' + P'in' + P'break' + P'continue' +
-	P'nil' + P'false' + P'true' + P'private' + 
+	P'nil' + P'false' + P'true' + P'private' + P'op' +
 	P'and' + P'or' + P'xor' ) * #(1 - R('AZ','az','09','__') ) + 
 
 	-- other punctuation	

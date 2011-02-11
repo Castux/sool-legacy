@@ -50,10 +50,12 @@ methods
 		
 		for x,y in a do
 			x2,y2 = a.getSomething(<x,y>)
+			if x2 == y2 then break end
 		end
 		
 		while priv do
 			priv = a.getPriv()
+			if priv.ahah?() then continue end
 		end
 				
 		a,b = <1,3,4>,<2,4,5>
@@ -73,6 +75,10 @@ methods
 		somenum = 5 + 4
 		
 		5.double()[3] = @meh
+	end
+	
+	num op<<(num b)
+		return i + b.i
 	end
 end
 ]]
