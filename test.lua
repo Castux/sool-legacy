@@ -75,9 +75,7 @@ end
 -- pp(lex(lex_test))
 
 parse_test = [[
-for i = 1,5 do
-	print i
-end
+
 ]]
 
 tokens = lex(parse_test)

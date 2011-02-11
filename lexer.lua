@@ -13,21 +13,27 @@ local function token(id,patt)
 end
 
 local Specials = Ct(C(
+	
+	-- we put them all in the same bag because some of them have several
+	-- meaning or shadow each other. let the parser sort it out!
+	
+	-- reserved keywords
 	P'class' + P'methods' + P'end' +
 	P'num' + P'vec' + P'str' + P'return' +
 	P'do' + P'if' + P'then' + P'elseif' + P'else' +
 	P'while' + P'for' + P'in' + P'break' + P'continue' +
-	P'nil' + P'false' + P'true' +
-	P'private' + S':.,;()[]{}/<>='
+	P'nil' + P'false' + P'true' + P'private' + 
+	
+	-- operators
+	P'and' + P'or' + P'xor' + S'~+-*/%^|#=<>' +
+	
+	-- other punctuation	
+	S':.,;()[]{}/<>='
+	
 )) * Space
 
-local Operators =
-	P'==' + P'~=' + P'<=' + P'>=' + P'<<' + P'>>' +
-	P'+=' + P'-=' + P'*=' + P'/=' + P'%=' + P'^=' +
-	S'+-*/%^#=<>'
-
 local ClassName = token( 'ClassName', R'AZ' * R('AZ','az','09','__') ^ 0 )
-local Name = token( 'Name', Operators + R('az','__') * R('AZ','az','09','__') ^ 0 )
+local Name = token( 'Name', R('az','__') * R('AZ','az','09','__') ^ 0 )
 
 local Symbol = token( 'Symbol', P'@' * (1 - Blank)^1 )
 

@@ -30,17 +30,20 @@ stat :=			'do' block 'end' |
 				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
 				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
 
-listexp :=		exp { ',' exp }
-
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 				'(' exp ')' |
-				'{' [ listexp ] '}' |
-				'[' [ listexp ] ']' |
-				'/' [ listexp ] '/' |
-				'<' [ listexp ] '>'
+				'{' [ listbasicexp ] '}' |
+				'[' [ listbasicexp ] ']' |
+				'/' [ listbasicexp ] '/' |
+				'<' [ listbasicexp ] '>'
 
 exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
 				'[' exp ']'
 
-exp :=			atomicexp { exptail } [ Name exp ] |
-				Name exp 	# Except if exp starts in '['. Maybe semantic analyzer can catch it back if Name is not a var or does not answer to []
+basicexp :=		atomicexp { exptail }
+
+exp := 			basicexp { Binop basicexp }
+
+listexp :=		exp { ',' exp }
+
+listbasicexp :=	basicexp { ',' basicexp }

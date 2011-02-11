@@ -21,6 +21,7 @@ end
 
 -- advance by one token
 local function consume()
+	debug('Consumed ' .. (tokens[1][2] or tokens[1][1]))
 	table.remove(tokens,1)
 end
 
@@ -47,12 +48,105 @@ local function expect(tok)
 	end
 end
 
+-- digraphs
+
+local function peek2()
+	return peek() or 'argh' .. peek(2) or 'argh'
+end
+
+local function accept2(s)
+	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
+		consume()
+		consume()
+		return s
+	else
+		return nil
+	end
+end
+
+local function expect2(s)
+	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
+		consume()
+		consume()
+		return s
+	else
+		error("Parse error: expected digraph" .. s .. ", found " .. peek() .. " instead (value:" .. (tokens[1][2] or '') .. ")")
+		return nil
+	end
+end
+
+----------------------------
+-- Advanced lexical rules --
+----------------------------
+
+local binop, unop
+
+unop = function()
+	local ops = {'not','-','#'}
+	local digr = {'++','--'}
+	
+	for i,v in ipairs(ops) do
+		if accept(v) then
+			return v
+		end
+	end
+	
+	for i,v in ipairs(digr) do
+		if accept2(v) then
+			return v
+		end
+	end
+	
+	error("Malformed unary operator: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+end
+
+binop = function(only_peek)
+
+	local ops = {'+','-','*','/','%','<','>','^','|','xor','and','or'}
+	local digr = {'+=','-=','*=','/=','%=','<=','>=','==','<<','>>',
+		'^=','|=' }
+	
+	if only_peek then
+	-- don't consume
+			
+		for i,v in ipairs(ops) do
+			if peek() == v then
+				return true
+			end
+		end
+		
+		for i,v in ipairs(digr) do
+			if peek2() == v then
+				return true
+			end
+		end
+
+		return false
+	-- consume	
+	else
+		for i,v in ipairs(ops) do
+			if accept(v) then
+				return v
+			end
+		end
+		
+		for i,v in ipairs(digr) do
+			if accept2(v) then
+				return v
+			end
+		end
+	end
+		
+	error("Malformed binary operator: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
+end
+
 -------------------
 -- Grammar rules --
 -------------------
 
+local begin_exp
 local chunk, class, type, block, method, stat, listexp, exp, atomicexp,
-	exptail
+	exptail, basicexp
 
 --[[
 chunk := 		block |
@@ -388,6 +482,9 @@ stat = function()
 		t.body = block()
 		expect 'end'
 	
+	elseif begin_exp(peek()) then
+		t = exp()
+	
 	-- no empty statement
 	else
 		error("Malformed statement: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
@@ -406,6 +503,8 @@ listexp :=		exp { ',' exp }
 
 listexp = function()
 	
+	debug'Entering listexp'
+	
 	local t = {}
 	
 	t[1] = exp()
@@ -414,16 +513,41 @@ listexp = function()
 		t[#t+1] = exp()
 	end
 	
+	debug'Leaving listexp'
+	
 	return t
 end
 
-local function begin_exp(s)
+--[[
+listbasicexp :=	basicexp { ',' basicexp }
+]]
+
+-- Does not return a node, just a list
+
+listbasicexp = function()
+	
+	debug'Entering listbasicexp'
+	
+	local t = {}
+	
+	t[1] = basicexp()
+	
+	while accept ',' do
+		t[#t+1] = basicexp()
+	end
+	
+	debug'Leaving listbasicexp'
+	
+	return t
+end
+
+begin_exp = function(s)
 	
 	local toks = {'Name','Number','String','nil','false','true',
 		'(','[','/','<' }
 	
 	for i,v in ipairs(toks) do
-		if s ==  v then return true end
+		if s == v then return true end
 	end
 	
 	return false	
@@ -432,13 +556,15 @@ end
 --[[
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 				'(' exp ')' |
-				'{' [ listexp ] '}' |
-				'[' [ listexp ] ']' |
-				'/' [ listexp ] '/' |
-				'<' [ listexp ] '>'
+				'{' [ listbasicexp ] '}' |
+				'[' [ listbasicexp ] ']' |
+				'/' [ listbasicexp ] '/' |
+				'<' [ listbasicexp ] '>'
 ]]
 
 atomicexp = function()
+	
+	debug'Entering atomicexp'
 	
 	local t = {}
 	
@@ -471,41 +597,43 @@ atomicexp = function()
 		t = exp()
 		expect ')'
 		
-	-- '{' [ listexp ] '}'
+	-- '{' [ listbasicexp ] '}'
 	elseif accept '{' then
 		t.node = 'pack'
 		if peek() ~= '}' then
-			t.vals = listexp()
+			t.vals = listbasicexp()
 		end
 		expect '}'
 	
-	-- '[' [ listexp ] ']'
+	-- '[' [ listbasicexp ] ']'
 	elseif accept '[' then
 		t.node = 'array'
 		if peek() ~= ']' then
-			t.vals = listexp()
+			t.vals = listbasicexp()
 		end
 		expect ']'
 		
-	-- '/' [ listexp ] '/'
+	-- '/' [ listbasicexp ] '/'
 	elseif accept '/' then
 		t.node = 'list'
 		if peek() ~= '/' then
-			t.vals = listexp()
+			t.vals = listbasicexp()
 		end
 		expect '/'
 		
-	-- '<' [ listexp ] '>'
+	-- '<' [ listbasicexp ] '>'
 	elseif accept '<' then
 		t.node = 'vector'
 		if peek() ~= '>' then
-			t.vals = listexp()
+			t.vals = listbasicexp()
 		end
 		expect '>'
 	
 	else
 		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[1][2] or '') .. ")")
 	end
+	
+	debug'Leaving atomicexp'
 	
 	return t
 end
@@ -514,24 +642,15 @@ end
 exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
 				'[' exp ']'
 				
-exp :=			atomicexp { exptail } [ Name exp ] |
-				Name exp
+basicexp :=		atomicexp { exptail }
 ]]
 
+-- Happily produces a leftmost derivation (good for access which is
+-- left associative, and indexing, which is suffix )
 
-exp = function()
+basicexp = function()
 	
-	-- Treat non left-factored Name first
-	if peek() == 'Name' and peek(2) == 'Name' and begin_exp(peek(3)) then	
-		-- Use the general expression later
-	elseif peek() == 'Name' and peek(2) ~= '[' and begin_exp(peek(2)) then
-		-- Name exp
-		local t = { node = 'unop' }
-		t.name = expect 'Name'
-		t.var = exp()
-		
-		return t
-	end
+	debug'Entering basicexp'
 	
 	-- atomicexp
 	local t = atomicexp()
@@ -564,12 +683,33 @@ exp = function()
 		
 	end
 	
-	-- [ Name exp ]
-	local val = peekval()
-	if accept 'Name' then
-		t = { left = t, binop = val }
-		t.right = exp()
+	debug'Leaving basicexp'
+	
+	return t
+end
+
+--[[
+exp := 			basicexp { Binop basicexp }
+]]
+
+-- Happily produces a leftmost derivation! Operators are naturally
+-- left associative.
+
+exp = function()
+	
+	debug'Entering exp'
+	
+	-- basicexp { Binop basicexp }
+	
+	local t = basicexp()
+	
+	while binop(true) do	-- true for only peeking
+		t = { node = 'binop', left = t }
+		t.binop = binop()
+		t.right = basicexp()
 	end
+	
+	debug'Leaving exp'
 	
 	return t
 end
