@@ -18,16 +18,15 @@ local Specials = Ct(C(
 	-- meaning or shadow each other. let the parser sort it out!
 	
 	-- reserved keywords
-	P'class' + P'methods' + P'end' +
+	( P'class' + P'methods' + P'end' +
 	P'num' + P'vec' + P'str' + P'return' +
 	P'do' + P'if' + P'then' + P'elseif' + P'else' +
 	P'while' + P'for' + P'in' + P'break' + P'continue' +
 	P'nil' + P'false' + P'true' + P'private' + 
-	
-	-- operators
-	P'and' + P'or' + P'xor' + S'~+-*/%^|#=<>' +
-	
+	P'and' + P'or' + P'xor' ) * #(1 - R('AZ','az','09','__') ) + 
+
 	-- other punctuation	
+	S'~+-*/%^|#=<>' +
 	S':.,;()[]{}/<>='
 	
 )) * Space

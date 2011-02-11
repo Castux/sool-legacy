@@ -44,39 +44,45 @@ methods
         return v.x, v.y
     end
     
-    youSuck_Man()
+    {/num/,/vec/} youSuck_Man()
     
 		a = Blah()
 		
-		x,y = a.getSomething(<5,10e-4>)
+		for x,y in a do
+			x2,y2 = a.getSomething(<x,y>)
+		end
 		
-		priv = getPriv a
-		priv = a.getPriv() -- same thing!
-		
+		while priv do
+			priv = a.getPriv()
+		end
+				
 		a,b = <1,3,4>,<2,4,5>
 		
-		-- sym = @aoisj_%&¤
+		a.sing()	-- lone method call is a statement
 		
-		-- c = a x b -- cross product ~ c = a.x(b)
+		sym = @aoisj_%&¤
+		
 		c = a * b -- dot product
 		
-		d = [1,2,3,b] -- array
+		d = [1,2,a,b.c(e)] -- array (no operators in constructor)
 		
 		l = /1,2,3,4/	-- list
 			   
 		e = {1,Blah(),<3,4,5>}  -- pack
 		
-		--somenum = 5.+(4) -- blah
-		somenum = 5 + 4  -- better
+		somenum = 5 + 4
+		
+		5.double()[3] = @meh
 	end
 end
 ]]
 
+--[=[
 lex_test = [[
 a,b,c = Yay(),3,<a,b>
 c.kill(/1,2,3/)
 ]]
-
+]=]
 tokens = lex(lex_test)
 
 print "Tokens\n======"

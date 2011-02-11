@@ -33,7 +33,7 @@ stat :=			'do' block 'end' |
 				listbasicexp '=' listexp
 
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
-				'(' exp ')' |
+				Symbol | '(' exp ')' |
 				'{' [ listbasicexp ] '}' |
 				'[' [ listbasicexp ] ']' |
 				'/' [ listbasicexp ] '/' |

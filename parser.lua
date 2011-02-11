@@ -556,7 +556,7 @@ end
 
 --[[
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
-				'(' exp ')' |
+				Symbol | '(' exp ')' |
 				'{' [ listbasicexp ] '}' |
 				'[' [ listbasicexp ] ']' |
 				'/' [ listbasicexp ] '/' |
@@ -572,7 +572,7 @@ atomicexp = function()
 	
 	local val = peekval()
 	
-	-- Name | Number | String | 'nil' | 'false' | 'true'
+	-- Name | Number | String | 'nil' | 'false' | 'true' | Symbol
 	if accept 'Name' then
 		t.node = 'var'
 		t.name = val
@@ -583,6 +583,10 @@ atomicexp = function()
 		
 	elseif accept 'String' then
 		t.node = 'string'
+		t.val = val
+
+	elseif accept 'Symbol' then
+		t.node = 'symbol'
 		t.val = val
 	
 	elseif accept 'nil' then
