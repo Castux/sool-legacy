@@ -57,7 +57,7 @@ methods
 			priv = a.getPriv()
 			if priv.ahah?() then continue end
 		end
-				
+		
 		a,b = <1,3,4>,<2,4,5>
 		
 		a.sing()	-- lone method call is a statement
@@ -69,7 +69,7 @@ methods
 		d = [1,2,a,b.c(e)] -- array (no operators in constructor)
 		
 		l = /1,2,3,4/	-- list
-			   
+		
 		e = {1,Blah(),<3,4,5>}  -- pack
 		
 		somenum = 5 + 4

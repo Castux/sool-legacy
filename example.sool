@@ -1,81 +1,60 @@
 class Blah : Root
-    
-    num i
-    vec v
-    {num vec} somePack
-    str s
-    
-    -- type try-outs
-    
-    num arr someArray
-    num arr arr grid
-    Blah list someList
-    vec list arr hum
-    
+	
+	num i
+	vec v
+	{num vec} somePack
+	str s
+	
 	[num] someArray
 	[[num]] grid
-	/Blah/ someList			<-- these win for now
+	/Blah/ someList
 	[/vec/] hum
 	
-	num* someArray
-	num** grid
-	Blah^ someList
-	vec^* hum
-	
-	*num someArray
-	**num grid
-	^Blah someList
-	*^vec hum
-	
-    private num priv
+	private num priv
 
 methods
-    
-    num,num getSomething(vec v) -- haha local variable shadows member! bad!
-        return v.x, v.y
-    end
-    
-    num getPriv()
-        return priv
-    end
-    
-    private voidfunc()
-        -- do things
-    end
+	
+	num,num getSomething(vec v) -- haha local variable shadows member! bad!
+		return v.x, v.y
+	end
+	
+	num getPriv()
+		return priv
+	end
+	
+	private voidfunc()
+		-- do things
+	end
 end
 
-class Root methods    -- meh, not so nice
+class Root methods	-- meh, not so nice
 num main([str])
-    
-    a = Blah()
-    
-    x,y = a.getSomething(<5,10>)
-    
-    priv = getPriv a
-    priv = a.getPriv() -- same thing!
-    
-    a,b = <1,3,4>,<2,4,5>
-    
-    c = a x b -- cross product ~ c = a.x(b)
-    c = a * b -- dot product
-    
-    d = [1,2,3,a*b] -- array
-    
-    l = /1,2,3,4/	-- list
-           
-    e = {1,Blah(),<3,4,5>}  -- pack
-    
-    somenum = 5.+(4) -- blah
-    somenum = 5 + 4  -- better
-    
-    n = ++ 2
-    n += 3 -- n.+=(3)
-    
-    for i,v in d do
-        print "#i,#v"     -- Root:print("%s,%s".format(i.to_s(),v.to_s()))
-    end    				  -- Or something like that
-    
-    
-    return x*y
+	
+	a = Blah()
+	
+	x,y = a.getSomething(<5,10>)
+	
+	priv = a.getPriv()
+	
+	a,b = <1,3,4>,<2,4,5>
+	
+	c = a * b -- dot product
+	
+	d = [1,2,3,a] -- array
+	
+	l = /1,2,3,4/	-- list
+		   
+	e = {1,Blah(),<3,4,5>}  -- pack
+	
+	somenum = 5 + 4		-- 5.+(4)
+	
+	n += 3 -- n.+=(3)
+	
+	for i,v in d do
+		print "#i,#v"	 -- Root:print("%s,%s".format(i.to_s(),v.to_s()))
+	end					  -- Or something like that
+	
+	
+	return x*y
 end
 end
