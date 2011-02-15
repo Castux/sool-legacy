@@ -75,6 +75,8 @@ methods
 		somenum = 5 + 4
 		
 		5.double()[3] = @meh
+		
+		a.yay
 	end
 	
 	num op<<(num b)

@@ -482,12 +482,11 @@ stat = function()
 			t.node = 'assignment'
 			t.lval = lval
 			t.rval = rval
-		else
-			if #lval == 1 and lval[1].node == 'call' then
+		elseif #lval == 1 then
 				t = lval[1]
-			else
-				error("Malformed call: " .. peek())
-			end
+		else
+			-- we have a listexp with several exps, but no "="
+			error("Malformed multi assignment: expected '=', found " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")	
 		end
 	
 	-- no empty statement
