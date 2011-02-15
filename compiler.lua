@@ -58,9 +58,9 @@ function print_error(err,file)
 		local fline,lline = err[4].fline,err[4].lline
 		
 		if fline == lline then
-			io.write(file.name,':',fline,': ')
+			io.write(file.name,':',"\027[1;35m",fline,"\027[0m",': ')
 		else
-			io.write(file.name,':',err[4].fline,'-',err[4].lline,': ')
+			io.write(file.name,':',"\027[1;35m",err[4].fline,'-',err[4].lline,"\027[0m",': ')
 		end
 	end
 	
@@ -78,6 +78,28 @@ function print_error(err,file)
 			str = str .. file[fline]:sub(fcol,lcol)
 			str = str .. "\027[0m"
 			str = str .. file[fline]:sub(lcol+1,-1)
+			str = str .. '\n'
+			
+			str = str .. "\027[1;32m"
+			
+			local count = 1
+			local marks = file[fline] .. "="	-- special end char for EOF
+			marks = marks:gsub(".",function(s)
+				if s == '\t' or s == ' ' then
+					count = count + 1
+					return s
+				end
+				
+				if count >= fcol and count <= lcol then
+					count = count + 1
+					return '^'
+				end
+				
+				count = count + 1
+				return ' '
+			end)
+			
+			str = str .. marks .. "\027[0m\n"
 		
 		else
 			str = str .. file[fline]:sub(fcol,-1) .. '\n'
@@ -97,13 +119,17 @@ end
 
 
 function compile(path)
-
+	
+	-- Loading
+	
 	local file,err = load_file(path)
 
 	if err then
 		print_error(err)
 		return
 	end
+	
+	-- Lexing
 	
 	local tokens,err = lex(file.all)
 	
@@ -118,5 +144,17 @@ function compile(path)
 		}
 		print_error(err)
 	end
-
+	
+	pp(tokens)
+	print''
+	print'=========='
+	
+	-- Parsing
+	
+	local tree,err = parse(tokens)
+	
+	for i,v in ipairs(err) do
+		print_error(v,file)
+	end
+	
 end

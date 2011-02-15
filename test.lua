@@ -101,4 +101,4 @@ pp(par)
 print ''
 ]]
 
-compile 'example.sool'
+compile 'ex2.sool'

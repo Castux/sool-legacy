@@ -2,6 +2,22 @@ local tokens
 
 local current
 
+-- error handling
+local errors
+
+local function add_err(typ,mess,pos)
+	
+	local err =  {
+		"Compiler",
+		typ,
+		mess,
+		pos or tokens[current][3]
+	}
+	
+	errors[#errors + 1] = err
+	
+end
+
 -- look ahead
 local function peek(n)
 	local n = n or 1
@@ -23,7 +39,6 @@ end
 
 -- advance by one token
 local function consume()
-	debug('Consumed ' .. (tokens[current][2] or tokens[current][1]))
 	current = current + 1
 end
 
@@ -45,7 +60,8 @@ local function expect(tok)
 		consume()
 		return val
 	else
-		error("Parse error: expected " .. tok .. ", found " .. peek() .. " instead (value:" .. (tokens[1][2] or '') .. ")")
+		add_err("error", "expected " .. tok .. 
+			", found " .. peek() .. " instead")
 		return nil
 	end
 end
@@ -72,7 +88,8 @@ local function expect2(s)
 		consume()
 		return s
 	else
-		error("Parse error: expected digraph" .. s .. ", found " .. peek() .. " instead (value:" .. (tokens[current][2] or '') .. ")")
+		add_err("error", "expected digraph" .. s ..
+			", found " .. peek() .. " instead")
 		return nil
 	end
 end
@@ -106,7 +123,7 @@ binop = function(only_peek)
 		end
 		
 		return false
-	-- consume	
+	-- consume
 	else
 		for i,v in ipairs(digr) do
 			if accept2(v) then
@@ -120,7 +137,8 @@ binop = function(only_peek)
 			end
 		end
 		
-		error("Malformed binary operator: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
+		add_err("error", "malformed binary operator")
+		return nil
 	end
 
 end
@@ -140,24 +158,22 @@ chunk := 		block |
 
 chunk = function()
 	
-	debug'Entering chunk'
-	
 	local t = { node = 'chunk' }
 	
 	-- block
 	if peek() ~= 'class' then
 		t.block = block()
+		if not t.block then return end
 	
 	-- { class }
 	else
 		while( peek() == 'class' ) do
 			local cl = class()
+			if not cl then return end
 			t[#t+1] = cl
 		end
 	end
 
-	debug'Leaving chunk'
-	
 	return t
 end
 
@@ -170,19 +186,20 @@ class :=		'class' ClassName [ ':' ClassName ]
 
 class = function()
 	
-	debug'Entering class'
-	
 	local t = { node = 'class' }
 	
 	-- 'class'
-	expect 'class'
+	local cl = expect 'class'
+	if not cl then return end
 	
 	-- ClassName
 	t.name = expect 'ClassName'
+	if not t.name then return end
 	
 	-- [ ':' ClassName ]
 	if accept ':' then
 		t.parent = expect 'ClassName'
+		if not t.parent then return end
 	end
 	
 	-- { [ 'private' ] type Name }
@@ -196,8 +213,10 @@ class = function()
 		end
 		
 		mem.type = type()
+		if not mem.type then return end
 		
 		mem.name = expect 'Name'
+		if not mem.name then return end
 		
 		t.members[#t.members+1] = mem
 	end
@@ -207,14 +226,17 @@ class = function()
 	
 	if accept 'methods' then
 		while peek() ~= 'end' do
-			t.methods[#t.methods+1] = method()
+			local meth = method()
+			if not meth then return end
+			
+			t.methods[#t.methods+1] = meth
 		end
 	end
 	
 	-- 'end'
-	expect 'end'
 	
-	debug'Leaving class'
+	local en = expect 'end'
+	if not en then return end
 	
 	return t
 end
@@ -229,9 +251,8 @@ type :=			'num' | 'vec' | 'str' |
 
 type = function()
 	
-	debug'Entering type'
-	
 	local t = { node = 'type' }
+	local tok
 	
 	local val = peekval()
 	
@@ -252,13 +273,20 @@ type = function()
 	
 	elseif accept '[' then
 		t.array = type()
-		expect ']'
+		if not t.array then return end
+		tok = expect ']'
+		if not tok then return end
 		
 	-- '/' type '/'
 	
 	elseif accept '/' then
 		t.list = type()
-		expect '/'
+		if not t.list then return end
+		tok = expect '/'
+		if not tok then
+			add_err('info','to complete list constructor')
+			return
+		end
 	
 	-- '{' { type  [ ',' ] } '}'
 	
@@ -267,17 +295,19 @@ type = function()
 		t.pack = {}
 		
 		while peek() ~= '}' do
-			t.pack[#t.pack+1] = type()
+			tok = type()
+			if not tok then return end
+			t.pack[#t.pack+1] = tok
 			accept ','
 		end
 		
-		expect '}'
+		tok = expect '}'
+		if not tok then return end
 		
 	else
-		error("Malformed type: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
+		add_err("error","malformed type")
+		return
 	end
-	
-	debug'Leaving type'
 	
 	return t
 end
@@ -292,9 +322,8 @@ method :=		[ 'private' ] [ type { ',' type } ]
 
 method = function()
 	
-	debug'Entering method'
-	
 	local t = { node = 'method' }
+	local tok
 	
 	-- [ 'private' ]
 	if accept 'private' then
@@ -306,44 +335,58 @@ method = function()
 	
 	if peek() ~= 'Name' then
 		
-		t.ret[#t.ret+1] = type()
+		tok = type()
+		if not tok then return end
+		t.ret[#t.ret+1] = tok
 		
 		while peek() == ',' do
-			expect ','
-			t.ret[#t.ret+1] = type()
+			tok = expect ','
+			if not tok then return end
+			
+			tok = type()
+			if not tok then return end
+			t.ret[#t.ret+1] = tok
 		end
 	end	
 	
 	-- ( Name | 'op' Binop )	
 	if accept 'op' then
 		t.name = binop()
+		if not t.name then return end
 	else
 		t.name = expect 'Name'
+		if not t.name then return end
 	end
 	
 	-- '(' { type Name [ ',' ] } ')'
 	t.args = {}
 	
-	expect '('
+	tok = expect '('
+	if not tok then return end
+	
 	while peek() ~= ')' do
 		local arg = { node = 'arg' }
 		
 		arg.type = type()
+		if not arg.type then return end
+		
 		arg.name = expect 'Name'
+		if not arg.name then return end
 		
 		accept ','
 		
 		t.args[#t.args+1] = arg
 	end
-	expect ')'
+	tok = expect ')'
+	if not tok then return end
 	
 	-- block
 	t.body = block()
+	if not t.body then return end
 	
 	-- 'end'
-	expect 'end'
-	
-	debug'Leaving method'
+	tok = expect 'end'
+	if not tok then return end
 	
 	return t
 end
@@ -354,8 +397,6 @@ block :=		{ stat [ ';' ] }
 ]]
 
 block = function()
-	
-	debug'Entering block'
 	
 	local t = { node = 'block' }
 	
@@ -386,16 +427,12 @@ block = function()
 		t[#t+1] = n
 	end
 		
-	debug'Leaving block'
-	
 	return t
 end
 
 stat = function()
 	
 	local t = {}
-	
-	debug'Entering stat'
 	
 	-- 'do' block 'end'
 	if accept 'do' then
@@ -486,15 +523,13 @@ stat = function()
 				t = lval[1]
 		else
 			-- we have a listexp with several exps, but no "="
-			error("Malformed multi assignment: expected '=', found " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")	
+			add_err("error","malformed multi assignment: expected '=', found " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")	
 		end
 	
 	-- no empty statement
 	else
-		error("Malformed statement: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
+		add_err("error","malformed statement: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
-	
-	debug'Leaving stat'
 	
 	return t
 end
@@ -507,8 +542,6 @@ listexp :=		exp { ',' exp }
 
 listexp = function()
 	
-	debug'Entering listexp'
-	
 	local t = {}
 	
 	t[1] = exp()
@@ -516,8 +549,6 @@ listexp = function()
 	while accept ',' do
 		t[#t+1] = exp()
 	end
-	
-	debug'Leaving listexp'
 	
 	return t
 end
@@ -530,8 +561,6 @@ listbasicexp :=	basicexp { ',' basicexp }
 
 listbasicexp = function()
 	
-	debug'Entering listbasicexp'
-	
 	local t = {}
 	
 	t[1] = basicexp()
@@ -539,8 +568,6 @@ listbasicexp = function()
 	while accept ',' do
 		t[#t+1] = basicexp()
 	end
-	
-	debug'Leaving listbasicexp'
 	
 	return t
 end
@@ -568,8 +595,6 @@ atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 ]]
 
 atomicexp = function()
-	
-	debug'Entering atomicexp'
 	
 	local t = {}
 	
@@ -650,10 +675,8 @@ atomicexp = function()
 		end
 	
 	else
-		error("Malformed expression: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
+		add_err("error","malformed expression: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
 	end
-	
-	debug'Leaving atomicexp'
 	
 	return t
 end
@@ -669,8 +692,6 @@ basicexp :=		atomicexp { exptail }
 -- left associative, and indexing, which is suffix )
 
 basicexp = function()
-	
-	debug'Entering basicexp'
 	
 	-- atomicexp
 	local t = atomicexp()
@@ -703,8 +724,6 @@ basicexp = function()
 		
 	end
 
-	debug'Leaving basicexp'
-	
 	return t
 end
 
@@ -717,8 +736,6 @@ exp := 			basicexp { Binop basicexp }
 
 exp = function()
 	
-	debug'Entering exp'
-	
 	local t
 	
 	-- basicexp { Binop basicexp }
@@ -730,22 +747,20 @@ exp = function()
 		t.right = basicexp()
 	end
 	
-	debug'Leaving exp'
-	
 	return t
 end
 
 function parse(toks)
 	tokens = toks
 	current = 1
-	
-	-- add end mark
-	tokens[#tokens+1] = {'EOF'}
+	errors = {}
 	
 	-- apply top level rule
 	local tree = chunk()
+	if not tree then return nil,errors end
 	
-	expect 'EOF'
+	local eof = expect 'EOF'
+	if not eof then return nil,errors end
 	
-	return tree
+	return tree,errors
 end

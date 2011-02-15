@@ -1,0 +1,4 @@
+class Blah : Hello
+	
+	private /num bloh
+end

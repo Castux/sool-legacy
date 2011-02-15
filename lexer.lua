@@ -40,7 +40,7 @@ lex = function(s)
 	end
 	
 	local function newline()
-		col = 0
+		col = 1
 		index = index + 1
 		line = line + 1
 	end
@@ -53,8 +53,8 @@ lex = function(s)
 			{
 				fline = line,
 				lline = line,
-				fcol = col + 1,
-				lcol = col + 1
+				fcol = col,
+				lcol = col
 			}
 		}
 		return nil,err
@@ -180,6 +180,20 @@ lex = function(s)
 		end
 	end
 	end
+	
+	-- add end mark
+	local tok = {
+		'EOF',
+		'EOF',
+		{
+			fline=line,
+			lline=line,
+			fcol=col,
+			lcol=col
+		}
+	}
+	
+	tokens[#tokens+1] = tok
 	
 	return tokens
 end
