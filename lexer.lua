@@ -1,3 +1,31 @@
+--[[
+
+Token structure:
+================
+
+1 = type (Name, ClassName, Symbol, Number, or complete string for others)
+2 = value (string of original text)
+3 = position in file
+
+Position structure:
+===================
+
+fline,fcol = beginning of token
+lline,lcol = end of token
+
+Only strings can be multiline, but this structure is the same as in
+nodes in the parse tree.
+
+Error structure:
+================
+
+1 = origin (Lexer, Parser, Analyser...)
+2 = type (Error, Warning, Info)
+3 = message
+4 = position in file
+
+]]
+
 lex = function(s)
 
 	local line = 1
@@ -18,7 +46,18 @@ lex = function(s)
 	end
 	
 	local function lexerr()
-		return {("Lexing error at " .. line .. ":" .. col), tokens}
+		local err = {
+			"Lexer",
+			"error",
+			"unexpected symbol '" .. s:sub(index,index) .. "'",
+			{
+				fline = line,
+				lline = line,
+				fcol = col + 1,
+				lcol = col + 1
+			}
+		}
+		return nil,err
 	end
 	
 	local function addtok(val,typ)
@@ -26,10 +65,12 @@ lex = function(s)
 		local tok = {
 			typ,
 			val,
-			fline=line,
-			lline=line,
-			fcol=col,
-			lcol=(col + #val - 1)
+			{
+				fline=line,
+				lline=line,
+				fcol=col,
+				lcol=(col + #val - 1)
+			}
 		}
 		
 		tokens[#tokens+1] = tok
@@ -63,7 +104,7 @@ lex = function(s)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}]",index)
+		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}\"]",index)
 		if m then
 			addtok(m)
 			break

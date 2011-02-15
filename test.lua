@@ -1,5 +1,4 @@
-require 'lexer'
-require 'parser'
+require 'compiler'
 
 pp = function(t)
 	
@@ -71,7 +70,7 @@ methods
 		l = /1,2,3,4/	-- list
 		
 		e = {1,Blah(),<3,4,5>}  -- pack
-		
+		shut<up
 		somenum = 5 + 4
 		
 		5.double()[3] = @meh
@@ -84,8 +83,12 @@ methods
 	end
 end
 ]]
+--[[
+tokens,err = lex(lex_test)
 
-tokens = lex(lex_test)
+if not tokens then
+	pp(err)
+end
 
 print "Tokens\n======"
 pp(tokens)
@@ -96,3 +99,6 @@ print "Parsing\n======="
 par = parse(tokens)
 pp(par)
 print ''
+]]
+
+compile 'example.sool'

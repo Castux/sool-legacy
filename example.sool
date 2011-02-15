@@ -31,13 +31,9 @@ class Root methods	-- meh, not so nice
 num main([str])
 	
 	a = Blah()
-	
 	x,y = a.getSomething(<5,10>)
-	
 	priv = a.getPriv()
-	
 	a,b = <1,3,4>,<2,4,5>
-	
 	c = a * b -- dot product
 	
 	d = [1,2,3,a] -- array
@@ -51,8 +47,8 @@ num main([str])
 	n += 3 -- n.+=(3)
 	
 	for i,v in d do
-		print "#i,#v"	 -- Root:print("%s,%s".format(i.to_s(),v.to_s()))
-	end					  -- Or something like that
+		print "#i,#v"	-- Root:print("%s,%s".format(i.to_s(),v.to_s()))
+	end					-- Or something like that
 	
 	
 	return x*y
