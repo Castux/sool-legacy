@@ -23,7 +23,14 @@ lex = function(s)
 	
 	local function addtok(val,typ)
 		local typ = typ or val
-		local tok = {typ,val,line=line,start=col,fin=(col + #val - 1)}
+		local tok = {
+			typ,
+			val,
+			fline=line,
+			lline=line,
+			fcol=col,
+			lcol=(col + #val - 1)
+		}
 		
 		tokens[#tokens+1] = tok
 		
@@ -55,7 +62,7 @@ lex = function(s)
 			break
 		end
 		
-		-- Special puncutation
+		-- Special punctuation
 		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}]",index)
 		if m then
 			addtok(m)

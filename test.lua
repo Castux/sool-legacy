@@ -85,14 +85,6 @@ methods
 end
 ]]
 
---[=[
-lex_test = [[
-	    
-    -- hai
-    blah = 12198.6 + 5
-  
-]]
---]=]
 tokens = lex(lex_test)
 
 print "Tokens\n======"
