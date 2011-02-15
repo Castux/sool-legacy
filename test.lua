@@ -87,10 +87,12 @@ end
 
 --[=[
 lex_test = [[
-a,b,c = Yay(),3,<a,b>
-c.kill(/1,2,3/)
+	    
+    -- hai
+    blah = 12198.6 + 5
+  
 ]]
-]=]
+--]=]
 tokens = lex(lex_test)
 
 print "Tokens\n======"

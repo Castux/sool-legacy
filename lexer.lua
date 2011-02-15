@@ -1,55 +1,137 @@
-require 'lpeg'
-
-local P,R,S,V = lpeg.P, lpeg.R, lpeg.S, lpeg.V
-local C,Ct,Cc = lpeg.C, lpeg.Ct, lpeg.Cc
-
--- lexical elements
-
-local Blank = S' \n\t'
-local Space = Blank ^ 0
-
-local function token(id,patt)
-	return Ct(Cc(id) * C(patt) * Space)
-end
-
-local Specials = Ct(C(
-	
-	-- we put them all in the same bag because some of them have several
-	-- meaning or shadow each other. let the parser sort it out!
-	
-	-- reserved keywords
-	( P'class' + P'methods' + P'end' +
-	P'num' + P'vec' + P'str' + P'return' +
-	P'do' + P'if' + P'then' + P'elseif' + P'else' +
-	P'while' + P'for' + P'in' + P'break' + P'continue' +
-	P'nil' + P'false' + P'true' + P'private' + P'op' +
-	P'and' + P'or' + P'xor' ) * #(1 - R('AZ','az','09','__') ) + 
-
-	-- other punctuation	
-	S'~+-*/%^|#=<>' +
-	S':.,;()[]{}/<>='
-	
-)) * Space
-
-local ClassName = token( 'ClassName', R'AZ' * R('AZ','az','09','__') ^ 0 )
-local Name = token( 'Name', R('az','__') * R('AZ','az','09','__') ^ 0 * S'!?' ^ -1 )
-
-local Symbol = token( 'Symbol', P'@' * (1 - Blank)^1 )
-
-local Digit = R'09'
-
-local Decimal = Digit ^ 1
-local Hexadecimal = P '0' * S 'xX' * R('09', 'AF', 'af') ^ 1
-local Float = (Digit^1 * P'.' * Digit^1 + Digit^1) *
-                     (S'eE' * S'-+'^-1 * Digit^1)^-1
-local Number = token('Number', Hexadecimal + Float + Decimal)
-
---local Comment = token('Comment', P'--' * (1 - P'\n') ^ 0 )
-local Comment = P'--' * (1 - P'\n') ^ 0 * Space -- not captured
-
-local AnyToken = Comment + Specials + Symbol + Name +
-	ClassName + Number
-
 lex = function(s)
-	return Ct( Space * AnyToken^0 * -1 ):match(s)
+
+	local line = 1
+	local col = 1
+	local index = 1
+	
+	local tokens = {}
+	
+	local function adv(n)
+		col = col + n
+		index = index + n
+	end
+	
+	local function newline()
+		col = 0
+		index = index + 1
+		line = line + 1
+	end
+	
+	local function lexerr()
+		return {("Lexing error at " .. line .. ":" .. col), tokens}
+	end
+	
+	local function addtok(val,typ)
+		local typ = typ or val
+		local tok = {typ,val,line=line,start=col,fin=(col + #val - 1)}
+		
+		tokens[#tokens+1] = tok
+		
+		adv(#val)
+	end
+	
+	while index < #s do
+	while true do
+		local m
+		
+		-- Skip horizontal white space
+		m = s:match("^[\t ]+",index)
+		if m then
+			adv(#m)
+			break
+		end
+		
+		-- Remove comment
+		m = s:match("^%-%-[^\n]*",index)
+		if m then
+			adv(#m)
+			break
+		end
+		
+		-- End of line/empty line
+		m = s:match("^\n",index)
+		if m then
+			newline()
+			break
+		end
+		
+		-- Special puncutation
+		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}]",index)
+		if m then
+			addtok(m)
+			break
+		end
+		
+		-- Name
+		m = s:match("^[_a-z][_a-zA-Z0-9]*[%?!]?",index)
+		if m then
+			
+			-- Reserved name?
+			local res = {'class', 'methods', 'end', 'num', 'vec', 'str',
+			'return', 'do', 'if', 'then', 'elseif', 'else', 'while',
+			'for', 'in', 'break', 'continue', 'nil', 'false', 'true',
+			'private', 'op', 'and', 'or', 'xor'}
+			
+			local wasres = false
+			for i,v in ipairs(res) do
+				if m == v then
+					addtok(m)
+					wasres = true
+					break
+				end
+			end
+			
+			if not wasres then
+				addtok(m,'Name')
+			end
+			
+			break
+		end
+		
+		-- ClassName
+		m = s:match("^[A-Z][_a-zA-Z0-9]*",index)
+		if m then
+			addtok(m,'ClassName')
+			break
+		end
+		
+		-- Symbol
+		m = s:match("^@(%S+)",index)
+		if m then
+			adv(1)	-- @
+			addtok(m,'Symbol')
+			break
+		end
+		
+		-- Hex number
+		m = s:match("^0[xX]%x+",index)
+		if m then
+			addtok(m,'Number')
+			break
+		end
+		
+		-- Number with dot
+		m = s:match("^%d+%.%d+",index)
+		if m then
+			local expo = s:match("^[eE]%d+",index+#m)
+			addtok(m .. (expo or ""),'Number')
+			break
+		end
+		
+		-- Number without dot
+		m = s:match("^%d+",index)
+		if m then
+			local expo = s:match("^[eE]%d+",index+#m)
+			addtok(m .. (expo or ""),'Number')
+			break
+		end
+		
+		-- If all else fails...
+		if not m then
+			return lexerr()
+		end
+	end
+	end
+	
+	return tokens
 end
