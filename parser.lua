@@ -959,6 +959,8 @@ function While:parse()
 	if not self.cond then
 		add_err('info','as condition in while loop started at',self:firstpos())
 		return
+	else
+		self:add(self.cond)
 	end
 	
 	if not self:expect 'do' then
@@ -969,6 +971,8 @@ function While:parse()
 	self.body = Block()
 	if not self.body then
 		return
+	else
+		self:add(self.body)
 	end
 	
 	if not self:expect 'end' then
@@ -1018,6 +1022,8 @@ function If:parse()
 		if not test.cond then
 			add_err('info','as condition in if',open)
 			return
+		else
+			self:add(test.cond)
 		end
 		
 		if not self:expect 'then' then
@@ -1028,6 +1034,8 @@ function If:parse()
 		test.body = Block()
 		if not test.body then
 			return
+		else
+			self:add(test.body)
 		end
 		
 		table.insert(self.tests,test)
@@ -1038,6 +1046,8 @@ function If:parse()
 		self.default = Block()
 		if not self.default then
 			return
+		else
+			self:add(self.default)
 		end
 	end
 	
@@ -1063,6 +1073,101 @@ function If:str()
 	end
 	
 	return s .. 'end'
+end
+
+--[[
+'for' Name '=' exp ',' exp [ ',' exp ] do block end
+]]
+
+For = class(Stat)
+
+function For:init()
+	For.super.init(self)
+	
+	self.var = ""
+	self[1] = nil
+	self[2] = nil
+	self[3] = nil
+	self.body = nil
+	
+	return self:parse()
+end
+
+function For:parse()
+	
+	if not self:expect 'for' then
+		return
+	end
+	
+	if self:expect 'Name' then
+		self.var = self:lastval()
+	else
+		add_err('info','as variable for for construct',self:lastpos())
+		return
+	end
+	
+	if not self:expect '=' then
+		add_err('info','in for construct',range(self:firstpos(),peekpos()))
+		return
+	end
+	
+	self[1] = Exp()
+	if not self[1] then
+		return
+	else
+		self:add(self[1])
+	end
+	
+	if not self:expect ',' then
+		add_err('info','in for construct',range(self:firstpos(),peekpos()))
+		return
+	end
+	
+	self[2] = Exp()
+	if not self[2] then
+		return
+	else
+		self:add(self[2])
+	end
+	
+	if self:accept ',' then
+		self[3] = Exp()
+		if not self[3] then
+			return
+		else
+			self:add(self[3])
+		end
+	end
+	
+	if not self:expect 'do' then
+		add_err('info','in for construct',range(self:firstpos(),peekpos()))
+		return
+	end
+	
+	self.body = Block()
+	if not self.body then
+		return
+	else
+		self:add(self.body)
+	end
+	
+	if not self:expect 'end' then
+		add_err('info','to complete for construct',self:firstpos())
+		return
+	end
+	
+	return self
+end
+
+function For:str()
+	local s =  'for ' .. self.var .. ' = ' ..
+		self[1]:str() .. ',' .. self[2]:str() 
+	
+	if self[3] then
+		s = s .. ',' .. self[3]:str()
+	end
+	
+	return s..' do\n' .. self.body:str() .. '\n' .. 'end'
 end
 
 Exp = class()

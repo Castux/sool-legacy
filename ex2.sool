@@ -4,12 +4,8 @@ class A : B
 	{num} pacool
 methods
 	num meh()
-		if then
+		for a = , do
 			break
-		elseif then
-			continue
-		else
-			return
 		end
 	end
 end
