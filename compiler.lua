@@ -39,28 +39,40 @@ function load_file(path)
 	return file
 end
 
+-- Enclose string in ANSI escape sequences
+local function C(str,col)
+	return "\027[1;" .. 30 + col .. "m" .. str .. "\027[0m"
+end
+local function Cd(str,col)
+	return "\027[" .. 30 + col .. "m" .. str .. "\027[0m"
+end
+
 function print_error(err,file)
+	
+	local file = err[4] and file or nil
 	
 	io.write(err[1],' ')
 	
 	local col
 	if err[2] == 'error' then
-		col = "\027[1;31m"
+		col = 1
 	elseif err[2] == 'warning' then
-		col = "\027[1;33m"
+		col = 3
 	elseif err[2] == 'info' then
-		col = "\027[1;34m"
+		col = 4
 	end
 	
-	io.write(col,err[2],"\027[0m",': ')
+	io.write(C(err[2],col),': ')
 	
 	if file then
 		local fline,lline = err[4].fline,err[4].lline
 		
+		io.write(Cd(file.name,2),':')
+		
 		if fline == lline then
-			io.write(file.name,':',"\027[1;35m",fline,"\027[0m",': ')
+			io.write(Cd(fline,5),': ')
 		else
-			io.write(file.name,':',"\027[1;35m",err[4].fline,'-',err[4].lline,"\027[0m",': ')
+			io.write(Cd(err[4].fline .. '-' .. err[4].lline,5),': ')
 		end
 	end
 	
@@ -72,15 +84,11 @@ function print_error(err,file)
 		local fcol,lcol = err[4].fcol,err[4].lcol
 		
 		str = file[fline]:sub(1,fcol-1)
-		str = str .. "\027[1;31m"
 		
 		if fline == lline then
-			str = str .. file[fline]:sub(fcol,lcol)
-			str = str .. "\027[0m"
+			str = str .. C(file[fline]:sub(fcol,lcol),1)
 			str = str .. file[fline]:sub(lcol+1,-1)
 			str = str .. '\n'
-			
-			str = str .. "\027[1;32m"
 			
 			local count = 1
 			local marks = file[fline] .. "="	-- special end char for EOF
@@ -99,21 +107,20 @@ function print_error(err,file)
 				return ' '
 			end)
 			
-			str = str .. marks .. "\027[0m\n"
+			str = str .. C(marks,2) .. '\n'
 		
 		else
-			str = str .. file[fline]:sub(fcol,-1) .. '\n'
+			local colored = file[fline]:sub(fcol,-1) .. '\n'
 			
 			for i = fline+1,lline-1 do
-				str = str .. file[i] .. '\n̈́'
+				colored = colored .. file[i] .. '\n̈́'
 			end
 			
-			str = str .. file[lline]:sub(1,lcol)
-			str = str .. "\027[0m"
-			str = str .. file[lline]:sub(lcol+1,-1)
+			colored = colored .. file[lline]:sub(1,lcol)
+			str = str .. C(colored,1) .. file[lline]:sub(lcol+1,-1) .. '\n'
 		end
 		
-		io.write(str,'\n')
+		io.write(str)
 	end
 end
 
@@ -134,20 +141,19 @@ function compile(path)
 	local tokens,err = lex(file.all)
 	
 	if err then
-		print_error(err,file)
+		for i,v in ipairs(err) do
+			print_error(v,file)
+		end
 		return
 	else
 		local err = {
 			"Compiler",
 			"info",
-			"successfully lexed file ".. file.name
-		}
+			"successfully lexed file ".. Cd(file.name,2) ..
+				" for a total of " .. #tokens-1 .. " tokens"	-- do not count EOF
+		}	
 		print_error(err)
 	end
-	
-	pp(tokens)
-	print''
-	print'=========='
 	
 	-- Parsing
 	

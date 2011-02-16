@@ -1,4 +1,6 @@
 class Blah : Hello
 	
-	private /num bloh
+	private /num/ bloh
+	private /num/ bloh
+	private /naum/ bloh
 end

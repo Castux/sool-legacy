@@ -57,7 +57,12 @@ lex = function(s)
 				lcol = col
 			}
 		}
-		return nil,err
+		local info = {
+			"Lexer",
+			"info",
+			"valid symbols at token beginning are: [_a-zA-Z0-9@] and operators"
+		}
+		return nil,{err,info}
 	end
 	
 	local function addtok(val,typ)
