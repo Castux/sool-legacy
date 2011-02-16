@@ -8,7 +8,7 @@ class :=		'class' ClassName [ ':' ClassName ]
 				
 method :=		[ 'private' ] [ type { ',' type } ]
 				( Name | 'op' Binop )
-				'(' { type Name [ ',' ] } ')'
+				'(' [ type Name { ',' type Name } ] ')'
 				block
 				'end'
 

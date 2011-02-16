@@ -67,12 +67,12 @@ function print_error(err,file)
 	if file then
 		local fline,lline = err[4].fline,err[4].lline
 		
-		io.write(Cd(file.name,2),':')
+		io.write(Cd(file.name,5),':')
 		
 		if fline == lline then
-			io.write(Cd(fline,5),': ')
+			io.write(Cd(fline,2),': ')
 		else
-			io.write(Cd(err[4].fline .. '-' .. err[4].lline,5),': ')
+			io.write(Cd(err[4].fline .. '-' .. err[4].lline,2),': ')
 		end
 	end
 	
@@ -93,7 +93,7 @@ function print_error(err,file)
 			local count = 1
 			local marks = file[fline] .. "="	-- special end char for EOF
 			marks = marks:gsub(".",function(s)
-				if s == '\t' or s == ' ' then
+				if s == '\t' then
 					count = count + 1
 					return s
 				end
@@ -149,7 +149,7 @@ function compile(path)
 		local err = {
 			"Compiler",
 			"info",
-			"successfully lexed file ".. Cd(file.name,2) ..
+			"successfully lexed file ".. Cd(file.name,5) ..
 				" for a total of " .. #tokens-1 .. " tokens"	-- do not count EOF
 		}	
 		print_error(err)

@@ -1,6 +1,10 @@
 class A : B
 	num hello
+	[num] v
+	{num} pacool
 methods
-	num blah()
-	end
+	private num meh()
+	
+	lol() end
+	
 end
