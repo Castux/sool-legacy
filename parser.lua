@@ -72,6 +72,20 @@ local function peek2()
 	return (peek() or 'argh') .. (peek(2) or 'argh')
 end
 
+-- helper function
+
+local begin_exp = function(s)
+	
+	local toks = {'Name','Number','String','nil','false','true',
+		'(','[','/','<','not','+','-'}
+	
+	for i,v in ipairs(toks) do
+		if s == v then return true end
+	end
+	
+	return false
+end
+
 ---------------------
 -- Base Node class --
 ---------------------
@@ -207,11 +221,19 @@ function Node:lastval()
 end
 
 function Node:lastpos()
-	return self.children[#self.children][3]
+	if self.children[#self.children].token then
+		return self.children[#self.children][3]
+	else
+		return self.children[#self.children]:lastpos()
+	end
 end
 
 function Node:firstpos()
-	return self.children[1][3]
+	if self.children[1].token then
+		return self.children[1][3]
+	else
+		return self.children[1]:firstpos()
+	end
 end
 
 -- Return line,col of first/last symbol. Read in token if token, call
@@ -671,12 +693,12 @@ function Method:parse()
 		return
 	end
 	
-	--[[ block
-	t.body = Block()
-	if not t.body then
+	-- block
+	self.body = Block()
+	if not self.body then
+		add_err('info','body fucked')
 		return
 	end
-	]]
 	
 	-- 'end'
 	if not self:expect 'end' then
@@ -706,10 +728,353 @@ function Method:str()
 		end
 	end
 	
-	s = s .. ')'
+	s = s .. ')\n'
+	
+	s = s .. self.body:str() .. 'end'
 	
 	return s
 end
+
+--[[
+block :=		{ stat [ ';' ] }
+				[ break | continue | return [ listexp ] ]
+]]
+
+Block = class(Node)
+
+function Block:init()
+	
+	Block.super.init(self)
+	
+	self.stats = {}
+	
+	return self:parse()
+end
+
+function Block:parse()
+	
+	-- { stat }
+	while peek() ~= 'end' and peek() ~= 'else' and peek() ~= 'elseif' and 
+		peek() ~= 'break' and peek() ~= 'continue' and peek() ~= 'return' and
+		peek() ~= ';' and peek() ~= 'EOF' do
+		
+		local st
+		
+		if peek() == 'do' then
+			st = Do()
+			
+		elseif peek() == 'while' then
+			st = While()
+			
+		elseif peek() == 'if' then
+			st = If()
+			
+		elseif peek() == 'for' and peek(3) == '=' then
+			st = For()
+			
+		elseif peek() == 'for' then
+			st = GenericFor()
+			
+		elseif begin_exp(peek()) then
+			st = Assignment()
+			
+		else
+			add_err('error','malformed statement: ' .. peekval(),peekpos())
+			return
+		end
+		
+		if not st then
+			return
+		else
+			table.insert(self.stats,st)
+			self:add(st)
+		end
+		
+		self:accept ';'
+	end
+	
+	-- [ break | continue | return { exp [ ',' ] } ]
+	local st = nil
+	
+	if peek() == 'break' then
+		st = Break()
+	
+	elseif peek() == 'continue' then
+		st = Continue()
+	
+	elseif peek() == 'return' then
+		st = Return()
+	end
+	
+	if st then
+		table.insert(self.stats,st)
+		self:add(st)
+	end
+		
+	return self
+end
+
+function Block:str()
+	local s = ""
+	
+	for i,v in ipairs(self.stats) do
+		s = s .. v:str() .. '\n'
+	end
+	
+	return s
+end
+
+--[[
+break | continue | return [ listexp ]
+]]
+
+Stat = class(Node)
+
+Break = class(Stat)
+
+function Break:init()
+	Break.super.init(self)
+	return self:parse()
+end
+
+function Break:parse()
+	if not self:expect 'break' then
+		return
+	end
+	return self
+end
+
+function Break:str()
+	return 'break'
+end
+
+Continue = class(Stat)
+
+function Continue:init()
+	Continue.super.init(self)
+	return self:parse()
+end
+
+function Continue:parse()
+	if not self:expect 'continue' then
+		return
+	end
+	return self
+end
+
+function Continue:str()
+	return 'continue'
+end
+
+Return = class(Stat)
+
+function Return:init()
+	Return.super.init(self)
+	
+	self.vals = {}
+	
+	return self:parse()
+end
+
+function Return:parse()
+	
+	if not self:expect 'return' then
+		return
+	end
+	
+	if peek() ~= 'end' then
+		self.vals = Listexp()
+	end
+	
+	return self
+end
+
+function Return:str()
+	local s = 'return '
+	
+	for i,v in ipairs(self.vals) do
+		s = s .. v:str()
+		if i < #self.vals then
+			s = s .. ','
+		end
+	end
+	
+	return s
+end
+
+--[[
+'do' block 'end'
+]]
+
+Do = class(Stat)
+
+function Do:init()
+	Do.super.init(self)
+	
+	self.body = nil
+	
+	return self:parse()
+end
+
+function Do:parse()
+	
+	if not self:expect 'do' then
+		return
+	end
+	
+	self.body = Block()
+	if not self.body then
+		return
+	end
+	
+	return self
+end
+
+function Do:str()
+	return 'do\n' .. self.body:str() .. 'end'
+end
+
+--[[
+'while' exp 'dö́' block 'end'
+]]
+
+While = class(Stat)
+
+function While:init()
+	While.super.init(self)
+	
+	self.cond = nil
+	self.body = nil
+	
+	return self:parse()
+end
+
+function While:parse()
+	
+	if not self:expect 'while' then
+		return
+	end
+	
+	self.cond = Exp()
+	if not self.cond then
+		add_err('info','as condition in while loop started at',self:firstpos())
+		return
+	end
+	
+	if not self:expect 'do' then
+		add_err('info','in while loop',range(self:firstpos(),peekpos()))
+		return
+	end
+	
+	self.body = Block()
+	if not self.body then
+		return
+	end
+	
+	if not self:expect 'end' then
+		add_err('info','to complete while loop',self:firstpos())
+		return
+	end
+	
+	return self
+end
+
+function While:str()
+	return 'while ' .. self.cond:str() .. ' do\n' .. self.body:str() .. '\nend'
+end
+
+--[[
+'if' exp 'then' block
+	{ 'elseif' exp 'then' block }
+	[ 'else' block ]
+	'end'
+]]
+
+If = class(Stat)
+
+function If:init()
+	If.super.init(self)
+	
+	self.tests = {}
+	self.default = nil
+	
+	return self:parse()
+end
+
+function If:parse()
+	
+	-- 'if'
+	if not self:expect 'if' then
+		return
+	end
+	
+	-- exp 'then' block
+	-- { 'elseif' exp 'then' block }
+	repeat
+		local test = {}
+		local open = self:lastpos()
+		
+		test.cond = Exp()
+		if not test.cond then
+			add_err('info','as condition in if',open)
+			return
+		end
+		
+		if not self:expect 'then' then
+			add_err('info','to match',open)
+			return
+		end
+		
+		test.body = Block()
+		if not test.body then
+			return
+		end
+		
+		table.insert(self.tests,test)
+	until not self:accept 'elseif'
+	
+	-- [ 'else' block ]
+	if self:accept 'else' then
+		self.default = Block()
+		if not self.default then
+			return
+		end
+	end
+	
+	if not self:expect 'end' then
+		return
+	end
+	
+	return self
+end
+
+function If:str()
+	
+	local s = 'if ' .. self.tests[1].cond:str() .. 
+		' then\n' .. self.tests[1].body:str() .. '\n'
+	
+	for i = 2,#self.tests do
+		s = s .. 'elseif ' .. self.tests[i].cond:str() .. 
+			' then\n' .. self.tests[i].body:str() .. '\n'
+	end
+	
+	if self.default then
+		s = s .. 'else\n' .. self.default:str() .. '\n'
+	end
+	
+	return s .. 'end'
+end
+
+Exp = class()
+
+function Exp:init()
+	return self
+end
+
+function Exp:str()
+	return ''
+end
+
 -------------------------
 -- Main parsing driver --
 -------------------------

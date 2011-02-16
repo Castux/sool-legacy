@@ -559,7 +559,7 @@ begin_exp = function(s)
 		if s == v then return true end
 	end
 	
-	return false	
+	return false
 end
 
 --[[
