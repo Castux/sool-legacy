@@ -1,24 +1,12 @@
-local tokens
+require 'class'
 
-local current
+-----------------------------------------------------------------------
+-- Shared context for all nodes, initialized by the parse() function --
+-----------------------------------------------------------------------
 
--- error handling
-local errors
+local tokens, current, errors
 
-local function add_err(typ,mess,pos)
-	
-	local err =  {
-		"Compiler",
-		typ,
-		mess,
-		pos or tokens[current][3]
-	}
-	
-	errors[#errors + 1] = err
-	
-end
-
--- look ahead
+-- Look ahead: type
 local function peek(n)
 	local n = n or 1
 
@@ -29,6 +17,7 @@ local function peek(n)
 	end
 end
 
+-- Look ahead: value
 local function peekval()
 	if not tokens[current] then
 		return nil
@@ -37,144 +26,182 @@ local function peekval()
 	end
 end
 
--- advance by one token
+-- Look ahead: position
+local function peekpos()
+	if not tokens[current] then
+		return nil
+	else
+		return tokens[current][3]
+	end
+end
+
+-- Look ahead: hole token
+local function head()
+	return tokens[current]
+end
+
+-- Advance by one token
 local function consume()
 	current = current + 1
 end
 
--- parse optionnal token
-local function accept(tok)
-	if peek() == tok then
-		local val = tokens[current][2] or tok
-		consume()
-		return val
-	else
-		return nil
-	end
-end
-
--- parse mandatory token
-local function expect(tok)
-	if peek() == tok then
-		local val = tokens[current][2]
-		consume()
-		return val
-	else
-		add_err("error", "expected " .. tok .. 
-			", found " .. peek() .. " instead")
-		return nil
-	end
-end
-
--- digraphs
-
-local function peek2()
-	return (peek() or 'argh') .. (peek(2) or 'argh')
-end
-
-local function accept2(s)
-	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
-		consume()
-		consume()
-		return s
-	else
-		return nil
-	end
-end
-
-local function expect2(s)
-	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
-		consume()
-		consume()
-		return s
-	else
-		add_err("error", "expected digraph" .. s ..
-			", found " .. peek() .. " instead")
-		return nil
-	end
-end
-
-----------------------------
--- Advanced lexical rules --
-----------------------------
-
-local binop
-
-binop = function(only_peek)
-
-	local ops = {'+','-','*','/','%','<','>','^','|','xor','and','or'}
-	local digr = {'+=','-=','*=','/=','%=','<=','>=','==','~=','<<','>>',
-		'^=','|=' }
+-- Push error to list.
+local function add_err(typ,mess,pos)
 	
-	if only_peek then
-	-- don't consume
-		
-		-- test digraphs first, or they never get used
-		for i,v in ipairs(digr) do
-			if peek2() == v then
-				return true
-			end
-		end	
-		
-		for i,v in ipairs(ops) do
-			if peek() == v then
-				return true
-			end
-		end
-		
-		return false
-	-- consume
-	else
-		for i,v in ipairs(digr) do
-			if accept2(v) then
-				return v
-			end
-		end
-		
-		for i,v in ipairs(ops) do
-			if accept(v) then
-				return v
-			end
-		end
-		
-		add_err("error", "malformed binary operator")
-		return nil
-	end
-
+	local err =  {
+		"Compiler",
+		typ,
+		mess,
+		pos
+	}
+	
+	table.insert(errors,err)
 end
 
--------------------
--- Grammar rules --
--------------------
+---------------------
+-- Base Node class --
+---------------------
 
-local begin_exp
-local chunk, class, type, block, method, stat, listexp, exp, atomicexp,
-	exptail, basicexp
+Node = class()
+
+function Node:init()
+	
+	self.children = {}
+	
+	return self
+end
+
+-- Add token or node to children
+function Node:add(child)
+	table.insert(self.children,child)
+end
+
+-- Parse optional token
+function Node:accept(toktype)
+	if peek() == toktype then
+		self:add(head())
+		consume()
+		return true
+	else
+		return false
+	end
+end
+
+-- Parse mandatory token
+function Node:expect(toktype)
+	if peek() == toktype then
+		self:add(head())
+		consume()
+		return true
+	else
+		add_err("error",
+			"expected " .. toktype .. ", found " .. peek() .. " instead",
+			peekpos()
+		)
+		return false
+	end
+end
+
+-- Return last parsed value (assuming it's a token)
+function Node:lastval()
+	return self.children[#self.children][2]
+end
+
+function Node:lastpos()
+	return self.children[#self.children][3]
+end
+
+function Node:firstpos()
+	return self.children[1][3]
+end
+
+-- Return line,col of first/last symbol. Read in token if token, call
+-- recursively if node
+function Node:firstlc()
+	local fi = self.children[1]
+	
+	if fi.token then
+		return fi[3].fline,fi[3].fcol
+	else
+		return fi:firstlc()
+	end
+end
+
+function Node:lastlc()
+	local la = self.children[#self.children]
+	
+	if la.token then
+		return la[3].lline,la[3].lcol
+	else
+		return la:lastlc()
+	end
+end
+
+function Node:pos()
+	local fline,fcol = self:firstlc()
+	local lline,lcol = self:lastlc()
+	
+	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol}
+end
+
+------------------------
+-- Other Node classes --
+------------------------
 
 --[[
 chunk := 		block |
 				{ class_def }
 ]]
 
-chunk = function()
+Chunk = class(Node)
+
+function Chunk:init()
 	
-	local t = { node = 'chunk' }
+	Chunk.super.init(self)
+	
+	self.block = nil
+	self.classes = {}
+	
+	return self:parse()
+end
+
+function Chunk:parse()
 	
 	-- block
 	if peek() ~= 'class' then
-		t.block = block()
-		if not t.block then return end
+		self.block = Block()
+		if not self.block then
+			return
+		else
+			self:add(self.block)
+		end
 	
 	-- { class }
 	else
-		while( peek() == 'class' ) do
-			local cl = class()
-			if not cl then return end
-			t[#t+1] = cl
+		while peek() == 'class' do
+			local cl = Class()
+			if not cl then
+				return
+			else
+				table.insert(self.classes,cl)
+				self:add(cl)
+			end
 		end
 	end
+	
+	return self
+end
 
-	return t
+function Chunk:str()
+	if self.block then
+		return self.block:str()
+	else
+		local s = ""
+		for i,v in ipairs(self.classes) do
+			s = s .. v:str() .. '\n'
+		end
+		return s
+	end
 end
 
 --[[
@@ -184,61 +211,121 @@ class :=		'class' ClassName [ ':' ClassName ]
 				'end'
 ]]
 
-class = function()
+Class = class(Node)
+
+function Class:init()
 	
-	local t = { node = 'class' }
+	Class.super.init(self)
+	
+	self.name = ""
+	self.parent = nil
+	
+	self.members = {}
+	self.methods = {}
+	
+	return self:parse()
+end
+
+function Class:parse()
 	
 	-- 'class'
-	local cl = expect 'class'
-	if not cl then return end
+	if not self:expect 'class' then
+		return
+	end
 	
 	-- ClassName
-	t.name = expect 'ClassName'
-	if not t.name then return end
+	if self:expect 'ClassName' then
+		self.name = self:lastval()
+	else
+		add_err('info','for class definition started at',self:pos())
+		return
+	end
 	
 	-- [ ':' ClassName ]
-	if accept ':' then
-		t.parent = expect 'ClassName'
-		if not t.parent then return end
+	if self:accept ':' then
+		if self:expect 'ClassName' then
+			self.parent = self:lastval()
+		else
+			add_err('info','as parent class for class started at',self:pos())
+			return
+		end
 	end
 	
 	-- { [ 'private' ] type Name }
-	t.members = {}
 	
 	while peek() ~= 'methods' and peek() ~= 'end' do
+		local open
 		local mem = {}
 		
-		if accept 'private' then
+		if self:accept 'private' then
 			mem.private = true
+			open = self:lastpos()
 		end
 		
-		mem.type = type()
-		if not mem.type then return end
+		mem.type = Type()
+		if not mem.type then
+			add_err('info','in member definition',peekpos())
+			return
+		else
+			self:add(mem.type)
+			open = open or mem.type:firstpos()
+		end
 		
-		mem.name = expect 'Name'
-		if not mem.name then return end
+		if self:expect 'Name' then
+			mem.name = self:lastval()
+		else
+			add_err('info','as member name in member definition',open)
+			return
+		end
 		
-		t.members[#t.members+1] = mem
+		table.insert(self.members,mem)
 	end
 	
 	-- [ 'methods' { meth_def } ]
-	t.methods = {}
 	
-	if accept 'methods' then
+	if self:accept 'methods' then
 		while peek() ~= 'end' do
-			local meth = method()
-			if not meth then return end
-			
-			t.methods[#t.methods+1] = meth
+			local meth = Method()
+			if not meth then
+				add_err('info','in class',self:firstpos())
+				return
+			else
+				self:add(meth)
+				table.insert(self.methods,meth)
+			end
 		end
 	end
 	
 	-- 'end'
 	
-	local en = expect 'end'
-	if not en then return end
+	if not self:expect 'end' then
+		return
+	end
 	
-	return t
+	return self
+end
+
+function Class:str()
+	local s = 'class ' .. self.name
+	
+	if self.parent then
+		s = s .. ' : ' .. self.parent
+	end
+	
+	s = s .. '\n'
+	
+	for i,v in ipairs(self.members) do
+		if v.private then
+			s = s .. 'private '
+		end
+		s = s .. v.type:str() .. ' ' .. v.name .. '\n'
+	end
+	
+	for i,v in ipairs(self.methods) do
+		s = s .. v:str() .. '\n'
+	end
+	
+	return s .. 'end\n'
 end
 
 --[[
@@ -249,506 +336,122 @@ type :=			'num' | 'vec' | 'str' |
 				'{' { type  [ ',' ] } '}'
 ]]
 
-type = function()
+Type = class(Node)
+
+function Type:init()
 	
-	local t = { node = 'type' }
-	local tok
+	Type.super.init(self)
 	
-	local val = peekval()
+	self.type = ""
+	self.val = nil
+	
+	return self:parse()
+end
+
+function Type:parse()
 	
 	-- 'num' | 'vec' | 'str'
-	if accept 'num' then
-		t.num = true
-	elseif accept 'vec' then
-		t.vec = true
-	elseif accept 'str' then
-		t.str = true
+	
+	if self:accept 'num' or self:accept 'vec' or self:accept 'str' then
+		self.type = self:lastval()
 	
 	-- ClassName
 	
-	elseif accept 'ClassName' then
-		t.class = val
+	elseif self:accept 'ClassName' then
+		self.type = 'class'
+		self.val = self:lastval()
 	
 	-- '[' type ']'
 	
-	elseif accept '[' then
-		t.array = type()
-		if not t.array then return end
-		tok = expect ']'
-		if not tok then return end
+	elseif self:accept '[' then
+		local open = self:lastpos()
+		self.type = 'array'
+		self.val = Type()
+		if not self.val then
+			add_err('info','in array type definition',open)
+			return
+		else
+			self:add(self.val)
+		end
+		if not self:expect ']' then
+			add_err('info','to close array type definition',open)
+			return
+		end
 		
 	-- '/' type '/'
 	
-	elseif accept '/' then
-		t.list = type()
-		if not t.list then return end
-		tok = expect '/'
-		if not tok then
-			add_err('info','to complete list constructor')
+	elseif self:accept '/' then
+		local open = self:lastpos()
+		self.type = 'list'
+		self.val = Type()
+		if not self.val then
+			add_err('info','in list type definition',open)
+			return
+		else
+			self:add(self.val)
+		end
+		if not self:expect '/' then
+			add_err('info','to close list type definition',open)
 			return
 		end
 	
 	-- '{' { type  [ ',' ] } '}'
 	
-	elseif accept '{' then
-		
-		t.pack = {}
+	elseif self:accept '{' then
+		local open = self:lastpos()
+		self.type = 'pack'
+		self.val = {}
 		
 		while peek() ~= '}' do
-			tok = type()
-			if not tok then return end
-			t.pack[#t.pack+1] = tok
-			accept ','
+			local typ = Type()
+			if not typ then
+				add_err('info','in pack type definition',open)
+				return
+			else
+				table.insert(self.val,typ)
+				self:add(typ)
+			end
+			self:accept ','
 		end
 		
-		tok = expect '}'
-		if not tok then return end
+		if not self:expect '}' then
+			add_err('info','to close pack type definition',open)
+			return
+		end
 		
 	else
-		add_err("error","malformed type")
+		add_err("error","malformed type",peekpos())
 		return
 	end
 	
-	return t
+	return self
 end
 
---[[
-method :=		[ 'private' ] [ type { ',' type } ]
-				Name
-				'(' { type Name [ ',' ] } ')'
-				block
-				'end'
-]]
-
-method = function()
+function Type:str()
 	
-	local t = { node = 'method' }
-	local tok
-	
-	-- [ 'private' ]
-	if accept 'private' then
-		t.private = true
+	if self.type == 'num' or self.type == 'vec' or self.type == 'str' then
+		return self.type
 	end
 	
-	-- [ type { ',' type } ]
-	t.ret = {}
-	
-	if peek() ~= 'Name' then
-		
-		tok = type()
-		if not tok then return end
-		t.ret[#t.ret+1] = tok
-		
-		while peek() == ',' do
-			tok = expect ','
-			if not tok then return end
-			
-			tok = type()
-			if not tok then return end
-			t.ret[#t.ret+1] = tok
-		end
-	end	
-	
-	-- ( Name | 'op' Binop )	
-	if accept 'op' then
-		t.name = binop()
-		if not t.name then return end
-	else
-		t.name = expect 'Name'
-		if not t.name then return end
-	end
-	
-	-- '(' { type Name [ ',' ] } ')'
-	t.args = {}
-	
-	tok = expect '('
-	if not tok then return end
-	
-	while peek() ~= ')' do
-		local arg = { node = 'arg' }
-		
-		arg.type = type()
-		if not arg.type then return end
-		
-		arg.name = expect 'Name'
-		if not arg.name then return end
-		
-		accept ','
-		
-		t.args[#t.args+1] = arg
-	end
-	tok = expect ')'
-	if not tok then return end
-	
-	-- block
-	t.body = block()
-	if not t.body then return end
-	
-	-- 'end'
-	tok = expect 'end'
-	if not tok then return end
-	
-	return t
-end
-
---[[
-block :=		{ stat [ ';' ] }
-				[ break | continue | return [ listexp ] ]
-]]
-
-block = function()
-	
-	local t = { node = 'block' }
-	
-	-- { stat }
-	while peek() ~= 'end' and peek() ~= 'else' and peek() ~= 'elseif' and 
-		peek() ~= 'break' and peek() ~= 'continue' and peek() ~= 'return' and
-		peek() ~= ';' and peek() ~= 'EOF' do
-		
-		t[#t+1] = stat()
-		accept ';'
-	end
-	
-	-- [ break | continue | return { exp [ ',' ] } ]
-	if accept 'break' then
-		t[#t+1] = { node = 'break' }
-	
-	elseif accept 'continue' then
-		t[#t+1] = { node = 'continue' }
-	
-	-- return { return [ listexp ] }
-	elseif accept 'return' then
-		local n = { node = 'return' }
-		
-		if peek() ~= 'end' then
-			n.vals = listexp()
-		end
-		
-		t[#t+1] = n
-	end
-		
-	return t
-end
-
-stat = function()
-	
-	local t = {}
-	
-	-- 'do' block 'end'
-	if accept 'do' then
-		t = block()
-		expect 'end'
-	
-	-- 'while' exp 'dö́' block 'end'
-	elseif accept 'while' then
-		t.node = 'while'
-		
-		t.exp = exp()
-		expect 'do'
-		t.body = block()
-		expect 'end'
-	
-	-- 'if'
-	elseif accept 'if' then
-		t.node = 'if'
-		t.tests = {}
-		
-		-- exp 'then' block
-		-- { 'elseif' exp 'then' block }
-		repeat
-			local test = {}
-			test.cond = exp()
-			expect 'then'
-			test.body = block()
-			
-			t.tests[#t.tests+1] = test	
-		until not accept 'elseif'
-	
-		-- [ 'else' block ]
-		if accept 'else' then
-			t.default = block()
-		end
-		
-		expect 'end'
-	
-	-- 'for' Name '=' exp ',' exp [ ',' exp ] do block end
-	elseif peek() == 'for' and peek(3) == '=' then
-		t.node = 'num_for'
-				
-		expect 'for'
-		t.var = expect 'Name'
-		expect '='
-		
-		t[1] = exp()
-		expect ','
-		t[2] = exp()
-		
-		if accept ',' then
-			t[3] = exp()
-		end
-		
-		expect 'do'
-		t.body = block()
-		expect 'end'
-	
-	-- 'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
-	elseif accept 'for' then
-		t.node = 'generic_for'
-		
-		t[1] = expect 'Name'
-		
-		while peek() ~= 'in' do
-			accept ','
-			t[#t+1] = expect 'Name'
-		end
-		
-		expect 'in'
-		t.exp = exp()
-		expect 'do'
-		t.body = block()
-		expect 'end'
-	
-	-- methodcall
-	-- listbasicexp '=' listexp
-	elseif begin_exp(peek()) then
-		local lval = listbasicexp()
-		local rval
-		
-		if accept '=' then
-			rval = listexp()
-			t.node = 'assignment'
-			t.lval = lval
-			t.rval = rval
-		elseif #lval == 1 then
-				t = lval[1]
-		else
-			-- we have a listexp with several exps, but no "="
-			add_err("error","malformed multi assignment: expected '=', found " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")	
-		end
-	
-	-- no empty statement
-	else
-		add_err("error","malformed statement: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
-	end
-	
-	return t
-end
-
---[[
-listexp :=		exp { ',' exp }
-]]
-
--- Does not return a node, just a list
-
-listexp = function()
-	
-	local t = {}
-	
-	t[1] = exp()
-	
-	while accept ',' do
-		t[#t+1] = exp()
-	end
-	
-	return t
-end
-
---[[
-listbasicexp :=	basicexp { ',' basicexp }
-]]
-
--- Does not return a node, just a list
-
-listbasicexp = function()
-	
-	local t = {}
-	
-	t[1] = basicexp()
-	
-	while accept ',' do
-		t[#t+1] = basicexp()
-	end
-	
-	return t
-end
-
-begin_exp = function(s)
-	
-	local toks = {'Name','Number','String','nil','false','true',
-		'(','[','/','<','not','+','-'}
-	
-	for i,v in ipairs(toks) do
-		if s == v then return true end
-	end
-	
-	return false	
-end
-
---[[
-atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
-				Symbol | '(' exp ')' |
-				'{' [ listbasicexp ] '}' |
-				'[' [ listbasicexp ] ']' |
-				'/' [ listbasicexp ] '/' |
-				'<' [ listbasicexp ] '>' |
-				ClassName [ '(' [ listexp ] ')' ]
-]]
-
-atomicexp = function()
-	
-	local t = {}
-	
-	local val = peekval()
-	
-	-- Name | Number | String | 'nil' | 'false' | 'true' | Symbol
-	if accept 'Name' then
-		t.node = 'var'
-		t.name = val
-		
-	elseif accept 'Number' then
-		t.node = 'number'
-		t.val = val
-		
-	elseif accept 'String' then
-		t.node = 'string'
-		t.val = val
-
-	elseif accept 'Symbol' then
-		t.node = 'symbol'
-		t.val = val
-	
-	elseif accept 'nil' then
-		t.node = 'nil'
-	
-	elseif accept 'true' then
-		t.node = 'true'
-	
-	elseif accept 'false' then
-		t.node = 'false'
-	
-	-- '(' exp ')'
-	elseif accept '(' then
-		t = exp()
-		expect ')'
-		
-	-- '{' [ listbasicexp ] '}'
-	elseif accept '{' then
-		t.node = 'pack'
-		if peek() ~= '}' then
-			t.vals = listbasicexp()
-		end
-		expect '}'
-	
-	-- '[' [ listbasicexp ] ']'
-	elseif accept '[' then
-		t.node = 'array'
-		if peek() ~= ']' then
-			t.vals = listbasicexp()
-		end
-		expect ']'
-		
-	-- '/' [ listbasicexp ] '/'
-	elseif accept '/' then
-		t.node = 'list'
-		if peek() ~= '/' then
-			t.vals = listbasicexp()
-		end
-		expect '/'
-		
-	-- '<' [ listbasicexp ] '>'
-	elseif accept '<' then
-		t.node = 'vector'
-		if peek() ~= '>' then
-			t.vals = listbasicexp()
-		end
-		expect '>'
-	
-	-- ClassName [ '(' [ listexp ] ')' ]
-	elseif accept 'ClassName' then
-		t.node = 'instanciation'
-		t.class = val
-		if accept '(' then
-			if peek() ~= ')' then
-				t.args = listexp()
-			end
-			expect ')'
-		end
-	
-	else
-		add_err("error","malformed expression: " .. peek() .. "(value: " .. (tokens[current][2] or '') .. ")")
-	end
-	
-	return t
-end
-
---[[
-exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
-				'[' exp ']'
-				
-basicexp :=		atomicexp { exptail }
-]]
-
--- Happily produces a leftmost derivation (good for access which is
--- left associative, and indexing, which is suffix )
-
-basicexp = function()
-	
-	-- atomicexp
-	local t = atomicexp()
-	
-	-- { exptail }
-	while peek() == '.' or peek() == '[' do
-		t = { var = t }
-		
-		-- '[' exp ']'
-		if accept '[' then
-			t.node = 'index'
-			t.index = exp()
-			expect ']'
-		
-		-- '.' Name [ '(' [ listexp ] ')' ]
-		elseif accept '.' then
-			
-			t.name = expect 'Name'
-			
-			if accept '(' then
-				t.node = 'call'
-				if peek() ~= ')' then
-					t.args = listexp()
-				end
-				expect ')'
-			else
-				t.node = 'member_access'
+	if self.type == 'array' then
+		return '[' .. self.val:str() .. ']'
+	elseif self.type == 'list' then
+		return '/' .. self.val:str() .. '/'
+	elseif self.type == 'pack' then
+		local s = '{'
+		for i,v in ipairs(self.val) do
+			s = s .. v:str()
+			if i < #self.val then
+				s = s .. ','
 			end
 		end
-		
+		return s .. '}'
 	end
-
-	return t
 end
 
---[[
-exp := 			basicexp { Binop basicexp }
-]]
-
--- Happily produces a leftmost derivation! Operators are naturally
--- left associative.
-
-exp = function()
-	
-	local t
-	
-	-- basicexp { Binop basicexp }
-	t = basicexp()
-	
-	while binop(true) do	-- true for only peeking
-		t = { node = 'binop', left = t }
-		t.binop = binop()
-		t.right = basicexp()
-	end
-	
-	return t
-end
+-------------------------
+-- Main parsing driver --
+-------------------------
 
 function parse(toks)
 	tokens = toks
@@ -756,11 +459,11 @@ function parse(toks)
 	errors = {}
 	
 	-- apply top level rule
-	local tree = chunk()
+	local tree = Chunk()
 	if not tree then return nil,errors end
 	
-	local eof = expect 'EOF'
-	if not eof then return nil,errors end
+	--local eof = expect 'EOF'
+	--if not eof then return nil,errors end
 	
 	return tree,errors
 end

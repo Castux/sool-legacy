@@ -1,6 +1,6 @@
-class Blah : Hello
-	
-	private /num/ bloh
-	private /num/ bloh
-	private /naum/ bloh
+class A : B
+	num hello
+methods
+	num blah()
+	end
 end

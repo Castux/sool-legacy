@@ -6,6 +6,7 @@ Token structure:
 1 = type (Name, ClassName, Symbol, Number, or complete string for others)
 2 = value (string of original text)
 3 = position in file
+token = true
 
 Position structure:
 ===================
@@ -60,7 +61,7 @@ lex = function(s)
 		local info = {
 			"Lexer",
 			"info",
-			"valid symbols at token beginning are: [_a-zA-Z0-9@] and operators"
+			"valid symbols at token beginning are: [_a-zA-Z0-9@] and operators [~+-*/%^|#=<>:.,;()[]{}\"'"
 		}
 		return nil,{err,info}
 	end
@@ -75,7 +76,8 @@ lex = function(s)
 				lline=line,
 				fcol=col,
 				lcol=(col + #val - 1)
-			}
+			},
+			token = true
 		}
 		
 		tokens[#tokens+1] = tok
@@ -109,7 +111,7 @@ lex = function(s)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}\"]",index)
+		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}\"']",index)
 		if m then
 			addtok(m)
 			break

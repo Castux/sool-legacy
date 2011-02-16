@@ -163,4 +163,6 @@ function compile(path)
 		print_error(v,file)
 	end
 	
+	print'done parsing'
+	if tree then print(tree:str()) end
 end
