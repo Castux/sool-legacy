@@ -24,7 +24,7 @@ methods
 		return priv
 	end
 	
-	private voidfunc()
+	private /[num]/ b(vec v,vec w)
 		(5).double()
 	end
 end
@@ -36,32 +36,35 @@ class Root methods	-- meh, not so nice
 		x,y = a.getSomething(<5,10>)
 		priv = a.getPriv()
 		a,b = <1,3,4>,<2,4,5>
-		c = a * b -- dot product
+		c = a * b; -- dot product
 		
-		d = [1,2,3,a] -- array
+		for a in 1 do
+			for j = 1,lol.double do
+				print lol
+			end
+		end
 		
 		l = /1,2,3,4/	-- list
-			   
-		e = {1,Blah(),<3,4,5>}  -- pack
+		
+		e = {1,Blah(),<3,(4*f),5>}  -- pack
 		
 		somenum = 5 + 4		-- 5.+(4)
 		
-		a = n*= 5
-		n += 3 -- n.+=(3)
+		a = n == 5 + @sy%&
 		
-		for i,v in d do
+		for i in d.a[a] do
 			--print "#i,#v"	-- Root:print("%s,%s".format(i.to_s(),v.to_s()))
 		end					-- Or something like that
 		
 		0x2345.lol(3*4,{a,b,4}).mem[a*b]
 		<1,2,blah.blih.blok([])>
 		
-		a,b,c = a xor b
+		mess = a + (errcount > 1 and 3 or 4)
 		
 		return x*y
 	end
 	
-	num op *= ()
+	num op == ()
 	
 	end
 end

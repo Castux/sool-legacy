@@ -86,7 +86,7 @@ function print_error(err,file)
 		str = file[fline]:sub(1,fcol-1)
 		
 		if fline == lline then
-			str = str .. C(file[fline]:sub(fcol,lcol),1)
+			str = str .. C(file[fline]:sub(fcol,lcol),col)
 			str = str .. file[fline]:sub(lcol+1,-1)
 			str = str .. '\n'
 			
@@ -107,7 +107,7 @@ function print_error(err,file)
 				return ' '
 			end)
 			
-			str = str .. C(marks,2) .. '\n'
+			str = str .. Cd(marks,col) .. '\n'
 		
 		else
 			local colored = file[fline]:sub(fcol,-1) .. '\n'
@@ -117,7 +117,7 @@ function print_error(err,file)
 			end
 			
 			colored = colored .. file[lline]:sub(1,lcol)
-			str = str .. C(colored,1) .. file[lline]:sub(lcol+1,-1) .. '\n'
+			str = str .. C(colored,col) .. file[lline]:sub(lcol+1,-1) .. '\n'
 		end
 		
 		io.write(str)
@@ -146,23 +146,35 @@ function compile(path)
 		end
 		return
 	else
-		local err = {
+		print_error {
 			"Compiler",
 			"info",
 			"successfully lexed file ".. Cd(file.name,5) ..
 				" for a total of " .. #tokens-1 .. " tokens"	-- do not count EOF
-		}	
-		print_error(err)
+		}
 	end
 	
 	-- Parsing
 	
 	local tree,err = parse(tokens)
 	
+	local errcount = 0
+	
 	for i,v in ipairs(err) do
 		print_error(v,file)
+		if v[2] == 'error' then
+			errcount = errcount + 1
+		end
 	end
 	
-	print'done parsing'
+	local mess
+	if errcount > 0 then
+		mess = 'parser reported ' .. errcount .. ' error' .. (errcount > 1 and 's' or '')
+	else
+		mess = 'successfully parsed file ' .. Cd(file.name,5)
+	end
+	
+	print_error {'Compiler','info',mess}
+	
 	if tree then print(tree:str()) end
 end

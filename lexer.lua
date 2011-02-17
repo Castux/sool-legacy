@@ -168,9 +168,8 @@ lex = function(s)
 		end
 		
 		-- Symbol
-		m = s:match("^@(%S+)",index)
+		m = s:match("^@%S+",index)
 		if m then
-			adv(1)	-- @
 			addtok(m,'Symbol')
 			break
 		end

@@ -49,7 +49,7 @@ end
 local function add_err(typ,mess,pos)
 	
 	local err =  {
-		"Compiler",
+		'Parser',
 		typ,
 		mess,
 		pos
@@ -64,12 +64,6 @@ local function range(from,to)
 	local lline,lcol = to.lline,to.lcol
 	
 	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol}
-end
-
--- digraphs
-
-local function peek2()
-	return (peek() or 'argh') .. (peek(2) or 'argh')
 end
 
 -- helper function
@@ -123,7 +117,7 @@ function Node:expect(toktype)
 		return true
 	else
 		add_err("error",
-			"expected " .. toktype .. ", found " .. peek() .. " instead",
+			"expected " .. toktype .. ", found '" .. peek() .. "' instead",
 			peekpos()
 		)
 		return false
@@ -567,7 +561,7 @@ function Method:parse()
 		
 		local typ = Type()
 		if not typ then
-			add_err('info','as return type for method started at',range(open,peekpos()))
+			add_err('info','as return type for method started at',open)
 			return
 		else
 			table.insert(self.ret,typ)
@@ -733,6 +727,9 @@ function Block:parse()
 			
 		else
 			add_err('error','malformed statement: ' .. peekval(),peekpos())
+			if #self.stats > 0 then
+				add_err('info', 'previous statement:', self.stats[#self.stats]:pos())
+			end
 			return
 		end
 		
@@ -881,6 +878,11 @@ function Do:parse()
 	
 	self.body = Block()
 	if not self.body then
+		return
+	end
+	
+	if not self:expect 'end' then
+		add_err('info','to close block started at',self:firstpos())
 		return
 	end
 	
@@ -1152,7 +1154,7 @@ function GenericFor:parse()
 	if self:expect 'Name' then
 		self[1] = self:lastval()
 	else
-		add_err('info','as variable in generic for',self:lastpos())
+		add_err('info','as variable in generic for',self:pos())
 		return
 	end
 	
@@ -1160,13 +1162,13 @@ function GenericFor:parse()
 		if self:expect 'Name' then
 			self[#self+1] = self:lastval()
 		else
-			add_err('info','as variable in generic for',self:firstpos())
+			add_err('info','as variable in generic for',self:pos())
 			return
 		end
 	end
 	
 	if not self:expect 'in' then
-		add_err('info','in generic for',self:firstpos())
+		add_err('info','in generic for',self:pos())
 		return
 	end
 	
@@ -1174,12 +1176,12 @@ function GenericFor:parse()
 	if self.exp then
 		self:add(self.exp)
 	else
-		add_err('info','as iterated in generic for',self:lastpos())
+		add_err('info','as iterated in generic for',self:pos())
 		return
 	end
 	
 	if not self:expect 'do' then
-		add_err('info','in generic for',self:firstpos())
+		add_err('info','in generic for',self:pos())
 		return
 	end
 	
@@ -1231,18 +1233,13 @@ function Assignment:parse()
 	self.lval = self:listbasicexp()
 	if not self.lval then
 		return
-	else
-		self:add(self.lval)
 	end
 	
 	-- normal case
 	if self:accept '=' then
 		self.rval = self:listexp()
 		if not self.rval then
-			add_err('info','as right value in assignment',self:pos())
 			return
-		else
-			self:add(self.rval)
 		end
 	
 	-- special case: lone basic expression
@@ -1421,6 +1418,7 @@ function AtomicExp:parse()
 		end
 		if not self:expect '}' then
 			add_err('info','to match',open)
+			add_err('info','(pack constructor)')
 			return
 		end
 	
@@ -1438,6 +1436,7 @@ function AtomicExp:parse()
 		end
 		if not self:expect ']' then
 			add_err('info','to match',open)
+			add_err('info','(array constructor)')
 			return
 		end
 		
@@ -1448,6 +1447,7 @@ function AtomicExp:parse()
 			self.val = self:listbasicexp()
 			if not self.val then
 				add_err('info','in list constructor started at',open)
+				add_err('info','(list constructor)')
 				return
 			else
 				self:add(self.val)
@@ -1472,6 +1472,7 @@ function AtomicExp:parse()
 		end
 		if not self:expect '>' then
 			add_err('info','to match',open)
+			add_err('info','(vector constructor)')
 			return
 		end
 	
@@ -1482,7 +1483,7 @@ function AtomicExp:parse()
 		if self:accept '(' then
 			open = self:lastpos()
 			if peek() ~= ')' then
-				self.args = listexp()
+				self.args = self:listexp()
 				if not self.args then
 					add_err('info','in instanciation argument list',open)
 					return
@@ -1492,6 +1493,7 @@ function AtomicExp:parse()
 			end
 			if not self:expect ')' then
 				add_err('info','to match',open)
+				add_err('info','(instanciation argument list)')
 				return
 			end
 		end
@@ -1505,11 +1507,6 @@ function AtomicExp:parse()
 end
 
 function AtomicExp:str()
-	
-	-- special basic
-	if self.kind == 'symbol' then
-		return '@' .. self.val
-	end
 	
 	-- basic
 	if self.val and type(self.val) ~= 'table' then
@@ -1703,6 +1700,8 @@ function Exp:parse()
 		if not term.right then
 			add_err('info','as right hand term in expression',self:pos())
 			return
+		else
+			self:add(term.right)
 		end
 		
 		table.insert(self.terms,term)
@@ -1715,7 +1714,7 @@ function Exp:str()
 	local s = self.left:str()
 	
 	for i,v in ipairs(self.terms) do
-		s = s .. v.binop ..'(' .. v.right:str() .. ')'
+		s = s .. ' ' .. v.binop .. ' ' ..'(' .. v.right:str() .. ')'
 	end
 	
 	return s
