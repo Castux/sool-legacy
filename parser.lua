@@ -235,7 +235,7 @@ end
 
 function Chunk:parse()
 	
-	-- block
+	--[[ block
 	if peek() ~= 'class' then
 		self.block = Block()
 		if not self.block then
@@ -243,10 +243,10 @@ function Chunk:parse()
 		else
 			self:add(self.block)
 		end
-	
+	]]
 	-- { class }
-	else
-		while peek() == 'class' do
+	--else
+		while peek() ~= 'EOF' do
 			local cl = Class()
 			if not cl then
 				return
@@ -255,7 +255,7 @@ function Chunk:parse()
 				self:add(cl)
 			end
 		end
-	end
+	--end
 	
 	if not self:expect 'EOF' then
 		return

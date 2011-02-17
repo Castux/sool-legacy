@@ -126,17 +126,9 @@ function print_error(err)
 	end
 end
 
+-- Treat file up to parsing
 
-function compile(path)
-	
-	-- Loading
-	
-	local file,err = load_file(path)
-
-	if err then
-		print_error(err)
-		return
-	end
+function parse_file(file)
 	
 	-- Lexing
 	
@@ -182,15 +174,61 @@ function compile(path)
 		return
 	end
 	
-	-- Analysis
+	return chunk
+end
+
+-- Compile a list of files together
+
+function compile(list)
 	
-	err = validate(chunk)
+	-- Load them all
 	
-	for i,v in ipairs(err) do
-		print_error(v,file)
-		if v[2] == 'error' then
-			errcount = errcount + 1
+	local files = {}
+	
+	for i,path in ipairs(list) do
+		
+		local file,err = load_file(path)
+		
+		if err then
+			print_error(err)
+			return
+		end
+		
+		table.insert(files,file)
+	end
+	
+	-- Parse them all
+	
+	local chunks = {}
+	
+	for i,file in ipairs(files) do
+	
+		local chunk = parse_file(file)
+		
+		if not chunk then
+			return
+		end
+		
+		table.insert(chunks,chunk)
+	end
+	
+	-- Merge lists of classes into single chunk
+	
+	local chunk = chunks[1]
+	
+	for i = 2,#chunks do
+		for _,class in ipairs(chunks[i].classes) do
+			table.insert(chunk.classes,class)
 		end
 	end
 	
+	chunks = nil
+	
+	-- Launch analysis
+	
+	local errors = validate(chunk)
+	
+	for i,err in ipairs(errors) do
+		print_error(err)
+	end
 end

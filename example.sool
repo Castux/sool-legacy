@@ -3,7 +3,7 @@ class Blah : Root
 end
 
 class Lol : Blah
-
+	num pues 
 end
 
 class Blah
