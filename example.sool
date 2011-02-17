@@ -25,34 +25,43 @@ methods
 	end
 	
 	private voidfunc()
-		-- do things
+		(5).double()
 	end
 end
 
 class Root methods	-- meh, not so nice
-num main([str] args)
+	num main([str] args)
+		
+		a = Blah()
+		x,y = a.getSomething(<5,10>)
+		priv = a.getPriv()
+		a,b = <1,3,4>,<2,4,5>
+		c = a * b -- dot product
+		
+		d = [1,2,3,a] -- array
+		
+		l = /1,2,3,4/	-- list
+			   
+		e = {1,Blah(),<3,4,5>}  -- pack
+		
+		somenum = 5 + 4		-- 5.+(4)
+		
+		a = n*= 5
+		n += 3 -- n.+=(3)
+		
+		for i,v in d do
+			--print "#i,#v"	-- Root:print("%s,%s".format(i.to_s(),v.to_s()))
+		end					-- Or something like that
+		
+		0x2345.lol(3*4,{a,b,4}).mem[a*b]
+		<1,2,blah.blih.blok([])>
+		
+		a,b,c = a xor b
+		
+		return x*y
+	end
 	
-	a = Blah()
-	x,y = a.getSomething(<5,10>)
-	priv = a.getPriv()
-	a,b = <1,3,4>,<2,4,5>
-	c = a * b -- dot product
+	num op *= ()
 	
-	d = [1,2,3,a] -- array
-	
-	l = /1,2,3,4/	-- list
-		   
-	e = {1,Blah(),<3,4,5>}  -- pack
-	
-	somenum = 5 + 4		-- 5.+(4)
-	
-	--n += 3 -- n.+=(3)
-	
-	for i,v in d do
-		--print "#i,#v"	-- Root:print("%s,%s".format(i.to_s(),v.to_s()))
-	end					-- Or something like that
-	
-	
-	return x*y
-end
+	end
 end

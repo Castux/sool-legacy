@@ -130,63 +130,13 @@ function Node:expect(toktype)
 	end
 end
 
-function Node:accept2(s)
-	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
-		-- cheat a bit: merge the two tokens
-		local a = head()
-		consume()
-		local b = head()
-		consume()
-		local tok = {
-			s,
-			s,
-			range(a[3],b[3])
-		}
-		self:add(tok)
-		return true
-	else
-		return false
-	end
-end
-
-function Node:expect2(s)
-	if peek() == s:sub(1,1) and peek(2) == s:sub(2,2) then
-		-- cheat a bit: merge the two tokens
-		local a = head()
-		consume()
-		local b = head()
-		consume()
-		local tok = {
-			s,
-			s,
-			range(a[3],b[3])
-		}
-		self:add(tok)
-		return true
-	else
-		add_err("error",
-			"expected digraph" .. s .. ", found " .. peek() .. " instead",
-			peekpos()
-		)
-		return false
-	end
-end
-
 function Node:binop(only_peek)
 
-	local ops = {'+','-','*','/','%','<','>','^','|','xor','and','or'}
-	local digr = {'+=','-=','*=','/=','%=','<=','>=','==','~=','<<','>>',
-		'^=','|=' }
+	local ops = {'+','-','*','/','%','<','>','^','|','xor','and','or',
+		'<=','>=','==','~=','<<','>>'}
 	
 	if only_peek then
 	-- don't consume
-		
-		-- test digraphs first, or they never get used
-		for i,v in ipairs(digr) do
-			if peek2() == v then
-				return true
-			end
-		end	
 		
 		for i,v in ipairs(ops) do
 			if peek() == v then
@@ -197,11 +147,6 @@ function Node:binop(only_peek)
 		return false
 	-- consume
 	else
-		for i,v in ipairs(digr) do
-			if self:accept2(v) then
-				return true
-			end
-		end
 		
 		for i,v in ipairs(ops) do
 			if self:accept(v) then
@@ -414,7 +359,6 @@ function Class:parse()
 		while peek() ~= 'end' do
 			local meth = Method()
 			if not meth then
-				add_err('info','in class that started at',self:firstpos())
 				return
 			else
 				self:add(meth)
@@ -619,7 +563,7 @@ function Method:parse()
 	
 	-- [ type { ',' type } ]
 	
-	if peek() ~= 'Name' then
+	if peek() ~= 'Name' and peek() ~= 'op' then
 		
 		local typ = Type()
 		if not typ then
@@ -665,7 +609,7 @@ function Method:parse()
 	-- '(' [ type Name { ',' type Name } ] ')'
 	
 	if not self:expect '(' then
-		add_err('info','to open argument list in method definition',range(open,peekpos()))
+		add_err('info','to open argument list in method definition',range(open,self:lastpos()))
 		return
 	end
 	
@@ -704,7 +648,6 @@ function Method:parse()
 	-- block
 	self.body = Block()
 	if not self.body then
-		add_err('info','body fucked')
 		return
 	end
 	
@@ -718,7 +661,7 @@ function Method:parse()
 end
 
 function Method:str()
-	local s = ""
+	local s = self.private and 'private ' or ''
 	
 	for i,v in ipairs(self.ret) do
 		s = s .. v:str()
@@ -727,7 +670,9 @@ function Method:str()
 		end
 	end
 	
-	s = s .. ' ' .. self.name .. '('
+	if #self.ret > 0 then s = s .. ' ' end
+	
+	s = s .. self.name .. '('
 	
 	for i,v in ipairs(self.args) do
 		s = s .. v.type:str() .. " " .. v.name
@@ -1281,9 +1226,10 @@ end
 
 function Assignment:parse()
 	
+	local begin = current
+	
 	self.lval = self:listbasicexp()
 	if not self.lval then
-		add_err('info','as lval in assignment')
 		return
 	else
 		self:add(self.lval)
@@ -1293,7 +1239,7 @@ function Assignment:parse()
 	if self:accept '=' then
 		self.rval = self:listexp()
 		if not self.rval then
-			add_err('info','as rval in assignment')
+			add_err('info','as right value in assignment',self:pos())
 			return
 		else
 			self:add(self.rval)
@@ -1301,7 +1247,7 @@ function Assignment:parse()
 	
 	-- special case: lone basic expression
 	elseif #self.lval == 1 then
-			return self.lval[1]
+		return self.lval[1]
 	
 	else
 		-- we know it's not going to happen, but nicer error message
@@ -1706,7 +1652,7 @@ function BasicExp:str()
 			if v.args then
 				s = s .. v.args[1]:str()
 				for i = 2,#v.args do
-					s = s .. ',' .. v.args[i]
+					s = s .. ',' .. v.args[i]:str()
 				end
 			end
 			s = s .. ')'
@@ -1749,13 +1695,13 @@ function Exp:parse()
 		if self:binop() then
 			term.binop = self:lastval()
 		else
-			add_err('info','in expression',self:pos())
+			add_err('info','as operator in expression',self:pos())
 			return
 		end
 		
 		term.right = BasicExp()
 		if not term.right then
-			add_err('info','in expression',self:pos())
+			add_err('info','as right hand term in expression',self:pos())
 			return
 		end
 		

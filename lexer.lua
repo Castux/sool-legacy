@@ -110,6 +110,23 @@ lex = function(s)
 			break
 		end
 		
+		-- Digraphs
+		local digr = {'<=','>=','==','~=','<<','>>'}
+		local wasdigr = false
+		
+		for i,v in ipairs(digr) do
+			m = s:match("^" .. v,index)
+			if m then
+				wasdigr = true
+				break
+			end
+		end
+		
+		if wasdigr then
+			addtok(m)
+			break
+		end
+		
 		-- Special punctuation
 		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}\"']",index)
 		if m then
