@@ -72,5 +72,10 @@ class Root methods	-- meh, not so nice
 		a = 'youpi
 		dooo wah' + "choubi
 		didouou"
+		
+		b = '' + "" + ' ' + " " + '"' + "'" + '
+		' - "
+		"
+		
 	end
 end

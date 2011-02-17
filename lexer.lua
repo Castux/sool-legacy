@@ -198,9 +198,9 @@ lex = function(s)
 		end
 		
 		-- String
-		
 		if s:sub(index,index) == "'" or s:sub(index,index) == '"' then
-			m = s:match("^'.-[^\\]?'",index) or s:match('^".-[^\\]?"',index)
+			m = s:match("^''",index) or s:match('^""',index) or
+			s:match("^'.-[^\\]'",index) or s:match('^".-[^\\]"',index)
 			if m then
 				-- form token
 				local tok = {
