@@ -28,8 +28,8 @@ stat :=			'do' block 'end' |
 					[ 'else' block ]
 				'end' |
 				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
-				'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end' |
-				methodcall |
+				'for' Name { ',' Name } 'in' exp 'do' block 'end' |
+				basicexp |
 				listbasicexp '=' listexp
 
 atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |

@@ -312,6 +312,10 @@ function Chunk:parse()
 		end
 	end
 	
+	if not self:expect 'EOF' then
+		return
+	end
+	
 	return self
 end
 
@@ -556,6 +560,10 @@ function Type:str()
 	
 	if self.type == 'num' or self.type == 'vec' or self.type == 'str' then
 		return self.type
+	end
+	
+	if self.type == 'class' then
+		return self.val
 	end
 	
 	if self.type == 'array' then
@@ -883,7 +891,11 @@ function Return:parse()
 	end
 	
 	if peek() ~= 'end' then
-		self.vals = Listexp()
+		self.vals = self:listexp()
+		if not self.vals then
+			add_err('info','in return statement',self:pos())
+			return
+		end
 	end
 	
 	return self
@@ -1171,7 +1183,7 @@ function For:str()
 end
 
 --[[
-'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
+'for' Name { ',' Name } 'in' exp 'do' block 'end'
 ]]
 
 GenericFor = class(Stat)
@@ -1199,9 +1211,7 @@ function GenericFor:parse()
 		return
 	end
 	
-	while peek() ~= 'in' do
-		self:accept ','
-		
+	while self:accept ',' do
 		if self:expect 'Name' then
 			self[#self+1] = self:lastval()
 		else
@@ -1254,14 +1264,515 @@ function GenericFor:str()
 	return s ..' do\n' .. self.body:str() .. '\n' .. 'end'
 end
 
-Exp = class()
+--[[
+basicexp | listbasicexp '=' listexp
+]]
+
+Assignment = class(Stat)
+
+function Assignment:init()
+	Assignment.super.init(self)
+	
+	self.lval = nil
+	self.rval = nil
+	
+	return self:parse()
+end
+
+function Assignment:parse()
+	
+	self.lval = self:listbasicexp()
+	if not self.lval then
+		add_err('info','as lval in assignment')
+		return
+	else
+		self:add(self.lval)
+	end
+	
+	-- normal case
+	if self:accept '=' then
+		self.rval = self:listexp()
+		if not self.rval then
+			add_err('info','as rval in assignment')
+			return
+		else
+			self:add(self.rval)
+		end
+	
+	-- special case: lone basic expression
+	elseif #self.lval == 1 then
+			return self.lval[1]
+	
+	else
+		-- we know it's not going to happen, but nicer error message
+		self:expect '='
+		add_err('info','in assignment',self:pos())
+	end
+	
+	return self
+end
+
+function Assignment:str()
+	
+	local s = self.lval[1]:str()
+	
+	for i = 2,#self.lval do
+		s = s .. ',' .. self.lval[i]:str()
+	end
+	
+	s = s .. ' = ' .. self.rval[1]:str()
+	
+	for i = 2,#self.rval do
+		s = s .. ',' .. self.rval[i]:str()
+	end
+	
+	return s
+end
+
+--[[
+listexp :=		exp { ',' exp }
+]]
+
+-- Does not return a node, just a list
+
+function Node:listexp()
+	
+	local t = {}
+	
+	t[1] = Exp()
+	if not t[1] then
+		return
+	else
+		self:add(t[1])
+	end
+	
+	while self:accept ',' do
+		local ex = Exp()
+		if not ex then
+			return
+		else
+			t[#t+1] = ex
+			self:add(ex)
+		end
+	end
+	
+	return t
+end
+
+--[[
+listbasicexp :=	basicexp { ',' basicexp }
+]]
+
+-- Does not return a node, just a list
+
+function Node:listbasicexp()
+	
+	local t = {}
+	
+	t[1] = BasicExp()
+	if not t[1] then
+		return
+	else
+		self:add(t[1])
+	end
+	
+	while self:accept ',' do
+		local ex = BasicExp()
+		if not ex then
+			return
+		else
+			t[#t+1] = ex
+			self:add(ex)
+		end
+	end
+	
+	return t
+end
+
+--[[
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
+				Symbol | '(' exp ')' |
+				'{' [ listbasicexp ] '}' |
+				'[' [ listbasicexp ] ']' |
+				'/' [ listbasicexp ] '/' |
+				'<' [ listbasicexp ] '>' |
+				ClassName [ '(' [ listexp ] ')' ]
+]]
+
+AtomicExp = class(Node)
+
+
+function AtomicExp:init()
+	AtomicExp.super.init(self)
+	
+	self.kind = ""
+	self.val = nil
+	self.args = nil		-- for instanciation only
+	
+	return self:parse()
+end
+
+function AtomicExp:parse()
+	
+	local open = peekpos()
+	
+	-- Name | Number | String | 'nil' | 'false' | 'true' | Symbol
+	if self:accept 'Name' then
+		self.kind = 'var'
+		self.val = self:lastval()
+		
+	elseif self:accept 'Number' then
+		self.kind = 'number'
+		self.val = self:lastval()
+		
+	elseif self:accept 'String' then
+		self.kind = 'string'
+		self.val = self:lastval()
+
+	elseif self:accept 'Symbol' then
+		self.kind = 'symbol'
+		self.val = self:lastval()
+	
+	elseif self:accept 'nil' then
+		self.kind = 'nil'
+		self.val = 'nil'
+	
+	elseif self:accept 'true' then
+		self.kind = 'true'
+		self.val = 'true'
+	
+	elseif self:accept 'false' then
+		self.kind = 'false'
+		self.val = 'false'
+	
+	-- '(' exp ')'
+	elseif self:accept '(' then
+		local ex = Exp()
+		if not ex then
+			return
+		else
+			self:add(ex)
+		end
+		if not self:expect ')' then
+			add_err('info','to match',open)
+			return
+		end
+		
+		-- return directly the expression, no need for a "parentheses" node 
+		return ex
+		
+	-- '{' [ listbasicexp ] '}'
+	elseif self:accept '{' then
+		self.kind = 'pack'
+		if peek() ~= '}' then
+			self.val = self:listbasicexp()
+			if not self.val then
+				add_err('info','in pack constructor started at',open)
+				return
+			else
+				self:add(self.val)
+			end
+		end
+		if not self:expect '}' then
+			add_err('info','to match',open)
+			return
+		end
+	
+	-- '[' [ listbasicexp ] ']'
+	elseif self:accept '[' then
+		self.kind = 'array'
+		if peek() ~= ']' then
+			self.val = self:listbasicexp()
+			if not self.val then
+				add_err('info','in array constructor started at',open)
+				return
+			else
+				self:add(self.val)
+			end
+		end
+		if not self:expect ']' then
+			add_err('info','to match',open)
+			return
+		end
+		
+	-- '/' [ listbasicexp ] '/'
+	elseif self:accept '/' then
+		self.kind = 'list'
+		if peek() ~= '/' then
+			self.val = self:listbasicexp()
+			if not self.val then
+				add_err('info','in list constructor started at',open)
+				return
+			else
+				self:add(self.val)
+			end
+		end
+		if not self:expect '/' then
+			add_err('info','to match',open)
+			return
+		end
+		
+	-- '<' [ listbasicexp ] '>'
+	elseif self:accept '<' then
+		self.kind = 'vector'
+		if peek() ~= '>' then
+			self.val = self:listbasicexp()
+			if not self.val then
+				add_err('info','in vector constructor started at',open)
+				return
+			else
+				self:add(self.val)
+			end
+		end
+		if not self:expect '>' then
+			add_err('info','to match',open)
+			return
+		end
+	
+	-- ClassName [ '(' [ listexp ] ')' ]
+	elseif self:accept 'ClassName' then
+		self.kind = 'instanciation'
+		self.val = self:lastval()
+		if self:accept '(' then
+			open = self:lastpos()
+			if peek() ~= ')' then
+				self.args = listexp()
+				if not self.args then
+					add_err('info','in instanciation argument list',open)
+					return
+				else
+					self:add(self.args)
+				end
+			end
+			if not self:expect ')' then
+				add_err('info','to match',open)
+				return
+			end
+		end
+	
+	else
+		add_err('error','malformed atomic expression: ' .. peek(),peekpos())
+		return
+	end
+	
+	return self
+end
+
+function AtomicExp:str()
+	
+	-- special basic
+	if self.kind == 'symbol' then
+		return '@' .. self.val
+	end
+	
+	-- basic
+	if self.val and type(self.val) ~= 'table' then
+		return self.val
+	end
+	
+	-- bracketed
+	local open,close
+	
+	if self.kind == 'array' then
+		open,close = '[',']'
+	elseif self.kind == 'list' then
+		open,close = '/','/'
+	elseif self.kind == 'pack' then
+		open,close = '{','}'
+	elseif self.kind == 'vector' then
+		open,close = '<','>'
+	end
+	
+	if open and close then
+		local s = open 
+		
+		if self.val then
+			s = s .. self.val[1]:str()
+			for i = 2,#self.val do
+				s = s .. ',' .. self.val[i]:str()
+			end
+		end
+		return s .. close
+	end
+	
+	-- instanciation
+	assert(self.kind == 'instanciation')
+	
+	local s = self.val .. '('
+	if self.args then
+		s = s .. self.args[1]:str()
+		for i = 2,#self.args do
+			s = s .. ',' .. self.args[i]
+		end
+		return s .. ')'
+	end
+	
+end
+
+--[[
+exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
+				'[' exp ']'
+				
+basicexp :=		atomicexp { exptail }
+]]
+
+BasicExp = class(Node)
+
+function BasicExp:init()
+	BasicExp.super.init(self)
+	
+	self.atom = nil
+	self.tails = {}
+	
+	return self:parse()
+end
+
+function BasicExp:parse()
+	
+	-- atomicexp
+	self.atom = AtomicExp()
+	if not self.atom then
+		return
+	else
+		self:add(self.atom)
+	end
+	
+	-- { exptail }
+	while peek() == '.' or peek() == '[' do
+		local tail = {}
+		local open = peekpos()
+		
+		-- '[' exp ']'
+		if self:accept '[' then
+			tail.kind = 'index'
+			tail.index = Exp()
+			if not tail.index then
+				add_err('info','as index in indexing started at',open)
+				return
+			else
+				self:add(tail.index)
+			end
+			
+			if not self:expect ']' then
+				add_err('info','to match',open)
+				return
+			end
+		
+		-- '.' Name [ '(' [ listexp ] ')' ]
+		elseif self:accept '.' then
+			
+			if self:expect 'Name' then
+				tail.name = self:lastval()
+			else
+				add_err('info','in member access started at',open)
+				return
+			end
+			
+			if self:accept '(' then
+				open = self:lastpos()
+				tail.kind = 'call'
+				if peek() ~= ')' then
+					tail.args = self:listexp()
+					if not tail.args then
+						return
+					end
+				end
+				
+				if not self:expect ')' then
+					add_err('info','to match',open)
+					return
+				end
+			else
+				tail.kind = 'member_access'
+			end
+		end
+		
+		table.insert(self.tails,tail)
+	end
+	
+	return self
+end
+
+function BasicExp:str()
+	local s = self.atom:str()
+	
+	for i,v in ipairs(self.tails) do
+		if v.kind == 'index' then
+			s = s .. '[' .. v.index:str() .. ']'
+		elseif v.kind == 'member_access' then
+			s = s .. '.' .. v.name
+		elseif v.kind == 'call' then
+			s = s .. '.' .. v.name .. '('
+			if v.args then
+				s = s .. v.args[1]:str()
+				for i = 2,#v.args do
+					s = s .. ',' .. v.args[i]
+				end
+			end
+			s = s .. ')'
+		else
+			error('BasicExp:str() - unknown tail kind: ' .. v.kind)
+		end
+	end
+	
+	return s
+end
+
+--[[
+exp := 			basicexp { Binop basicexp }
+]]
+
+Exp = class(Node)
 
 function Exp:init()
+	Exp.super.init(self)
+	
+	self.left = nil
+	self.terms = {}
+	
+	return self:parse()
+end
+
+function Exp:parse()
+	
+	-- basicexp { Binop basicexp }
+	self.left = BasicExp()
+	if not self.left then
+		return
+	else
+		self:add(self.left)
+	end
+	
+	while self:binop(true) do	-- true for only peeking
+		local term = {}
+		
+		if self:binop() then
+			term.binop = self:lastval()
+		else
+			add_err('info','in expression',self:pos())
+			return
+		end
+		
+		term.right = BasicExp()
+		if not term.right then
+			add_err('info','in expression',self:pos())
+			return
+		end
+		
+		table.insert(self.terms,term)
+	end
+	
 	return self
 end
 
 function Exp:str()
-	return ''
+	local s = self.left:str()
+	
+	for i,v in ipairs(self.terms) do
+		s = s .. v.binop ..'(' .. v.right:str() .. ')'
+	end
+	
+	return s
 end
 
 -------------------------
@@ -1276,9 +1787,6 @@ function parse(toks)
 	-- apply top level rule
 	local tree = Chunk()
 	if not tree then return nil,errors end
-	
-	--local eof = expect 'EOF'
-	--if not eof then return nil,errors end
 	
 	return tree,errors
 end

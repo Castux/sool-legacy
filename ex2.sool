@@ -4,8 +4,7 @@ class A : B
 	{num} pacool
 methods
 	num meh()
-		for a,b,c do
-			break
-		end
+		a
 	end
 end
+
