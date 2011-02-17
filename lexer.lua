@@ -127,6 +127,29 @@ lex = function(s)
 			break
 		end
 		
+		-- Hex number
+		m = s:match("^[-+]?0[xX]%x+",index)
+		if m then
+			addtok(m,'Number')
+			break
+		end
+		
+		-- Number with dot
+		m = s:match("^[-+]?%d+%.%d+",index)
+		if m then
+			local expo = s:match("^[eE]%d+",index+#m)
+			addtok(m .. (expo or ""),'Number')
+			break
+		end
+		
+		-- Number without dot
+		m = s:match("^[-+]?%d+",index)
+		if m then
+			local expo = s:match("^[eE]%d+",index+#m)
+			addtok(m .. (expo or ""),'Number')
+			break
+		end
+		
 		-- Special punctuation
 		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}]",index)
 		if m then
@@ -171,29 +194,6 @@ lex = function(s)
 		m = s:match("^@%S+",index)
 		if m then
 			addtok(m,'Symbol')
-			break
-		end
-		
-		-- Hex number
-		m = s:match("^0[xX]%x+",index)
-		if m then
-			addtok(m,'Number')
-			break
-		end
-		
-		-- Number with dot
-		m = s:match("^%d+%.%d+",index)
-		if m then
-			local expo = s:match("^[eE]%d+",index+#m)
-			addtok(m .. (expo or ""),'Number')
-			break
-		end
-		
-		-- Number without dot
-		m = s:match("^%d+",index)
-		if m then
-			local expo = s:match("^[eE]%d+",index+#m)
-			addtok(m .. (expo or ""),'Number')
 			break
 		end
 		

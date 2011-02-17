@@ -27,9 +27,6 @@ methods
 	private /[num]/ b(vec v,vec w)
 		(5).double()
 	end
-end
-
-class Root methods	-- meh, not so nice
 	num main([str] args)
 		
 		a = Blah()
@@ -42,6 +39,10 @@ class Root methods	-- meh, not so nice
 			for j = 1,lol.double do
 				print lol
 			end
+		end
+		
+		while true do
+			nothing
 		end
 		
 		a = "haha
@@ -57,8 +58,8 @@ class Root methods	-- meh, not so nice
 		a = n == 5 + @sy%&
 		
 		for i in d.a[a] do
-			--print "#i,#v"	-- Root:print("%s,%s".format(i.to_s(),v.to_s()))
-		end					-- Or something like that
+			"#i,#v".print
+		end
 		
 		0x2345.lol(3*4,{a,b,4}).mem[a*b]
 		<1,2,blah.blih.blok([])>
@@ -76,6 +77,8 @@ class Root methods	-- meh, not so nice
 		b = '' + "" + ' ' + " " + '"' + "'" + '
 		' - "
 		"
+		
+		a = a and b or c
 		
 	end
 end

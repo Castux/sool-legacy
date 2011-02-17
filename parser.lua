@@ -754,6 +754,9 @@ function Block:parse()
 	
 	elseif peek() == 'return' then
 		st = Return()
+		if not st then
+			return
+		end
 	end
 	
 	if st then
