@@ -50,6 +50,7 @@ end
 
 function print_error(err)
 	
+	-- Retrieve file info from position structure, if any
 	local file = err[4] and err[4].file or nil
 	
 	io.write(err[1],' ')
