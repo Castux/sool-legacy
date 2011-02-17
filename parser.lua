@@ -1170,6 +1170,90 @@ function For:str()
 	return s..' do\n' .. self.body:str() .. '\n' .. 'end'
 end
 
+--[[
+'for' Name { [ ',' ] Name } 'in' exp 'do' block 'end'
+]]
+
+GenericFor = class(Stat)
+
+function GenericFor:init()
+	GenericFor.super.init(self)
+	
+	self[1] = ""
+	self.exp = nil
+	self.body = nil
+	
+	return self:parse()
+end
+
+function GenericFor:parse()
+	
+	if not self:expect 'for' then
+		return
+	end
+	
+	if self:expect 'Name' then
+		self[1] = self:lastval()
+	else
+		add_err('info','as variable in generic for',self:lastpos())
+		return
+	end
+	
+	while peek() ~= 'in' do
+		self:accept ','
+		
+		if self:expect 'Name' then
+			self[#self+1] = self:lastval()
+		else
+			add_err('info','as variable in generic for',self:firstpos())
+			return
+		end
+	end
+	
+	if not self:expect 'in' then
+		add_err('info','in generic for',self:firstpos())
+		return
+	end
+	
+	self.exp = Exp()
+	if self.exp then
+		self:add(self.exp)
+	else
+		add_err('info','as iterated in generic for',self:lastpos())
+		return
+	end
+	
+	if not self:expect 'do' then
+		add_err('info','in generic for',self:firstpos())
+		return
+	end
+	
+	self.body = Block()
+	if not self.body then
+		return
+	end
+	
+	if not self:expect 'end' then
+		add_err('info','to complete generic for started at',self:firstpos())
+		return
+	end
+	
+	return self
+end
+
+function GenericFor:str()
+	
+	local s =  'for ' .. self[1]
+	
+	for i = 2,#self do
+		s = s .. ',' .. self[i]
+	end
+	
+	s = s .. ' in ' .. self.exp:str()
+	
+	return s ..' do\n' .. self.body:str() .. '\n' .. 'end'
+end
+
 Exp = class()
 
 function Exp:init()
