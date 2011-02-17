@@ -6,9 +6,34 @@ class Lol : Blah
 	num pues 
 end
 
-class Blah
+class Blah : Fun
 
 end
 
 class Lol
+	
+	num haha
+	vec lol
+	/vec/ haha
+	[Blah] naaa
+	
+methods
+	
+	num doThing()
+		lots
+		of
+		things
+		yes
+	end
+	private {vec,{num,num}},/[num]/,num blah(vec v,/num/ l) end
+	
+	doThing() end
+	
+	num doThing()
+		lots
+		of thinks fosij 
+		so ji
+		
+	end
+	
 end

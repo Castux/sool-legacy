@@ -292,7 +292,7 @@ function Class:init()
 	self.name = ""
 	self.parent = nil
 	
-	self.members = {}	-- {type,name}
+	self.members = {}	-- small Node with fields {type,name} (and proper children)
 	self.methods = {}
 	
 	return self:parse()
@@ -327,11 +327,11 @@ function Class:parse()
 	
 	while peek() ~= 'methods' and peek() ~= 'end' do
 		local open
-		local mem = {}
+		local mem = Node()
 		
-		if self:accept 'private' then
+		if mem:accept 'private' then
 			mem.private = true
-			open = self:lastpos()
+			open = mem:lastpos()
 		end
 		
 		open = open or peekpos()
@@ -340,11 +340,11 @@ function Class:parse()
 			add_err('info','in member definition started here',open)
 			return
 		else
-			self:add(mem.type)
+			mem:add(mem.type)
 		end
 		
-		if self:expect 'Name' then
-			mem.name = self:lastval()
+		if mem:expect 'Name' then
+			mem.name = mem:lastval()
 		else
 			add_err('info','for member name in member definition',range(open,peekpos()))
 			return
@@ -546,6 +546,8 @@ function Method:init()
 	self.args = {}
 	self.body = nil
 	
+	self.namepos = nil
+	
 	return self:parse()
 end
 
@@ -593,6 +595,7 @@ function Method:parse()
 	if self:accept 'op' then
 		if self:binop() then
 			self.name = self:lastval()
+			self.namepos = self:lastpos()
 		else
 			add_err('info','for method name in method definition',range(open,peekpos()))
 			return
@@ -600,6 +603,7 @@ function Method:parse()
 	else
 		if self:expect 'Name' then
 			self.name = self:lastval()
+			self.namepos = self:lastpos()
 		else
 			add_err('info','for method name in method definition',range(open,peekpos()))
 			return
