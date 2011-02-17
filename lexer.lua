@@ -3,7 +3,7 @@
 Token structure:
 ================
 
-1 = type (Name, ClassName, Symbol, Number, or complete string for others)
+1 = type (Name, ClassName, Symbol, Number, String, or complete string for others)
 2 = value (string of original text)
 3 = position in file
 token = true
@@ -61,7 +61,7 @@ lex = function(s)
 		local info = {
 			"Lexer",
 			"info",
-			"valid symbols at token beginning are: [_a-zA-Z0-9@] and operators [~+-*/%^|#=<>:.,;()[]{}\"'"
+			"valid symbols at token beginning are: [_a-zA-Z0-9@'\"] and operators [~+-*/%^|#=<>:.,;()[]{}"
 		}
 		return nil,{err,info}
 	end
@@ -128,7 +128,7 @@ lex = function(s)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}\"']",index)
+		m = s:match("^[~%+%-%*/%%^|#=<>:.,;%(%)%[%]{}]",index)
 		if m then
 			addtok(m)
 			break
@@ -195,6 +195,62 @@ lex = function(s)
 			local expo = s:match("^[eE]%d+",index+#m)
 			addtok(m .. (expo or ""),'Number')
 			break
+		end
+		
+		-- String
+		
+		if s:sub(index,index) == "'" or s:sub(index,index) == '"' then
+			m = s:match("^'.-[^\\]?'",index) or s:match('^".-[^\\]?"',index)
+			if m then
+				-- form token
+				local tok = {
+					'String',
+					m,
+					{
+						fline=line,
+						fcol=col,
+					},
+					token = true
+				}
+				
+				-- count newlines
+				local _,nl = m:gsub('\n',{})
+				
+				line = line + nl
+				
+				if nl > 0 then
+					-- count characters on last line
+					local rem = m:match("[^\n]*$")
+					col = #rem + 1
+				else
+					-- single line, basic advance
+					col = col + #m
+				end
+				
+				-- update global index
+				index = index + #m
+				
+				-- update token
+				tok[3].lline = line
+				tok[3].lcol = col - 1
+				
+				tokens[#tokens+1] = tok
+			
+			else
+				local err = {
+					"Lexer",
+					"error",
+					"unfinished string starting at",
+					{
+						fline = line,
+						lline = line,
+						fcol = col,
+						lcol = col
+					}
+				}
+				
+				return nil,{err}
+			end
 		end
 		
 		-- If all else fails...
