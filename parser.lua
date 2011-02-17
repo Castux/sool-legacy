@@ -63,7 +63,11 @@ local function range(from,to)
 	local fline,fcol = from.fline,from.fcol
 	local lline,lcol = to.lline,to.lcol
 	
-	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol}
+	-- from and to should really be in the same file
+	assert(from.file == to.file)
+	local file = from.file
+	
+	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol, file = file}
 end
 
 -- helper function
@@ -175,33 +179,35 @@ function Node:firstpos()
 	end
 end
 
--- Return line,col of first/last symbol. Read in token if token, call
+-- Return line,col,file of first/last symbol. Read in token if token, call
 -- recursively if node
-function Node:firstlc()
-	local fi = self.children[1]
+function Node:firstlc(n)
+	local fi = self.children[n or 1]
 	
 	if fi.token then
-		return fi[3].fline,fi[3].fcol
+		return fi[3].fline,fi[3].fcol,fi[3].file
 	else
 		return fi:firstlc()
 	end
 end
 
-function Node:lastlc()
-	local la = self.children[#self.children]
+function Node:lastlc(n)
+	local la = self.children[n or #self.children]
 	
 	if la.token then
-		return la[3].lline,la[3].lcol
+		return la[3].lline,la[3].lcol,la[3].file
 	else
 		return la:lastlc()
 	end
 end
 
-function Node:pos()
-	local fline,fcol = self:firstlc()
-	local lline,lcol = self:lastlc()
+function Node:pos(a,b)
+	local fline,fcol,file1 = self:firstlc(a)
+	local lline,lcol,file2 = self:lastlc(b)
 	
-	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol}
+	assert(file1 == file2)
+	
+	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol, file = file1}
 end
 
 
@@ -286,7 +292,7 @@ function Class:init()
 	self.name = ""
 	self.parent = nil
 	
-	self.members = {}
+	self.members = {}	-- {type,name}
 	self.methods = {}
 	
 	return self:parse()
@@ -1733,8 +1739,7 @@ function parse(toks)
 	errors = {}
 	
 	-- apply top level rule
-	local tree = Chunk()
-	if not tree then return nil,errors end
+	local chunk = Chunk()
 	
-	return tree,errors
+	return chunk,errors
 end

@@ -13,6 +13,7 @@ Position structure:
 
 fline,fcol = beginning of token
 lline,lcol = end of token
+file = file structure
 
 Only strings can be multiline, but this structure is the same as in
 nodes in the parse tree.
@@ -21,14 +22,16 @@ Error structure:
 ================
 
 1 = origin (Lexer, Parser, Analyser...)
-2 = type (Error, Warning, Info)
+2 = type (error, warning, info)
 3 = message
 4 = position in file
 
 ]]
 
-lex = function(s)
-
+lex = function(file)
+	
+	local s = file.all
+	
 	local line = 1
 	local col = 1
 	local index = 1
@@ -55,7 +58,8 @@ lex = function(s)
 				fline = line,
 				lline = line,
 				fcol = col,
-				lcol = col
+				lcol = col,
+				file = file
 			}
 		}
 		local info = {
@@ -75,7 +79,8 @@ lex = function(s)
 				fline=line,
 				lline=line,
 				fcol=col,
-				lcol=(col + #val - 1)
+				lcol=(col + #val - 1),
+				file = file
 			},
 			token = true
 		}
@@ -209,6 +214,7 @@ lex = function(s)
 					{
 						fline=line,
 						fcol=col,
+						file=file
 					},
 					token = true
 				}
@@ -245,7 +251,8 @@ lex = function(s)
 						fline = line,
 						lline = line,
 						fcol = col,
-						lcol = col
+						lcol = col,
+						file = file
 					}
 				}
 				
@@ -268,7 +275,8 @@ lex = function(s)
 			fline=line,
 			lline=line,
 			fcol=col,
-			lcol=col
+			lcol=col,
+			file=file
 		}
 	}
 	

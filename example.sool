@@ -1,84 +1,14 @@
 class Blah : Root
-	
-	num i
-	vec v
-	{num vec} somePack
-	str s
-	
-	Blah object
-	
-	[num] someArray
-	[[num]] grid
-	/Blah/ someList
-	[/vec/] hum
-	
-	private num priv
 
-methods
-	
-	num,num getSomething(vec v) -- haha local variable shadows member! bad!
-		return v.x, v.y
-	end
-	
-	num getPriv()
-		return priv
-	end
-	
-	private /[num]/ b(vec v,vec w)
-		(5).double()
-	end
-	num main([str] args)
-		
-		a = Blah()
-		x,y = a.getSomething(<5,10>)
-		priv = a.getPriv()
-		a,b = <1,3,4>,<2,4,5>
-		c = a * b; -- dot product
-		
-		for a in 1 do
-			for j = 1,lol.double do
-				print lol
-			end
-		end
-		
-		while true do
-			nothing
-		end
-		
-		a = "haha
-		louou" * 4
-		
-		
-		l = /1,2,3,4/	-- list
-		
-		e = {1,Blah(),<3,(4*f),5>}  -- pack
-		
-		somenum = 5 + 4		-- 5.+(4)
-		
-		a = n == 5 + @sy%&
-		
-		for i in d.a[a] do
-			"#i,#v".print
-		end
-		
-		0x2345.lol(3*4,{a,b,4}).mem[a*b]
-		<1,2,blah.blih.blok([])>
-		
-		mess = a + (errcount > 1 and 3 or 4)
-		
-		return x*y
-	end
-	
-	num op == ()
-		a = 'youpi
-		dooo wah' + "choubi
-		didouou"
-		
-		b = '' + "" + ' ' + " " + '"' + "'" + '
-		' - "
-		"
-		
-		a = a and b or c
-		
-	end
+end
+
+class Lol : Blah
+
+end
+
+class Blah
+
+end
+
+class Lol
 end

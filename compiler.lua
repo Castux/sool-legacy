@@ -1,5 +1,6 @@
 require 'lexer'
 require 'parser'
+require 'analyzer'
 
 --[[
 File structure
@@ -47,9 +48,9 @@ local function Cd(str,col)
 	return "\027[" .. 30 + col .. "m" .. str .. "\027[0m"
 end
 
-function print_error(err,file)
+function print_error(err)
 	
-	local file = err[4] and file or nil
+	local file = err[4] and err[4].file or nil
 	
 	io.write(err[1],' ')
 	
@@ -138,7 +139,7 @@ function compile(path)
 	
 	-- Lexing
 	
-	local tokens,err = lex(file.all)
+	local tokens,err = lex(file)
 	
 	if err then
 		for i,v in ipairs(err) do
@@ -156,7 +157,7 @@ function compile(path)
 	
 	-- Parsing
 	
-	local tree,err = parse(tokens)
+	local chunk,err = parse(tokens)
 	
 	local errcount = 0
 	
@@ -176,5 +177,19 @@ function compile(path)
 	
 	print_error {'Compiler','info',mess}
 	
-	if tree then print(tree:str()) end
+	if errcount > 0 then
+		return
+	end
+	
+	-- Analysis
+	
+	err = validate(chunk)
+	
+	for i,v in ipairs(err) do
+		print_error(v,file)
+		if v[2] == 'error' then
+			errcount = errcount + 1
+		end
+	end
+	
 end
