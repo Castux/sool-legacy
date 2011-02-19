@@ -139,12 +139,21 @@ function parse_file(file)
 			print_error(v,file)
 		end
 		return
+	end
+		
+	-- Check that file wasn't empty
+	if #tokens-1 == 0 then		-- do not count EOF
+		print_error{
+			'Lexer',
+			'warning',
+			'no tokens found in file ' .. Cd(file.name,5)
+		}
 	else
 		print_error {
-			"Compiler",
-			"info",
-			"successfully lexed file ".. Cd(file.name,5) ..
-				" for a total of " .. #tokens-1 .. " tokens"	-- do not count EOF
+			'Compiler',
+			'info',
+			'successfully lexed file '.. Cd(file.name,5) ..
+			' for a total of ' .. #tokens-1 .. ' tokens'
 		}
 	end
 	
@@ -219,6 +228,7 @@ function compile(list)
 	for i = 2,#chunks do
 		for _,class in ipairs(chunks[i].classes) do
 			table.insert(chunk.classes,class)
+			class.parent = chunk
 		end
 	end
 	

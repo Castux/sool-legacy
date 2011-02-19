@@ -93,6 +93,7 @@ Node = class()
 function Node:init()
 	
 	self.children = {}
+	self.parent = nil
 	
 	return self
 end
@@ -100,6 +101,7 @@ end
 -- Add token or node to children
 function Node:add(child)
 	table.insert(self.children,child)
+	child.parent = self
 end
 
 -- Parse optional token
@@ -290,7 +292,7 @@ function Class:init()
 	Class.super.init(self)
 	
 	self.name = ""
-	self.parent = nil
+	self.base = nil
 	
 	self.members = {}	-- small Node with fields {type,name} (and proper children)
 	self.methods = {}
@@ -316,7 +318,7 @@ function Class:parse()
 	-- [ ':' ClassName ]
 	if self:accept ':' then
 		if self:expect 'ClassName' then
-			self.parent = self:lastval()
+			self.base = self:lastval()
 		else
 			add_err('info','as parent class for class started at',self:pos())
 			return
@@ -351,6 +353,7 @@ function Class:parse()
 		end
 		
 		table.insert(self.members,mem)
+		self:add(mem)
 	end
 	
 	-- [ 'methods' { meth_def } ]
@@ -379,8 +382,8 @@ end
 function Class:str()
 	local s = 'class ' .. self.name
 	
-	if self.parent then
-		s = s .. ' : ' .. self.parent
+	if self.base then
+		s = s .. ' : ' .. self.base
 	end
 	
 	s = s .. '\n'

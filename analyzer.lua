@@ -1,4 +1,4 @@
-require 'parser'    -- nodes are defined here
+require 'parser'	-- nodes are defined here
 
 local errors
 
@@ -15,6 +15,26 @@ local function add_err(typ,mess,pos)
 	table.insert(errors,err)
 end
 
+---------------------
+-- Base Node class --
+---------------------
+
+--self.children = {}
+--self.parent = nil
+
+function Node:getParent(clas)
+	
+	if self.class == clas then
+		return self
+	end
+	
+	if not self.parent then
+		return nil
+	end
+	
+	return self.parent:getParent(clas)
+end
+
 -----------
 -- Chunk --
 -----------
@@ -23,27 +43,27 @@ end
 --self.classes = {}
 
 function Chunk:validate()
-    
-    -- Index classes by name and check they are unique
-    for i,v in ipairs(self.classes) do
-        
-        local name = v.name
-        
-        if self.classes[name] then
-            add_err('error','class ' .. name .. ' was already defined',v:pos(1,2))
-            add_err('info','(here)',self.classes[name]:pos(1,2))
-        end
-        
-        self.classes[name] = v
-    end
-    
-    -- Recurse
-    for i,v in ipairs(self.classes) do
-        v:validate(self.classes)
-    end
-    
-    -- Check for cyclic inheritence
-    
+	
+	-- Index classes by name and check they are unique
+	for i,v in ipairs(self.classes) do
+		
+		local name = v.name
+		
+		if self.classes[name] then
+			add_err('error','class ' .. name .. ' was already defined',v:pos(1,2))
+			add_err('info','(here)',self.classes[name]:pos(1,2))
+		end
+		
+		self.classes[name] = v
+	end
+	
+	-- Recurse
+	for i,v in ipairs(self.classes) do
+		v:validate(self.classes)
+	end
+	
+	-- Check for cyclic inheritence
+	
 end
 
 -----------
@@ -51,41 +71,85 @@ end
 -----------
 
 --self.name = ""
---self.parent = nil
+--self.base = nil
 
---self.members = {}	-- {type,name}
+--self.members = {}	-- small Node with fields {type,name} (and proper children)
 --self.methods = {}
 
-function Class:validate(classes)
-    
-    -- Check that parent class exists
-    if self.parent and not classes[self.parent] then
-        add_err('error','parent class ' .. self.parent .. ' does not exist',self:pos(4,4))
-    end
-    
-    -- Build inverse member table and check for duplicates
-    for i,mem in ipairs(self.members) do
-        
-        if self.members[mem.name] then
-            add_err('error','member ' .. mem.name .. ' was already defined',mem:pos())
-            add_err('info','(here)',self.members[mem.name]:pos())
-        end
-        
-        self.members[mem.name] = mem
-    end
-    
-    -- Build inverse method table and check for duplicates (use signatures, not just name)
-    for i,meth in ipairs(self.methods) do
-        
-        if self.methods[meth:signature()] then
-            add_err('error','method ' .. meth:signature() .. ' was already defined',meth.namepos)
-            add_err('info','(here)',self.methods[meth:signature()].namepos)
-        end
-        
-        self.methods[meth:signature()] = meth
-    end
+function Class:validate()
+	
+	-- Check that base class exists
+	if self.base and not self.parent.classes[self.base] then
+		add_err('error','base class ' .. self.base .. ' does not exist',self:pos(4,4))
+	end
+	
+	-- Members
+	for i,mem in ipairs(self.members) do
+		
+		-- Validate type
+		mem.type:validate()
+		
+		-- Check for duplicates
+		if self.members[mem.name] then
+			add_err('error','member ' .. mem.name .. ' was already defined',mem:pos())
+			add_err('info','(here)',self.members[mem.name]:pos())
+		end
+		
+		-- Build inverse member table
+		self.members[mem.name] = mem
+	end
+	
+	-- Same for methods
+	for i,meth in ipairs(self.methods) do
+		
+		-- Check for duplicates (use signatures, not just name)
+		if self.methods[meth:signature()] then
+			add_err('error','method ' .. meth:signature() .. ' was already defined',meth.namepos)
+			add_err('info','(here)',self.methods[meth:signature()].namepos)
+		end
+		
+		-- Check member-method name collision as well
+		if self.members[meth.name] then
+			add_err('error','method ' .. meth.name .. ' shadows member of the same name',meth.namepos)
+			add_err('info','defined here',self.members[meth.name]:pos())
+		end
+		
+		-- Add to reverse table
+		self.methods[meth:signature()] = meth
+	end
+	
+	-- Recurse
+	for _,meth in ipairs(self.methods) do
+		meth:validate()
+	end
 end
 
+----------
+-- Type --
+----------
+
+--self.type = ""
+--self.val = nil
+
+function Type:validate()
+	
+	if self.type == 'class' then
+		local classes = self:getParent(Chunk).classes
+		
+		if not classes[self.val] then
+			add_err('error','unknown class ' .. self.val, self:pos())
+		end
+	
+	elseif self.type == 'array' or self.type == 'list' then
+		self.val:validate()
+	
+	elseif self.type == 'pack' then
+		for i,v in ipairs(self.val) do
+			v:validate()
+		end
+	end
+	
+end
 
 ------------
 -- Method --
@@ -98,33 +162,42 @@ end
 --self.body = nil
 
 function Method:signature()
-    
-    if self.sig then
-        return self.sig
-    end
-    
-    local sig = ''
-    
-    for i,v in ipairs(self.ret) do
-        sig = sig .. v:str()
-        if i < #self.ret then
-            sig = sig .. ','
-        end
-    end
-    
-    sig = sig .. ':' .. self.name .. ':'
-    
-    for i,v in ipairs(self.args) do
-        sig = sig .. v.type:str()
-        if i < #self.args then
-            sig = sig .. ','
-        end
-    end
-    
-    -- Memoize
-    self.sig = sig
-    
-    return sig
+	
+	if self.sig then
+		return self.sig
+	end
+	
+	local sig = ''
+	
+	for i,v in ipairs(self.ret) do
+		sig = sig .. v:str()
+		if i < #self.ret then
+			sig = sig .. ','
+		end
+	end
+	
+	sig = sig .. ':' .. self.name .. ':'
+	
+	for i,v in ipairs(self.args) do
+		sig = sig .. v.type:str()
+		if i < #self.args then
+			sig = sig .. ','
+		end
+	end
+	
+	-- Memoize
+	self.sig = sig
+	
+	return sig
+end
+
+function Method:validate()
+	
+	-- Check return types
+	for _,ret in ipairs(self.ret) do
+		ret:validate()
+	end
+	
 end
 
 ---------------------------

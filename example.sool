@@ -1,39 +1,18 @@
-class Blah : Root
+class Blah
 
 end
 
 class Lol : Blah
-	num pues 
-end
-
-class Blah : Fun
-
-end
-
-class Lol
 	
 	num haha
 	vec lol
-	/vec/ haha
-	[Blah] naaa
+	[Blou] naaa
+	Taguel hihi
+	{/Taguel/,num,vec} asij
 	
 methods
 	
-	num doThing()
-		lots
-		of
-		things
-		yes
-	end
-	private {vec,{num,num}},/[num]/,num blah(vec v,/num/ l) end
-	
-	doThing() end
-	
-	num doThing()
-		lots
-		of thinks fosij 
-		so ji
-		
+	/{num,/Fuck/}/ what()
 	end
 	
 end
