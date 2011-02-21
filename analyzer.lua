@@ -104,6 +104,9 @@ end
 --self.members = {}	-- small Node with fields {type,name} (and proper children)
 --self.methods = {}
 
+-- Added by validate():
+-- self.variables = {}	members in the form of Variable
+
 function Class:validate()
 	
 	-- Check that base class exists
@@ -112,19 +115,38 @@ function Class:validate()
 	end
 	
 	-- Members
+	self.variables = {}
+	
 	for i,mem in ipairs(self.members) do
 		
 		-- Validate type
 		mem.type:validate()
 		
 		-- Check for duplicates
-		if self.members[mem.name] then
+		local taken = self:in_scope(mem.name)
+		if taken then
 			add_err('error','member ' .. mem.name .. ' is already defined',mem:pos())
-			add_err('info','(here)',self.members[mem.name]:pos())
+			add_err('info','(here)',taken.defnode:pos())
 		end
 		
 		-- Build inverse member table
 		self.members[mem.name] = mem
+		
+		-- Build variables table
+		local var = {
+			name = mem.name,
+			scope = self,
+			
+			type = mem.type,
+			
+			defnode = mem,
+			deftype = 'member',
+			assnum = nil,
+			
+			const = nil
+		}
+		
+		self.variables[var.name] = var
 	end
 	
 	-- Same for methods
@@ -137,9 +159,10 @@ function Class:validate()
 		end
 		
 		-- Check member-method name collision as well
-		if self.members[meth.name] then
+		local taken = self:in_scope(meth.name)
+		if taken then
 			add_err('error','method ' .. meth.name .. ' shadows member of the same name',meth.namepos)
-			add_err('info','defined here',self.members[meth.name]:pos())
+			add_err('info','defined here',taken.defnode:pos())
 		end
 		
 		-- Add to reverse table
@@ -150,6 +173,25 @@ end
 
 function Class:validate_methods()
 	
+	for _,meth in ipairs(self.methods) do
+		meth:validate()
+	end
+end
+
+-- Returns variable with given name if it is in current scope
+-- (for a class: member, or member in a base class)
+-- or nil if there is none
+function Class:in_scope(name)
+	
+	if self.variables[name] then
+		return self.variables[name]
+	end
+	
+	if self.base then
+		return self.parent.classes[self.base]:in_scope(name)
+	end
+	
+	return nil
 end
 
 ----------
@@ -189,6 +231,9 @@ end
 --self.args = {}
 --self.body = nil
 
+-- validate() adds:
+-- self.variables
+
 function Method:signature()
 	
 	if self.sig then
@@ -226,6 +271,63 @@ function Method:validate()
 		ret:validate()
 	end
 	
+	-- Check arguments
+	self.variables = {}
+	
+	for _,arg in ipairs(self.args) do
+	
+		-- Check type
+		arg.type:validate()
+		
+		-- Check that name is not already taken
+		local taken = self:in_scope(arg.name)
+		
+		if taken and taken.deftype == 'member' then
+			add_err('error','argument ' .. arg.name ..
+				' shadows class member of the same name',arg:pos())
+			add_err('info','defined here',taken.defnode:pos())
+		end
+		
+		if taken and taken.deftype == 'argument' then
+			add_err('error','argument ' .. arg.name ..
+				' already defined',arg:pos())
+			add_err('info','(here)',taken.defnode:pos())
+		end
+		
+		-- Add to reverse args table
+		self.args[arg.name] = arg
+		
+		-- Add to variables table
+		local var = {
+			name = arg.name,
+			scope = self,
+			
+			type = arg.type,
+			
+			defnode = arg,
+			deftype = 'argument',
+			assnum = nil,
+			
+			const = nil
+		}
+		
+		self.variables[var.name] = var
+	end
+	
+end
+
+-- Returns variable with given name if it is in current scope
+-- (for a method: argument name or upper scope)
+-- or nil if there is none
+function Method:in_scope(name)
+	
+	-- Check self
+	if self.variables[name] then
+		return self.variables[name]
+	end
+	
+	-- Forward to class
+	return self.parent:in_scope(name)
 end
 
 ---------------------------

@@ -292,7 +292,7 @@ function Class:init()
 	Class.super.init(self)
 	
 	self.name = ""
-	self.base = nil
+	self.base = nil		-- string
 	
 	self.members = {}	-- small Node with fields {type,name} (and proper children)
 	self.methods = {}
@@ -631,17 +631,18 @@ function Method:parse()
 				add_err('info','in argument list of method definition',range(open,peekpos()))
 				return
 			else
-				self:add(arg.type)
+				arg:add(arg.type)
 			end
 			
 			if arg:expect 'Name' then
-				arg.name = self:lastval()
+				arg.name = arg:lastval()
 			else
 				add_err('info','for argument name in method definition',range(open,peekpos()))
 				return
 			end
 			
 			table.insert(self.args,arg)
+			self:add(arg)
 			
 			if not self:accept ',' then
 				break
