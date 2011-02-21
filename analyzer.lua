@@ -35,6 +35,31 @@ function Node:getParent(clas)
 	return self.parent:getParent(clas)
 end
 
+--------------------
+-- Variable class --
+--------------------
+
+-- Is used to keep all information possible about variables
+
+Variable = class()
+
+function Variable:init()
+	
+	self.name = nil		-- obvious?
+	self.scope = nil	-- where does it belong? can be a class, or a block
+	
+	self.type = nil		-- type node, or nil if not yet known
+	
+	self.defnode = nil	-- where was it defined? can be a member definition, an argument definition, or an assignment
+	self.deftype = nil	-- can be 'member', 'argument', 'assignment'
+	self.assnum = nil	-- in case of (multi) assignment, assignment number
+	
+	self.const = nil	-- if has a compile-time known value, put it here (represent array, lists, vectors and packs
+						-- with tables; number and strings by the Lua counterpart)
+	
+	return self
+end
+
 -----------
 -- Chunk --
 -----------
@@ -50,19 +75,22 @@ function Chunk:validate()
 		local name = v.name
 		
 		if self.classes[name] then
-			add_err('error','class ' .. name .. ' was already defined',v:pos(1,2))
+			add_err('error','class ' .. name .. ' is already defined',v:pos(1,2))
 			add_err('info','(here)',self.classes[name]:pos(1,2))
 		end
 		
 		self.classes[name] = v
 	end
 	
-	-- Recurse
+	-- Recurse breadth first: validate all interfaces first...
 	for i,v in ipairs(self.classes) do
-		v:validate(self.classes)
+		v:validate()
 	end
 	
-	-- Check for cyclic inheritence
+	-- ...then only the inner methods
+	for i,v in ipairs(self.classes) do
+		v:validate_methods()
+	end
 	
 end
 
@@ -91,7 +119,7 @@ function Class:validate()
 		
 		-- Check for duplicates
 		if self.members[mem.name] then
-			add_err('error','member ' .. mem.name .. ' was already defined',mem:pos())
+			add_err('error','member ' .. mem.name .. ' is already defined',mem:pos())
 			add_err('info','(here)',self.members[mem.name]:pos())
 		end
 		
@@ -104,7 +132,7 @@ function Class:validate()
 		
 		-- Check for duplicates (use signatures, not just name)
 		if self.methods[meth:signature()] then
-			add_err('error','method ' .. meth:signature() .. ' was already defined',meth.namepos)
+			add_err('error','method ' .. meth:signature() .. ' is already defined',meth.namepos)
 			add_err('info','(here)',self.methods[meth:signature()].namepos)
 		end
 		
@@ -118,10 +146,10 @@ function Class:validate()
 		self.methods[meth:signature()] = meth
 	end
 	
-	-- Recurse
-	for _,meth in ipairs(self.methods) do
-		meth:validate()
-	end
+end
+
+function Class:validate_methods()
+	
 end
 
 ----------

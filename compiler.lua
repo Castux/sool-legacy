@@ -200,7 +200,7 @@ function compile(list)
 		
 		if err then
 			print_error(err)
-			return
+			os.exit(1)
 		end
 		
 		table.insert(files,file)
@@ -215,7 +215,7 @@ function compile(list)
 		local chunk = parse_file(file)
 		
 		if not chunk then
-			return
+			os.exit(1)
 		end
 		
 		table.insert(chunks,chunk)
@@ -238,7 +238,27 @@ function compile(list)
 	
 	local errors = validate(chunk)
 	
+	local errcount,warncount = 0,0
 	for i,err in ipairs(errors) do
 		print_error(err)
+		if err[2] == 'error' then
+			errcount = errcount + 1
+		elseif err[2] == 'warning' then
+			warncount = warncount + 1
+		end
+	end
+	
+	local mess
+	if errcount > 0 then
+		mess = 'analyzer reported ' .. errcount .. ' error' .. (errcount ~= 1 and 's' or '') ..
+		' and ' .. warncount .. ' warning' .. (warncount ~= 1 and 's' or '')
+	else
+		mess = 'chunk passed validation, for a total of ' .. #chunk.classes .. ' classes'
+	end
+	
+	print_error {'Compiler','info',mess}
+	
+	if errcount > 0 then
+		os.exit(1)
 	end
 end

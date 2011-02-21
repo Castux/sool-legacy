@@ -546,7 +546,7 @@ function Method:init()
 	self.private = false
 	self.ret = {}
 	self.name = ""
-	self.args = {}
+	self.args = {}		-- small Node with fields {type,name} (and proper children)
 	self.body = nil
 	
 	self.namepos = nil
@@ -624,15 +624,17 @@ function Method:parse()
 	
 	if peek() ~= ')' then
 		while true do
-			local arg = {}
+			local arg = Node()
 			
 			arg.type = Type()
 			if not arg.type then
 				add_err('info','in argument list of method definition',range(open,peekpos()))
 				return
+			else
+				self:add(arg.type)
 			end
 			
-			if self:expect 'Name' then
+			if arg:expect 'Name' then
 				arg.name = self:lastval()
 			else
 				add_err('info','for argument name in method definition',range(open,peekpos()))
