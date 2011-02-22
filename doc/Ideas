@@ -10,43 +10,50 @@ Motivation
 Design
 ======
 
-- Object oriented: everything is an object, all functions are methods (<- Ruby), except the basic types "number" and "pack"
-- All operators (binary and unary) are in fact syntactic sugar for method calls, and are therefore user definable, except for numbers and packs
-- Introspection: objects know their own class, which methods they answer to, etc, which allows for late binding when type is not known at compile time, and "true" virtual methods (-> SmallTalk, ObjC). The only time we know type is when the object has been created in the same function. Otherwise it could be a child of the "apparent" type. (But it can be checked at linking whether the given class has children or not for more optimisation)
+- Object oriented: everything is an object, all functions are methods (<- Ruby)
+- Objects are always used by reference, except numbers and packs, which are always copied.
+- All binary operators are in fact syntactic sugar for method calls. They are therefore overloadable, except for built-in types (which do not have a sool side interface)
+- Member getting/setting is also syntactic for method calls (but these are provided by the compiler for public members)
+- Array/list indexing/setting too. The methods can be defined for user objects, and thus the indexing syntax can be used on these too.
+- Introspection: objects know their own class, which methods they answer to, etc, which allows for late binding when type is not known at compile time, and "true" virtual methods (<- SmallTalk, ObjC).
+- Possibility for static typing (using the class name), or dynamic (using the generic type 'obj') to allow compile time optimisation (direct method call instead of message passing and virtual tables) when wanted, and flexibility when prefered (<- ObjC). Question is: should message passing occur even with static typing (ObjC) or not (C++ without 'virtual').
+- Member access is allowed on dynamic objects, since it is in fact really methods calls
 - Classes know their name as a string
-- No globals
+- No globals: the only first level type is the class
 - Variable declaration is automaticly done at first assignment, and type is infered from it
 - Class definition and implementation are combined: more "script" like and avoids multiple files per class
-- "import" command includes class definitions from other files, Lua like: run the interpreter/compiler on the main file, and everything else is included textually.
-- Arrays/Lists are homogenous: can contain different types only if they are children of the base type
+- "import" command includes class definitions from other files, Lua like: run the interpreter/compiler on the main file, and classes from every other file are included in the chunk.
+- Arrays/Lists are homogenous: can contain different types only if they are children of the base type, or by using obj
 - for loops are either numeric, or iterative over arrays/lists/user defined classes
 - Methods can return several values (<- Lua), but it is part of their signature. Methods with similar names can have a different number of return values (ex: iterators with just values or index(es) + value)
 - Multivalued assignments (<- Lua)
-- Variables are always references to objects (except for numbers, which are not objects). Method parameters and return values are always by reference.
-- Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. ) When passing to functions, the final value of the local ref is passed back automatically to the caller (incl. if it has been nil-ed by destruction or storage somewhere else. In other words, objects are in fact passed by ref-to-ref. We can modify the outside variable, not only the object it points to).
+- Variables are always references to objects. Method parameters and return values are always by reference (except numbers and packs, which are always copied)
+- Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. )
+Have a 'ref' type be actually a reference to the unique owner, and deref if automatically, so when the unique owner is set to nil, this ref knows it too (safer but slower). Can also do ref = nil for remote deletion, but it's not done automatically at assignment or when going out of scope. Refs are also what are actually passed as arguments to methods. That way, can delete or reassign to an outside variable from inside a method.
 
-This means: existence of an object is determined by non-nil-ness of *its* (a) reference to it. Magic. No more NULL pointer dereference (normally caught by compiler), or problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
+This means: existence of an object is determined by non-nil-ness of *its* reference to it (or any, since they all actually point to the unique one). Magic. No more problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
 
 This forced ownership gives memory a natural tree-like structure (which is what I do most of the time anyway). Deleting an object automatically deletes all the objects it references, and so on. Similarly, copying an object forces a deep copy (otherwise, the copied object would have all its members set to nil). There is even no need to overload the copy method, since it's always done the same way (?)
+Refs are: class members (explicitely declared so 'ref Blah blah', so that the destructor does not try to free the object), method arguments (implicit, objects are *always* passed by ref to ref), or local variables, requested by .ref method.
+Since they are always transparently deferenced, they do not show a special type (kept internally by compiler), they cannot be repointed at another object pointer (that would repoint the pointer itself to another object), they cannot be copied (have to call .ref again to get another ref or .copy to get another object), etc.
+On argument passing, the compiler may optimize and pass a direct pointer to the object if it sees there is no assignment involving it.
 
-For the few cases where we actually need multiple references to objects (ie: graphs structures), have one vector own them all, and use the indices for referencing.
-
-Plus, it allows über optimisations at compilation: within a LLMS function, there can be only one "variable" holding the object, even if the high level variable changes.
+- The big question is: do we do automatic nil testing before member access/method calling? Safer, but slower. As a compiler option, maybe, for debug builds?
 
 - Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
-- Can use as scripts: automatically enclosed in main() if none found
+- Can use as scripts: automatically enclosed in main() if none found (? maybe. But we don't know yet how to deal with main() so...)
 - A "pack". Kind of struct without named fields, that can be used without declaring it. Still type checked when adding it to arrays or passing to functions. Always copied (like numbers), cannot be refered to. Allows tight packing in arrays without the class overhead (pointer to class). Accessed using numerical indexes (like would do for heterogenous lists in Lua). Anything "bigger" or which needs named fields or pass by reference should be a class (even a methodless class, which would still inherit init, and copy and such)
-- "unreachable" return function.
+- "unreachable" return keyword.
 - Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)
 - "symbols": hashed string casted to num for quick comparison (<- Ruby, Lua). For instance FVN-32. Regular strings can be hashed if need be but there are character restrictions
-- association tables?
+- association tables? Indexing stuff by strings is pretty nifty... (<- Lua)
 - numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
 - 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
+- boolan operators and and or return actual values of the expressions, not only booleans
 - Possibility to extend existing classes, notably built-in (compensate the absence of functions that would act on these)
-- Have a root class to allow total polymorphism by defining methods there (?). Also has the interface for init, copy, == (automaticly deep and built-in!), class, isa, etc.
 - self and super keywords (<- Objective-C) with the interesting possibility of doing self = nil and commiting suicide, while niling the outside reference (self is passed as double-ref argument too!). Or self = other. Maybe give them restricted use, like assignment only at end of method to avoid "object change" mid-method. Or make it possible and that's fun.
 - No variable shadowing (<- C#). Fits well that there is no declaration syntax either. If it already exists, it's the outside one, else, it's a new local one. Lexical scoping, though (lose stuff at block end).
-- Fancy var-in-string replacement with light syntax. No ${aha}, more like #expr, whitespace delimited: "5 + 5 = #5+5"
+- Fancy var-in-string replacement with light syntax. No ${aha}, more like #expr, whitespace delimited: "5 + 5 = #5+5". Or something...
 
 - Collections provide the iter() method that returns an iterator object, that itself answers to next(). Return type of iter() tells the compiler which object it is, and return type(s) of next() for the local variables. next() itself can have several forms (like returns value or index + value).
 	for a in v do ... end
@@ -60,11 +67,11 @@ Plus, it allows über optimisations at compilation: within a LLMS function, ther
 
 Multi iterator solution: if the given object answers to next() consider it the iterator. Else, look for iter().
 
-	for l in lines file do end
-	for l in words file do end
-	for c in chars file do end
+	for l in file.lines do end
+	for w in file.words do end
+	for c in file do end
 
-- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
+- This re	minds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
 
 Lexing
 ======
