@@ -35,7 +35,7 @@ struct sool_list_node *sool_list_node_new(struct sool_list *l)
 	return malloc(sizeof(struct sool_list_node) + l->data_size);
 }
 
-void *sool_list_append(struct sool_list *l)
+void *sool_list_push_right(struct sool_list *l)
 {
 	struct sool_list_node *n = sool_list_node_new(l);
 	
@@ -61,4 +61,42 @@ void *sool_list_append(struct sool_list *l)
 	
 	l->length++;
 	return n->data;
+}
+
+void *sool_list_push_left(struct sool_list *l)
+{
+	struct sool_list_node *n = sool_list_node_new(l);
+	
+	/* empty list */
+	if(l->first == NULL)
+	{
+		n->next = NULL;
+		n->prev = NULL;
+		
+		l->first = n;
+		l->last = n;
+	}
+	
+	/* not empty */
+	else
+	{
+		n->prev = NULL;
+		n->next = l->first;
+		
+		l->first->prev = n;
+		l->first = n;
+	}
+	
+	l->length++;
+	return n->data;
+}
+
+void *sool_list_first(struct sool_list *l)
+{
+	return l->first->data;
+}
+
+void *sool_list_last(struct sool_list *l)
+{
+	return l->last->data;
 }

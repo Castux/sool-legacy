@@ -22,17 +22,37 @@ end
 --self.children = {}
 --self.parent = nil
 
-function Node:getParent(clas)
+-- Get the first parent node whose class matches one of the arguments
+function Node:getParent(...)
 	
-	if self.class == clas then
-		return self
+	for i,node in ipairs{...} do
+		if self.class == node then
+			return self
+		end
 	end
 	
 	if not self.parent then
 		return nil
 	end
 	
-	return self.parent:getParent(clas)
+	return self.parent:getParent(...)
+end
+
+-- Default name searcher: up the parse tree
+-- (overloaded for classes who search up the class tree)
+function Node:in_scope(name)
+	
+	-- Check self
+	if self.variables and self.variables[name] then
+		return self.variables[name]
+	end
+	
+	-- Forward up
+	if self.parent then
+		return self.parent:in_scope(name)
+	end
+	
+	return nil
 end
 
 --------------------
@@ -221,6 +241,42 @@ function Type:validate()
 	
 end
 
+function Type:equals(other)
+	
+	if self.type ~= other.type then
+		return false
+	end
+	
+	if self.type == 'class' then
+		return self.val == other.val
+	end
+	
+	if self.type == 'array' or self.type == 'list' then
+		return self.val:equals(other.val)
+	end
+	
+	if self.type == 'pack' then
+		return Type.list_equals(self.val,other.val)
+	end
+	
+	error('Type:equal() - unknown type ' .. self.type)
+end
+
+function Type.list_equals(a,b)
+	
+	if #a ~= #b then
+		return false
+	end
+	
+	for i = 1,#a do
+		if not a[i]:equals(b[i]) then
+			return false
+		end
+	end
+	
+	return true
+end
+
 ------------
 -- Method --
 ------------
@@ -314,6 +370,9 @@ function Method:validate()
 		self.variables[var.name] = var
 	end
 	
+	-- Recurse
+	self.body:validate()
+	
 end
 
 -- Returns variable with given name if it is in current scope
@@ -328,6 +387,132 @@ function Method:in_scope(name)
 	
 	-- Forward to class
 	return self.parent:in_scope(name)
+end
+
+-----------
+-- Block --
+-----------
+
+--self.stats = {}
+
+-- validate() adds
+-- self.variables = {}
+
+function Block:validate()
+	
+	-- Prepare local variables table
+	self.variables = {}
+	
+	for i,stat in ipairs(self.stats) do
+		stat:validate()
+	end
+end
+
+-- Returns variable with given name if it is in current scope
+-- (for a block: locals or upper scope)
+-- or nil if there is none
+function Method:in_scope(name)
+	
+	-- Check self
+	if self.variables[name] then
+		return self.variables[name]
+	end
+	
+	-- Forward to class
+	return self.parent:in_scope(name)
+end
+
+
+---------------
+-- Statement --
+---------------
+
+function Break:validate()
+	
+	local loop = self:getParent(While,For,GenericFor)
+	
+	if not loop then
+		add_err('error','break statement is not inside a loop',self:pos())
+	end
+end
+
+function Continue:validate()
+	
+	local loop = self:getParent(While,For,GenericFor)
+	
+	if not loop then
+		add_err('error','continue statement is not inside a loop',self:pos())
+	end
+end
+
+function Return:validate()
+	
+	-- Get method return types
+	local meth = self:getParent(Method).ret
+	
+	-- Resolve types of expressions
+	--local types = Exp.type_list(self.vals)
+	
+end
+
+
+-----------------
+-- Expressions --
+-----------------
+
+-- When validating an expression, we also compute its type and store it
+-- in self.type. If the type is unknown yet, use '?'
+
+---------------
+-- AtomicExp --
+---------------
+
+--self.kind = ""
+--self.val = nil
+--self.args = nil		-- for instanciation only
+
+function AtomicExp:validate()
+	
+	if self.kind == 'var' then
+		
+		local var = self:in_scope(self.val)
+		self.type = var and var.type or '?'
+		
+	elseif self.kind == 'number' then
+	
+		local num = Type(true)
+		num.type = 'num'
+		self.type = num
+	
+	end
+	
+	print('debuuug ' .. ( self.type == '?' and '?' or self.type:str() ) )
+end
+
+--------------
+-- BasicExp --
+--------------
+
+--self.atom = nil
+--self.tails = {}
+
+function BasicExp:validate()
+	
+	self.atom:validate()
+	
+end
+
+---------
+-- Exp --
+---------
+
+--self.left = nil
+--self.terms = {}
+
+function Exp:validate()
+	
+	self.left:validate()
+	
 end
 
 ---------------------------

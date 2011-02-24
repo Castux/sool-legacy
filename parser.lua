@@ -414,14 +414,18 @@ type :=			'num' | 'vec' | 'str' |
 
 Type = class(Node)
 
-function Type:init()
+function Type:init(no_parsing)
 	
 	Type.super.init(self)
 	
 	self.type = ""
 	self.val = nil
 	
-	return self:parse()
+	if no_parsing then
+		return self
+	else
+		return self:parse()
+	end
 end
 
 function Type:parse()
@@ -659,6 +663,8 @@ function Method:parse()
 	self.body = Block()
 	if not self.body then
 		return
+	else
+		self:add(self.body)
 	end
 	
 	-- 'end'
