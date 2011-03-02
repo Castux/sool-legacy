@@ -5,13 +5,14 @@ l = /1,2,3,4/
 
 -- append element
 
-l <- 5
+l <~ 5			-- numbers are always copied, so... copied
+l <~ someobj	-- ownership is transfered
 
--- append list (transfer contents)
+-- append list (transfer contents and ownerships of objects)
 
 l2 = /10,11,12/
 
-l <- l2 	-- l == /1,2,3,4,5,10,11,12/
+l <~ l2 	-- l == /1,2,3,4,5,10,11,12/
 			-- l == //	in fact internally, the same list nodes are used
 			
 
@@ -19,17 +20,19 @@ l <- l2 	-- l == /1,2,3,4,5,10,11,12/
 
 l3 = /13,14,15/
 
-l <~ l3			-- l == /1,2,3,4,5,10,11,12,13,14,15/
+l <- l3			-- l == /1,2,3,4,5,10,11,12,13,14,15/
 				-- l3 == /13,14,15/
-				-- effectively the same as l <- l3.copy
+				-- effectively the same as l <~ l3.copy
 
 -- mid insertion (both have same effect on always-copied objects), before given index
 
-a.insert(5,/100,102/)	-- transfered
+a <~ {n,b}	-- transfered
+a <- {n,b}	-- copied, effectively the same as a <~ {5,b.copy}
+
 
 -- for compatibility with string API, concatenation:
 
-a = b + c	-- same as a = b.copy <~ c
+a = b + c	-- same as a = b.copy <- c
 
 -- linear access (implementation always starts at the closest end)
 
@@ -40,6 +43,12 @@ a = l[-1]	-- a == 12 == a.last
 
 a.remove(index)
 a.remove(start,end)
+	
+	-- shortcut operators? might be unclear.
+	-- the ~ gives the idea of deletion
+
+a ~~ index
+a ~~ {start,end}
 
 -- iterators: for [i,]v in l do
 
@@ -78,10 +87,10 @@ end
 
 -- without:
 a = b + c + d + e -->
-a = ((b.copy <- c.copy).copy + d.copy).copy + e.copy
+a = ((b.copy <~ c.copy).copy <~ d.copy).copy <~ e.copy
 
 with:
-a = b.copy.resize(total) <~ c <~ d <~ e
+a = b.copy.resize(total) <- c <- d <- e
 
 String
 ======
