@@ -40,7 +40,8 @@ atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
 				'<' [ listbasicexp ] '>' |
 				ClassName [ '(' [ listexp ] ')' ]
 
-exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
+exptail :=		'.' Name |
+				'(' [ listexp ] ')' |
 				'[' exp ']'
 
 basicexp :=		atomicexp { exptail }

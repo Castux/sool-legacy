@@ -1578,7 +1578,8 @@ function AtomicExp:str()
 end
 
 --[[
-exptail :=		'.' Name [ '(' [ listexp ] ')' ] |
+exptail :=		'.' Name |
+				'(' [ listexp ] ')' |
 				'[' exp ']'
 				
 basicexp :=		atomicexp { exptail }
@@ -1606,7 +1607,7 @@ function BasicExp:parse()
 	end
 	
 	-- { exptail }
-	while peek() == '.' or peek() == '[' do
+	while peek() == '.' or peek() == '[' or peek() == '(' do
 		local tail = {}
 		local open = peekpos()
 		
@@ -1626,32 +1627,31 @@ function BasicExp:parse()
 				return
 			end
 		
-		-- '.' Name [ '(' [ listexp ] ')' ]
+		-- '.' Name
 		elseif self:accept '.' then
 			
 			if self:expect 'Name' then
 				tail.name = self:lastval()
+				tail.kind = 'member_access'
 			else
 				add_err('info','in member access started at',open)
 				return
 			end
-			
-			if self:accept '(' then
-				open = self:lastpos()
-				tail.kind = 'call'
-				if peek() ~= ')' then
-					tail.args = self:listexp()
-					if not tail.args then
-						return
-					end
-				end
-				
-				if not self:expect ')' then
-					add_err('info','to match',open)
+		
+		-- '(' [ listexp ] ')'
+		elseif self:accept '(' then
+			open = self:lastpos()
+			tail.kind = 'call'
+			if peek() ~= ')' then
+				tail.args = self:listexp()
+				if not tail.args then
 					return
 				end
-			else
-				tail.kind = 'member_access'
+			end
+			
+			if not self:expect ')' then
+				add_err('info','to match in method call',open)
+				return
 			end
 		end
 		
@@ -1670,7 +1670,7 @@ function BasicExp:str()
 		elseif v.kind == 'member_access' then
 			s = s .. '.' .. v.name
 		elseif v.kind == 'call' then
-			s = s .. '.' .. v.name .. '('
+			s = s .. '('
 			if v.args then
 				s = s .. v.args[1]:str()
 				for i = 2,#v.args do
