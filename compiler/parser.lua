@@ -1237,7 +1237,7 @@ function GenericFor:str()
 end
 
 --[[
-basicexp | listbasicexp '=' listexp
+exp | listbasicexp '=' listexp
 ]]
 
 Assignment = class(Stat)
@@ -1267,9 +1267,11 @@ function Assignment:parse()
 			return
 		end
 	
-	-- special case: lone basic expression
+	-- special case: lone expression
 	elseif #self.lval == 1 then
-		return self.lval[1]
+	
+		-- parse an expression with preparsed left term
+		return Exp(self.lval[1])
 	
 	else
 		-- we know it's not going to happen, but nicer error message
@@ -1692,19 +1694,20 @@ exp := 			basicexp { Binop basicexp }
 
 Exp = class(Node)
 
-function Exp:init()
+-- can pass a pre-parsed left term (from Assignment() mostly)
+function Exp:init(left)
 	Exp.super.init(self)
 	
 	self.left = nil
 	self.terms = {}
 	
-	return self:parse()
+	return self:parse(left)
 end
 
-function Exp:parse()
+function Exp:parse(left)
 	
 	-- basicexp { Binop basicexp }
-	self.left = BasicExp()
+	self.left = left or BasicExp()
 	if not self.left then
 		return
 	else
