@@ -1,0 +1,89 @@
+List
+====
+
+l = /1,2,3,4/
+
+-- append element
+
+l <- 5
+
+-- append list (transfer contents)
+
+l2 = /10,11,12/
+
+l <- l2 	-- l == /1,2,3,4,5,10,11,12/
+			-- l == //	in fact internally, the same list nodes are used
+			
+
+-- if transfer is not wanted, use copy append:
+
+l3 = /13,14,15/
+
+l <~ l3			-- l == /1,2,3,4,5,10,11,12,13,14,15/
+				-- l3 == /13,14,15/
+				-- effectively the same as l <- l3.copy
+
+-- mid insertion (both have same effect on always-copied objects), before given index
+
+a.insert(5,/100,102/)	-- transfered
+
+-- for compatibility with string API, concatenation:
+
+a = b + c	-- same as a = b.copy <~ c
+
+-- linear access (implementation always starts at the closest end)
+
+a = l[1]	-- a == 1 == a.first
+a = l[-1]	-- a == 12 == a.last
+
+-- removal
+
+a.remove(index)
+a.remove(start,end)
+
+-- iterators: for [i,]v in l do
+
+it = l.iter
+while it do
+	i = it.index	-- type: num
+	v = it.value	-- type: ref for an object
+	
+	-- internally, the iterator is used for set/getting and insertion and stuff at index i (and close)
+	-- instead of using the general l.insert/remove which is in linear time
+	-- also deals with updating the iterator correctly if the current element is removed (or a range around)
+	-- of course, that works only if the operation is in the body of the loop, not deeper in a function
+	
+	it.next
+end
+
+Array
+=====
+
+-- Well, the same, it's the whole point
+
+-- iterators: for [i,]v in l do
+
+i = 1
+while i < l.size do
+	v = l[i]	-- type: ref for an object
+	
+	-- in case of removals, i is updated properly? (but that works only if in the body of the loop)
+	
+	i += 1
+end
+
+-- the copy append/concat operation are optimized to avoid doing double copies:
+-- the whole length is computed first and the contents are copied directly.
+-- can even have an analyzer optimization for chained concatenations/appends:
+
+-- without:
+a = b + c + d + e -->
+a = ((b.copy <- c.copy).copy + d.copy).copy + e.copy
+
+with:
+a = b.copy.resize(total) <~ c <~ d <~ e
+
+String
+======
+
+-- same again, with same optimizations as for arrays
