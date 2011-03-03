@@ -32,9 +32,9 @@ stat :=			'do' block 'end' |
 				exp |
 				listbasicexp '=' listexp
 
-atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
-				Symbol | '(' exp ')' |
-				'{' [ listbasicexp ] '}' |
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' | Symbol
+
+constructor :=	'{' [ listbasicexp ] '}' |
 				'[' [ listbasicexp ] ']' |
 				'/' [ listbasicexp ] '/' |
 				'<' [ listbasicexp ] '>' |
@@ -44,7 +44,8 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 
-basicexp :=		atomicexp { exptail }
+basicexp :=		( atomicexp | '(' exp ')' | constructor )
+				{ exptail }
 
 exp := 			[ Unop ] basicexp { Binop [ Unop ] basicexp }
 

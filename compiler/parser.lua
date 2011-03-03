@@ -75,7 +75,7 @@ end
 local begin_exp = function(s)
 	
 	local toks = {'Name','Number','String','Symbol','nil','false','true',
-		'(','[','/','<','{','not','#','-'}
+		'(','[','/','<','{','ClassName','not','#','-'}
 	
 	for i,v in ipairs(toks) do
 		if s == v then return true end
@@ -123,7 +123,7 @@ function Node:expect(toktype)
 		return true
 	else
 		add_err("error",
-			"expected " .. toktype .. ", found '" .. peek() .. "' instead",
+			"expected '" .. toktype .. "', found '" .. peek() .. "' instead",
 			peekpos()
 		)
 		return false
@@ -1274,9 +1274,9 @@ function Assignment:parse()
 		return Exp(self.lval[1])
 	
 	else
-		-- we know it's not going to happen, but nicer error message
-		self:expect '='
+		self:expect '=' -- we know it's going to fail, but nicer error message
 		add_err('info','in assignment',self:pos())
+		return
 	end
 	
 	return self
@@ -1360,170 +1360,32 @@ function Node:listbasicexp()
 end
 
 --[[
-atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' |
-				Symbol | '(' exp ')' |
-				'{' [ listbasicexp ] '}' |
-				'[' [ listbasicexp ] ']' |
-				'/' [ listbasicexp ] '/' |
-				'<' [ listbasicexp ] '>' |
-				ClassName [ '(' [ listexp ] ')' ]
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' | Symbol
 ]]
 
 AtomicExp = class(Node)
 
-
 function AtomicExp:init()
 	AtomicExp.super.init(self)
 	
-	self.kind = ""
+	self.kind = nil
 	self.val = nil
-	self.args = nil		-- for instanciation only
 	
 	return self:parse()
 end
 
 function AtomicExp:parse()
 	
-	local open = peekpos()
-	
 	-- Name | Number | String | 'nil' | 'false' | 'true' | Symbol
-	if self:accept 'Name' then
-		self.kind = 'var'
+	if 	self:accept 'Name' or
+	 	self:accept 'Number' or
+	 	self:accept 'String' or
+		self:accept 'Symbol' or
+		self:accept 'nil' or
+		self:accept 'true' then
+		
+		self.kind = self.children[#self.children][1]
 		self.val = self:lastval()
-		
-	elseif self:accept 'Number' then
-		self.kind = 'number'
-		self.val = self:lastval()
-		
-	elseif self:accept 'String' then
-		self.kind = 'string'
-		self.val = self:lastval()
-
-	elseif self:accept 'Symbol' then
-		self.kind = 'symbol'
-		self.val = self:lastval()
-	
-	elseif self:accept 'nil' then
-		self.kind = 'nil'
-		self.val = 'nil'
-	
-	elseif self:accept 'true' then
-		self.kind = 'true'
-		self.val = 'true'
-	
-	elseif self:accept 'false' then
-		self.kind = 'false'
-		self.val = 'false'
-	
-	-- '(' exp ')'
-	elseif self:accept '(' then
-		local ex = Exp()
-		if not ex then
-			return
-		else
-			self:add(ex)
-		end
-		if not self:expect ')' then
-			add_err('info','to match',open)
-			return
-		end
-		
-		-- return directly the expression, no need for a "parentheses" node 
-		return ex
-		
-	-- '{' [ listbasicexp ] '}'
-	elseif self:accept '{' then
-		self.kind = 'pack'
-		if peek() ~= '}' then
-			self.val = self:listbasicexp()
-			if not self.val then
-				add_err('info','in pack constructor started at',open)
-				return
-			else
-				self:add(self.val)
-			end
-		end
-		if not self:expect '}' then
-			add_err('info','to match',open)
-			add_err('info','(pack constructor)')
-			return
-		end
-	
-	-- '[' [ listbasicexp ] ']'
-	elseif self:accept '[' then
-		self.kind = 'array'
-		if peek() ~= ']' then
-			self.val = self:listbasicexp()
-			if not self.val then
-				add_err('info','in array constructor started at',open)
-				return
-			else
-				self:add(self.val)
-			end
-		end
-		if not self:expect ']' then
-			add_err('info','to match',open)
-			add_err('info','(array constructor)')
-			return
-		end
-		
-	-- '/' [ listbasicexp ] '/'
-	elseif self:accept '/' then
-		self.kind = 'list'
-		if peek() ~= '/' then
-			self.val = self:listbasicexp()
-			if not self.val then
-				add_err('info','in list constructor started at',open)
-				add_err('info','(list constructor)')
-				return
-			else
-				self:add(self.val)
-			end
-		end
-		if not self:expect '/' then
-			add_err('info','to match',open)
-			return
-		end
-		
-	-- '<' [ listbasicexp ] '>'
-	elseif self:accept '<' then
-		self.kind = 'vector'
-		if peek() ~= '>' then
-			self.val = self:listbasicexp()
-			if not self.val then
-				add_err('info','in vector constructor started at',open)
-				return
-			else
-				self:add(self.val)
-			end
-		end
-		if not self:expect '>' then
-			add_err('info','to match',open)
-			add_err('info','(vector constructor)')
-			return
-		end
-	
-	-- ClassName [ '(' [ listexp ] ')' ]
-	elseif self:accept 'ClassName' then
-		self.kind = 'instanciation'
-		self.val = self:lastval()
-		if self:accept '(' then
-			open = self:lastpos()
-			if peek() ~= ')' then
-				self.args = self:listexp()
-				if not self.args then
-					add_err('info','in instanciation argument list',open)
-					return
-				else
-					self:add(self.args)
-				end
-			end
-			if not self:expect ')' then
-				add_err('info','to match',open)
-				add_err('info','(instanciation argument list)')
-				return
-			end
-		end
 	
 	else
 		add_err('error','malformed atomic expression: ' .. peek(),peekpos())
@@ -1531,52 +1393,289 @@ function AtomicExp:parse()
 	end
 	
 	return self
+	
 end
 
 function AtomicExp:str()
 	
-	-- basic
-	if self.val and type(self.val) ~= 'table' then
-		return self.val
+	return self.val
+end
+
+
+--[[
+	'{' [ listbasicexp ] '}'
+]]
+
+PackConst = class(Node)
+
+function PackConst:init()
+	PackConst.super.init(self)
+	
+	self.vals = {}
+	
+	return self:parse()
+end
+
+function PackConst:parse()
+	
+	local open = peekpos()
+	
+	-- '{' [ listbasicexp ] '}'
+	if not self:expect '{' then
+		add_err('info','to start pack constructor',peekpos())
+		return
 	end
 	
-	-- bracketed
-	local open,close
-	
-	if self.kind == 'array' then
-		open,close = '[',']'
-	elseif self.kind == 'list' then
-		open,close = '/','/'
-	elseif self.kind == 'pack' then
-		open,close = '{','}'
-	elseif self.kind == 'vector' then
-		open,close = '<','>'
+	if peek() ~= '}' then
+		self.vals = self:listbasicexp()
+		if not self.vals then
+			add_err('info','in pack constructor started at',open)
+			return
+		end
 	end
 	
-	if open and close then
-		local s = open 
-		
-		if self.val then
-			s = s .. self.val[1]:str()
-			for i = 2,#self.val do
-				s = s .. ',' .. self.val[i]:str()
+	if not self:expect '}' then
+		add_err('info','to match',open)
+		add_err('info','(pack constructor)')
+		return
+	end
+	
+	return self
+end
+
+function PackConst:str()
+	local open,close = '{','}'
+	local s = open 
+
+	if #self.vals > 0 then
+		s = s .. self.vals[1]:str()
+		for i = 2,#self.vals do
+			s = s .. ',' .. self.vals[i]:str()
+		end
+	end
+	return s .. close
+end
+
+
+--[[
+	'[' [ listbasicexp ] ']'
+]]
+
+ArrayConst = class(Node)
+
+function ArrayConst:init()
+	ArrayConst.super.init(self)
+	
+	self.vals = {}
+	
+	return self:parse()
+end
+
+function ArrayConst:parse()
+	
+	local open = peekpos()
+	
+	if not self:expect '[' then
+		add_err('info','to start array constructor',peekpos())
+		return
+	end
+	
+	if peek() ~= ']' then
+		self.vals = self:listbasicexp()
+		if not self.vals then
+			add_err('info','in array constructor started at',open)
+			return
+		end
+	end
+	
+	if not self:expect ']' then
+		add_err('info','to match',open)
+		add_err('info','(array constructor)')
+		return
+	end
+	
+	return self
+end
+
+function ArrayConst:str()
+	local open,close = '[',']'
+	local s = open 
+
+	if #self.vals > 0 then
+		s = s .. self.vals[1]:str()
+		for i = 2,#self.vals do
+			s = s .. ',' .. self.vals[i]:str()
+		end
+	end
+	return s .. close
+end
+
+
+--[[
+	'/' [ listbasicexp ] '/'
+]]
+
+ListConst = class(Node)
+
+function ListConst:init()
+	ListConst.super.init(self)
+	
+	self.vals = {}
+	
+	return self:parse()
+end
+
+function ListConst:parse()
+	
+	local open = peekpos()
+	
+	if not self:expect '/' then
+		add_err('info','to start list constructor',peekpos())
+		return
+	end
+	
+	if peek() ~= '/' then
+		self.vals = self:listbasicexp()
+		if not self.vals then
+			add_err('info','in list constructor started at',open)
+			return
+		end
+	end
+	
+	if not self:expect '/' then
+		add_err('info','to match',open)
+		add_err('info','(list constructor)')
+		return
+	end
+	
+	return self
+end
+
+function ListConst:str()
+	local open,close = '/','/'
+	local s = open 
+
+	if #self.vals > 0 then
+		s = s .. self.vals[1]:str()
+		for i = 2,#self.vals do
+			s = s .. ',' .. self.vals[i]:str()
+		end
+	end
+	return s .. close
+end
+
+
+--[[
+	'<' [ listbasicexp ] '>'
+]]
+
+VectorConst = class(Node)
+
+function VectorConst:init()
+	VectorConst.super.init(self)
+	
+	self.vals = {}
+	
+	return self:parse()
+end
+
+function VectorConst:parse()
+	
+	local open = peekpos()
+	
+	if not self:expect '<' then
+		add_err('info','to start vector constructor',peekpos())
+		return
+	end
+	
+	if peek() ~= '>' then
+		self.vals = self:listbasicexp()
+		if not self.vals then
+			add_err('info','in vector constructor started at',open)
+			return
+		end
+	end
+	
+	if not self:expect '>' then
+		add_err('info','to match',open)
+		add_err('info','(vector constructor)')
+		return
+	end
+	
+	return self
+end
+
+function VectorConst:str()
+	local open,close = '<','>'
+	local s = open 
+
+	if #self.vals > 0 then
+		s = s .. self.vals[1]:str()
+		for i = 2,#self.vals do
+			s = s .. ',' .. self.vals[i]:str()
+		end
+	end
+	return s .. close
+end
+
+--[[
+	ClassName [ '(' [ listexp ] ')' ]
+]]
+
+ObjConst = class(Node)
+
+function ObjConst:init()
+	ObjConst.super.init(self)
+	
+	self.class = nil
+	self.args = {}
+	
+	return self:parse()
+end
+
+function ObjConst:parse()
+
+	-- ClassName [ '(' [ listexp ] ')' ]
+	if not self:expect 'ClassName' then
+		add_err('info','in insstanciation',peekpos())
+		return
+	end
+
+	self.class = self:lastval()
+	
+	if self:accept '(' then
+		local open = self:lastpos()
+		if peek() ~= ')' then
+			self.args = self:listexp()
+			if not self.args then
+				add_err('info','in instanciation argument list',open)
+				return
+			else
+				self:add(self.args)
 			end
 		end
-		return s .. close
+		if not self:expect ')' then
+			add_err('info','to match',open)
+			add_err('info','(instanciation argument list)')
+			return
+		end
 	end
-	
-	-- instanciation
-	assert(self.kind == 'instanciation')
-	
-	local s = self.val .. '('
-	if self.args then
+
+	return self
+end
+
+function ObjConst:str()
+
+	local s = self.class .. '('
+	if #self.args > 0 then
 		s = s .. self.args[1]:str()
 		for i = 2,#self.args do
-			s = s .. ',' .. self.args[i]
+			s = s .. ',' .. self.args[i]:str()
 		end
-		return s .. ')'
+		
 	end
 	
+	return s .. ')'
 end
 
 --[[
@@ -1584,7 +1683,8 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 				
-basicexp :=		atomicexp { exptail }
+basicexp :=		( atomicexp | '(' exp ')' | constructor )
+				{ exptail }
 ]]
 
 BasicExp = class(Node)
@@ -1592,7 +1692,7 @@ BasicExp = class(Node)
 function BasicExp:init()
 	BasicExp.super.init(self)
 	
-	self.atom = nil
+	self.left = nil
 	self.tails = {}
 	
 	return self:parse()
@@ -1600,15 +1700,42 @@ end
 
 function BasicExp:parse()
 	
-	-- atomicexp
-	self.atom = AtomicExp()
-	if not self.atom then
-		if self.unop then
-			add_err('info','after unary operator',self:pos())
+	local open = peekpos()
+	
+	-- '(' exp ')'
+	if self:accept '(' then
+		self.left = Exp()
+		
+		if not self:expect ')' then
+			add_err('info','to match',open)
+			return
 		end
+		
+	-- constructor
+	elseif peek() == '{' then
+		self.left = PackConst()
+		
+	elseif peek() == '[' then
+		self.left = ArrayConst()
+		
+	elseif peek() == '/' then
+		self.left = ListConst()
+		
+	elseif peek() == '<' then
+		self.left = VectorConst()
+	
+	elseif peek() == 'ClassName' then
+		self.left = ObjConst()
+	
+	else
+		-- atomicexp
+		self.left = AtomicExp()
+	end
+
+	if not self.left then
 		return
 	else
-		self:add(self.atom)
+		self:add(self.left)
 	end
 	
 	-- { exptail }
@@ -1668,7 +1795,7 @@ end
 
 function BasicExp:str()
 	
-	s = self.atom:str()
+	s = self.left:str()
 	
 	for i,v in ipairs(self.tails) do
 		if v.kind == 'index' then

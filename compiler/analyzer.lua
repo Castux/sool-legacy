@@ -481,7 +481,7 @@ end
 
 function BasicExp:validate()
 	
-	self.atom:validate()
+	self.left:validate()
 	
 end
 
