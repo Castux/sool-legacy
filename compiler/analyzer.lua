@@ -460,9 +460,6 @@ end
 -- Expressions --
 -----------------
 
--- When validating an expression, we also compute its type and store it
--- in self.type. If the type is unknown yet, use '?'
-
 ---------------
 -- AtomicExp --
 ---------------
@@ -473,27 +470,6 @@ end
 
 function AtomicExp:validate()
 	
-	if self.kind == 'var' then
-		
-		local var = self:in_scope(self.val)
-		self.type = var and var.type or '?'
-		
-	elseif self.kind == 'number' or self.kind == 'symbol' or
-		self.kind == 'true' or self.kind == 'false' then
-	
-		local num = Type(true)
-		num.type = 'num'
-		self.type = num
-	
-	elseif self.kind == 'string' then
-	
-		local str = Type(true)
-		str.type = 'str'
-		self.type = str
-	
-	end
-	
-	print('debuuug ' .. ( self.type == '?' and '?' or self.type:str() ) )
 end
 
 --------------
