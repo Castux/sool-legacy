@@ -74,8 +74,8 @@ end
 
 local begin_exp = function(s)
 	
-	local toks = {'Name','Number','String','nil','false','true',
-		'(','[','/','<','not','+','-'}
+	local toks = {'Name','Number','String','Symbol','nil','false','true',
+		'(','[','/','<','{'}
 	
 	for i,v in ipairs(toks) do
 		if s == v then return true end
