@@ -1584,7 +1584,7 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 				
-basicexp :=		[ Unop ] atomicexp { exptail }
+basicexp :=		atomicexp { exptail }
 ]]
 
 BasicExp = class(Node)
@@ -1592,7 +1592,6 @@ BasicExp = class(Node)
 function BasicExp:init()
 	BasicExp.super.init(self)
 	
-	self.unop = nil
 	self.atom = nil
 	self.tails = {}
 	
@@ -1600,12 +1599,6 @@ function BasicExp:init()
 end
 
 function BasicExp:parse()
-	
-	-- [ Unop ]
-	
-	if self:accept 'not' or self:accept '-' or self:accept '#' then
-		self.unop = self:lastval()
-	end
 	
 	-- atomicexp
 	self.atom = AtomicExp()
@@ -1674,13 +1667,8 @@ function BasicExp:parse()
 end
 
 function BasicExp:str()
-	local s = ''
 	
-	if self.unop then
-		s = s .. self.unop .. '('
-	end
-	
-	s = s .. self.atom:str()
+	s = self.atom:str()
 	
 	for i,v in ipairs(self.tails) do
 		if v.kind == 'index' then
@@ -1699,10 +1687,6 @@ function BasicExp:str()
 		else
 			error('BasicExp:str() - unknown tail kind: ' .. v.kind)
 		end
-	end
-	
-	if self.unop then
-		s = s .. ')'
 	end
 	
 	return s

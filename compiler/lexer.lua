@@ -197,7 +197,7 @@ lex = function(file)
 		end
 		
 		-- Symbol
-		m = s:match("^@%S+",index)
+		m = s:match("^@[_a-zA-Z0-9]+",index)
 		if m then
 			addtok(m,'Symbol')
 			break

@@ -44,12 +44,10 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 
-basicexp :=		[ Unop ] atomicexp { exptail }
+basicexp :=		atomicexp { exptail }
 
-exp := 			basicexp { Binop basicexp }
+exp := 			[ Unop ] basicexp { Binop [ Unop ] basicexp }
 
 listexp :=		exp { ',' exp }
 
 listbasicexp :=	basicexp { ',' basicexp }
-
-methodcall :=	basicexp (with a 'call' as top node)
