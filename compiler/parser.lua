@@ -1698,6 +1698,10 @@ function BasicExp:init()
 	return self:parse()
 end
 
+--[[ TODO: transform this into Node:basicexp() which produces a
+leftmost derivation with Nodes at each step (Indexing, MemberAccess and
+Call)
+]]
 function BasicExp:parse()
 	
 	local open = peekpos()
@@ -1835,6 +1839,10 @@ function Exp:init(left)
 	
 	return self:parse(left)
 end
+
+--[[ TODO: transform this into Node:exp() which produces a
+leftmost derivation with Nodes at each step (Binop, Unop)
+]]
 
 function Exp:parse(left)
 	
