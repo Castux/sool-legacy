@@ -75,7 +75,7 @@ end
 local begin_exp = function(s)
 	
 	local toks = {'Name','Number','String','Symbol','nil','false','true',
-		'(','[','/','<','{'}
+		'(','[','/','<','{','not','#','-'}
 	
 	for i,v in ipairs(toks) do
 		if s == v then return true end
@@ -1254,14 +1254,13 @@ end
 
 function Assignment:parse()
 	
-	local begin = current
-	
+	-- all cases start with basic expression(s)
 	self.lval = self:listbasicexp()
 	if not self.lval then
 		return
 	end
 	
-	-- normal case
+	-- normal case: assignment
 	if self:accept '=' then
 		self.rval = self:listexp()
 		if not self.rval then
@@ -1585,7 +1584,7 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 				
-basicexp :=		atomicexp { exptail }
+basicexp :=		[ Unop ] atomicexp { exptail }
 ]]
 
 BasicExp = class(Node)
@@ -1593,6 +1592,7 @@ BasicExp = class(Node)
 function BasicExp:init()
 	BasicExp.super.init(self)
 	
+	self.unop = nil
 	self.atom = nil
 	self.tails = {}
 	
@@ -1601,9 +1601,18 @@ end
 
 function BasicExp:parse()
 	
+	-- [ Unop ]
+	
+	if self:accept 'not' or self:accept '-' or self:accept '#' then
+		self.unop = self:lastval()
+	end
+	
 	-- atomicexp
 	self.atom = AtomicExp()
 	if not self.atom then
+		if self.unop then
+			add_err('info','after unary operator',self:pos())
+		end
 		return
 	else
 		self:add(self.atom)
@@ -1665,7 +1674,13 @@ function BasicExp:parse()
 end
 
 function BasicExp:str()
-	local s = self.atom:str()
+	local s = ''
+	
+	if self.unop then
+		s = s .. self.unop .. '('
+	end
+	
+	s = s .. self.atom:str()
 	
 	for i,v in ipairs(self.tails) do
 		if v.kind == 'index' then
@@ -1686,6 +1701,10 @@ function BasicExp:str()
 		end
 	end
 	
+	if self.unop then
+		s = s .. ')'
+	end
+	
 	return s
 end
 
@@ -1695,10 +1714,11 @@ exp := 			basicexp { Binop basicexp }
 
 Exp = class(Node)
 
--- can pass a pre-parsed left term (from Assignment() mostly)
+-- can pass a pre-parsed left term (from Assignment())
 function Exp:init(left)
 	Exp.super.init(self)
 	
+	-- binop
 	self.left = nil
 	self.terms = {}
 	
@@ -1740,6 +1760,13 @@ function Exp:parse(left)
 end
 
 function Exp:str()
+	
+	-- unop
+	if self.unop then
+		return self.unop .. ' ' .. self.exp:str()
+	end
+	
+	-- binops
 	local s = self.left:str()
 	
 	for i,v in ipairs(self.terms) do

@@ -65,7 +65,7 @@ lex = function(file)
 		local info = {
 			"Lexer",
 			"info",
-			"valid symbols at token beginning are: [_a-zA-Z0-9@'\"] and operators [~+-*/%^|#=<>:.,;()[]{}"
+			"valid symbols at token beginning are: [_a-zA-Z0-9@'\"] and operators [ ~+-*/%^|#=<>:.,;()[]{} ]"
 		}
 		return nil,{err,info}
 	end
@@ -134,14 +134,14 @@ lex = function(file)
 		end
 		
 		-- Hex number
-		m = s:match("^[-+]?0[xX]%x+",index)
+		m = s:match("^0[xX]%x+",index)
 		if m then
 			addtok(m,'Number')
 			break
 		end
 		
 		-- Number with dot
-		m = s:match("^[-+]?%d+%.%d+",index)
+		m = s:match("^%d+%.%d+",index)
 		if m then
 			local expo = s:match("^[eE]%d+",index+#m)
 			addtok(m .. (expo or ""),'Number')
@@ -149,7 +149,7 @@ lex = function(file)
 		end
 		
 		-- Number without dot
-		m = s:match("^[-+]?%d+",index)
+		m = s:match("^%d+",index)
 		if m then
 			local expo = s:match("^[eE]%d+",index+#m)
 			addtok(m .. (expo or ""),'Number')
@@ -157,7 +157,7 @@ lex = function(file)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|=<>:.,;%(%)%[%]{}]",index)
+		m = s:match("^[~%+%-%*/%%^|=<>:.,;%(%)%[%]{}#]",index)
 		if m then
 			addtok(m)
 			break
@@ -171,7 +171,7 @@ lex = function(file)
 			local res = {'class', 'methods', 'end', 'num', 'vec', 'str',
 			'return', 'do', 'if', 'then', 'elseif', 'else', 'while',
 			'for', 'in', 'break', 'continue', 'nil', 'false', 'true',
-			'private', 'op', 'and', 'or', 'xor'}
+			'private', 'op', 'and', 'or', 'xor', 'not'}
 			
 			local wasres = false
 			for i,v in ipairs(res) do

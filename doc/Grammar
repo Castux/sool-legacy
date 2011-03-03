@@ -44,7 +44,7 @@ exptail :=		'.' Name |
 				'(' [ listexp ] ')' |
 				'[' exp ']'
 
-basicexp :=		atomicexp { exptail }
+basicexp :=		[ Unop ] atomicexp { exptail }
 
 exp := 			basicexp { Binop basicexp }
 
