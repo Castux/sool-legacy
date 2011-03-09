@@ -700,7 +700,7 @@ function Method:str()
 	
 	s = s .. ')\n'
 	
-	s = s .. self.body:str() .. 'end'
+	s = s .. self.body:str() .. '\nend'
 	
 	return s
 end
@@ -794,7 +794,7 @@ function Block:str()
 	local s = ""
 	
 	for i,v in ipairs(self.stats) do
-		s = s .. v:str() .. '\n'
+		s = s .. v:str() .. (i < #self.stats and '\n' or '')
 	end
 	
 	return s
@@ -940,7 +940,7 @@ function While:parse()
 		return
 	end
 	
-	self.cond = Exp()
+	self.cond = self:exp()
 	if not self.cond then
 		add_err('info','as condition in while loop started at',self:firstpos())
 		return
@@ -1003,7 +1003,7 @@ function If:parse()
 		local test = {}
 		local open = self:lastpos()
 		
-		test.cond = Exp()
+		test.cond = self:exp()
 		if not test.cond then
 			add_err('info','as condition in if',open)
 			return
@@ -1096,7 +1096,7 @@ function For:parse()
 		return
 	end
 	
-	self[1] = Exp()
+	self[1] = self:exp()
 	if not self[1] then
 		return
 	else
@@ -1108,7 +1108,7 @@ function For:parse()
 		return
 	end
 	
-	self[2] = Exp()
+	self[2] = self:exp()
 	if not self[2] then
 		return
 	else
@@ -1116,7 +1116,7 @@ function For:parse()
 	end
 	
 	if self:accept ',' then
-		self[3] = Exp()
+		self[3] = self:exp()
 		if not self[3] then
 			return
 		else
@@ -1198,7 +1198,7 @@ function GenericFor:parse()
 		return
 	end
 	
-	self.exp = Exp()
+	self.exp = self:exp()
 	if self.exp then
 		self:add(self.exp)
 	else
@@ -1271,7 +1271,7 @@ function Assignment:parse()
 	elseif #self.lval == 1 then
 	
 		-- parse an expression with preparsed left term
-		return Exp(self.lval[1])
+		return self:exp(self.lval[1])
 	
 	else
 		self:expect '=' -- we know it's going to fail, but nicer error message
@@ -1309,7 +1309,7 @@ function Node:listexp()
 	
 	local t = {}
 	
-	t[1] = Exp()
+	t[1] = self:exp()
 	if not t[1] then
 		return
 	else
@@ -1317,7 +1317,7 @@ function Node:listexp()
 	end
 	
 	while self:accept ',' do
-		local ex = Exp()
+		local ex = self:exp()
 		if not ex then
 			return
 		else
@@ -1748,7 +1748,7 @@ function Node:basicexp()
 	
 	-- '(' exp ')'
 	if self:accept '(' then
-		left = Exp()
+		left = self:exp()
 		
 		if not self:expect ')' then
 			add_err('info','to match',open)
@@ -1794,7 +1794,7 @@ function Node:basicexp()
 			
 			tail:expect '['
 			
-			tail.index = Exp()
+			tail.index = tail:exp()
 			if not tail.index then
 				add_err('info','as index in indexing started at',open)
 				return
@@ -1856,75 +1856,114 @@ function Node:basicexp()
 end
 
 --[[
-exp := 			basicexp { Binop basicexp }
+exp := 			[ Unop ] basicexp { Binop [ Unop ] basicexp }
 ]]
 
-Exp = class(Node)
+Unop = class(Node)
 
--- can pass a pre-parsed left term (from Assignment())
-function Exp:init(left)
-	Exp.super.init(self)
+function Unop:init()
+	Unop.super.init(self)
 	
-	-- binop
-	self.left = nil
-	self.terms = {}
+	self.op = nil
+	self.expr = nil
 	
-	return self:parse(left)
+	return self:parse()
 end
 
---[[ TODO: transform this into Node:exp() which produces a
-leftmost derivation with Nodes at each step (Binop, Unop)
-]]
-
-function Exp:parse(left)
+function Unop:parse()
 	
-	-- basicexp { Binop basicexp }
-	self.left = left or self:basicexp()
-	if not self.left then
+	if not self:accept 'not' and not self:accept '-' and not self:accept '#' then
+		add_err('error','malformed unary operator',peekpos())
 		return
-	else
-		self:add(self.left)
 	end
 	
-	while self:binop(true) do	-- true for only peeking
-		local term = {}
-		
-		if self:binop() then
-			term.binop = self:lastval()
-		else
-			add_err('info','as operator in expression',self:pos())
-			return
-		end
-		
-		term.right = self:basicexp()
-		if not term.right then
-			add_err('info','as right hand term in expression',self:pos())
-			return
-		else
-			self:add(term.right)
-		end
-		
-		table.insert(self.terms,term)
+	self.op = self:lastval()
+	
+	self.expr = self:basicexp()
+	if not self.expr then
+		add_err('info','as operand of unary operator',self:pos())
+		return
 	end
 	
 	return self
 end
 
-function Exp:str()
+function Unop:str()
+	return self.op .. ' ' .. self.expr:str()
+end
+
+Binop = class(Node)
+
+function Binop:init()
+	Binop.super.init(self)
 	
-	-- unop
-	if self.unop then
-		return self.unop .. ' ' .. self.exp:str()
+	self.left = nil
+	self.op = nil
+	self.right = nil
+	
+	return self
+end
+
+function Binop:str()
+	return '(' .. self.left:str() .. ') ' .. self.op ..
+		' (' .. self.right:str() .. ')'
+end
+
+-- can pass a pre-parsed left term (from Assignment())
+
+function Node:exp(left)
+	
+	local left = left
+	
+	-- if not left side is provided, parse it
+	if not left then
+
+		-- [ Unop ] basicexp
+		if peek() == 'not' or peek() == '-' or peek() == '#' then
+			left = Unop()
+		else
+			left = self:basicexp()
+		end
 	end
 	
-	-- binops
-	local s = self.left:str()
-	
-	for i,v in ipairs(self.terms) do
-		s = s .. ' ' .. v.binop .. ' ' ..'(' .. v.right:str() .. ')'
+	-- by now we really should have a left side
+	if not left then
+		return
 	end
 	
-	return s
+	-- { Binop [ Unop ] basicexp }
+	
+	while self:binop(true) do	-- true for only peeking
+		
+		local bin = Binop()
+		
+		-- left
+		bin.left = left
+		bin:add(left)
+		
+		-- middle
+		bin:binop()
+		bin.op = bin:lastval()
+		
+		-- right: [ Unop ] basicexp
+		if peek() == 'not' or peek() == '-' or peek() == '#' then
+			bin.right = Unop()
+		else
+			bin.right = bin:basicexp()
+		end
+
+		if not bin.right then
+			add_err('info','as right hand term in expression',bin:pos())
+			return
+		else
+			bin:add(bin.right)
+		end
+		
+		-- magic leftmost derivation
+		left = bin
+	end
+	
+	return left
 end
 
 -------------------------
