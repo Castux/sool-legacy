@@ -1339,7 +1339,7 @@ function Node:listbasicexp()
 	
 	local t = {}
 	
-	t[1] = BasicExp()
+	t[1] = self:basicexp()
 	if not t[1] then
 		return
 	else
@@ -1347,7 +1347,7 @@ function Node:listbasicexp()
 	end
 	
 	while self:accept ',' do
-		local ex = BasicExp()
+		local ex = self:basicexp()
 		if not ex then
 			return
 		else
@@ -1687,28 +1687,68 @@ basicexp :=		( atomicexp | '(' exp ')' | constructor )
 				{ exptail }
 ]]
 
-BasicExp = class(Node)
+Indexing = class(Node)
 
-function BasicExp:init()
-	BasicExp.super.init(self)
+function Indexing:init()
+	Indexing.super.init(self)
 	
-	self.left = nil
-	self.tails = {}
+	self.index = nil	-- Exp node
 	
-	return self:parse()
+	return self
 end
 
---[[ TODO: transform this into Node:basicexp() which produces a
-leftmost derivation with Nodes at each step (Indexing, MemberAccess and
-Call)
-]]
-function BasicExp:parse()
+function Indexing:str()
+	return self.left:str() .. '[' .. self.index:str() .. ']'
+end
+
+MemberAccess = class(Node)
+
+function MemberAccess:init()
+	MemberAccess.super.init(self)
+	
+	self.name = nil		-- string
+	
+	return self
+end
+
+function MemberAccess:str()
+	return self.left:str() .. '.' .. self.name
+end
+
+Call = class(Node)
+
+function Call:init()
+	Call.super.init(self)
+	
+	self.args = nil		-- list of Exp
+	
+	return self
+end
+
+function Call:str()
+	local s = self.left:str() .. '('
+	
+	if self.args then
+		s = s .. self.args[1]:str()
+		for i = 2,#self.args do
+			s = s .. ',' .. self.args[i]:str()
+		end
+	end
+	
+	return s .. ')'
+end
+
+-- Unique function that produces a leftmost derivation and the proper
+-- nodes
+
+function Node:basicexp()
 	
 	local open = peekpos()
+	local left
 	
 	-- '(' exp ')'
 	if self:accept '(' then
-		self.left = Exp()
+		left = Exp()
 		
 		if not self:expect ')' then
 			add_err('info','to match',open)
@@ -1717,110 +1757,102 @@ function BasicExp:parse()
 		
 	-- constructor
 	elseif peek() == '{' then
-		self.left = PackConst()
+		left = PackConst()
 		
 	elseif peek() == '[' then
-		self.left = ArrayConst()
+		left = ArrayConst()
 		
 	elseif peek() == '/' then
-		self.left = ListConst()
+		left = ListConst()
 		
 	elseif peek() == '<' then
-		self.left = VectorConst()
+		left = VectorConst()
 	
 	elseif peek() == 'ClassName' then
-		self.left = ObjConst()
+		left = ObjConst()
 	
 	else
 		-- atomicexp
-		self.left = AtomicExp()
+		left = AtomicExp()
 	end
 
-	if not self.left then
+	if not left then
 		return
-	else
-		self:add(self.left)
 	end
 	
 	-- { exptail }
 	while peek() == '.' or peek() == '[' or peek() == '(' do
-		local tail = {}
+		local tail
 		local open = peekpos()
 		
 		-- '[' exp ']'
-		if self:accept '[' then
-			tail.kind = 'index'
+		if peek() == '[' then
+			tail = Indexing()
+			
+			tail.left = left
+			tail:add(left)
+			
+			tail:expect '['
+			
 			tail.index = Exp()
 			if not tail.index then
 				add_err('info','as index in indexing started at',open)
 				return
 			else
-				self:add(tail.index)
+				tail:add(tail.index)
 			end
 			
 			if not self:expect ']' then
-				add_err('info','to match',open)
+				add_err('info','to match (indexing)',open)
 				return
 			end
 		
 		-- '.' Name
-		elseif self:accept '.' then
+		elseif peek() == '.' then
 			
-			if self:expect 'Name' then
-				tail.name = self:lastval()
-				tail.kind = 'member_access'
+			tail = MemberAccess()
+			
+			tail.left = left
+			tail:add(left)
+			
+			tail:expect '.' 
+			
+			if tail:expect 'Name' then
+				tail.name = tail:lastval()
 			else
 				add_err('info','in member access started at',open)
 				return
 			end
 		
 		-- '(' [ listexp ] ')'
-		elseif self:accept '(' then
-			open = self:lastpos()
-			tail.kind = 'call'
+		elseif peek() == '(' then
+			
+			tail = Call()
+			
+			tail.left = left
+			tail:add(left)
+			
+			tail:expect '('
+			open = tail:lastpos()
+			
 			if peek() ~= ')' then
-				tail.args = self:listexp()
+				tail.args = tail:listexp()
 				if not tail.args then
 					return
 				end
 			end
 			
-			if not self:expect ')' then
-				add_err('info','to match in method call',open)
+			if not tail:expect ')' then
+				add_err('info','to match (method call)',open)
 				return
 			end
 		end
 		
-		table.insert(self.tails,tail)
+		-- magic left derivation
+		left = tail
 	end
 	
-	return self
-end
-
-function BasicExp:str()
-	
-	s = self.left:str()
-	
-	for i,v in ipairs(self.tails) do
-		if v.kind == 'index' then
-			s = s .. '[' .. v.index:str() .. ']'
-		elseif v.kind == 'member_access' then
-			s = s .. '.' .. v.name
-		elseif v.kind == 'call' then
-			s = s .. '('
-			if v.args then
-				s = s .. v.args[1]:str()
-				for i = 2,#v.args do
-					s = s .. ',' .. v.args[i]:str()
-				end
-			end
-			s = s .. ')'
-		else
-			error('BasicExp:str() - unknown tail kind: ' .. v.kind)
-		end
-	end
-	
-	return s
+	return left
 end
 
 --[[
@@ -1847,7 +1879,7 @@ leftmost derivation with Nodes at each step (Binop, Unop)
 function Exp:parse(left)
 	
 	-- basicexp { Binop basicexp }
-	self.left = left or BasicExp()
+	self.left = left or self:basicexp()
 	if not self.left then
 		return
 	else
@@ -1864,7 +1896,7 @@ function Exp:parse(left)
 			return
 		end
 		
-		term.right = BasicExp()
+		term.right = self:basicexp()
 		if not term.right then
 			add_err('info','as right hand term in expression',self:pos())
 			return
