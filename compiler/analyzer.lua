@@ -1,4 +1,6 @@
 require 'parser'	-- nodes are defined here
+require 'types'
+require 'Selector'
 
 local errors
 
@@ -221,6 +223,8 @@ end
 --self.type = ""
 --self.val = nil
 
+-- Build associated TType and store in self.ttype
+
 function Type:validate()
 	
 	if self.type == 'class' then
@@ -229,14 +233,35 @@ function Type:validate()
 		if not classes[self.val] then
 			add_err('error','unknown class ' .. self.val, self:pos())
 		end
+		
+		self.ttype = TObject(self.val)
 	
-	elseif self.type == 'array' or self.type == 'list' then
+	elseif self.type == 'array' then
 		self.val:validate()
+		self.ttype = TArray(self.val.ttype)
+	
+	elseif self.type == 'list' then
+		self.val:validate()
+		self.ttype = TList(self.val.ttype)
 	
 	elseif self.type == 'pack' then
+		
+		local ttypes = {}
 		for i,v in ipairs(self.val) do
 			v:validate()
+			table.insert(ttypes,v.ttype)
 		end
+		
+		self.ttype = TPack(ttypes)
+	
+	elseif self.type == 'num' then
+			self.ttype = TNum()
+	
+	elseif self.type == 'vec' then
+			self.ttype = TVec()
+	
+	elseif self.type == 'str' then
+			self.ttype = TStr()
 	end
 	
 end
@@ -478,7 +503,7 @@ end
 
 --self.atom = nil
 --self.tails = {}
-
+--[[
 function BasicExp:validate()
 	
 	self.left:validate()
@@ -497,7 +522,7 @@ function Exp:validate()
 	self.left:validate()
 	
 end
-
+]]
 ---------------------------
 -- Main analyzing driver --
 ---------------------------
