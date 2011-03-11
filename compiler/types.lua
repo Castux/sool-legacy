@@ -134,11 +134,11 @@ function TPack:init(subtypes)
 	
 	self.subtypes = subtypes
 	
-	self.sig = '/'
+	self.sig = '{'
 	for i,v in ipairs(subtypes) do
 		self.sig = self.sig .. v.sig .. (i < #subtypes and ',' or '')
 	end
-	self.sig = self.sig .. '/'
+	self.sig = self.sig .. '}'
 	
 	return self:internize()
 end

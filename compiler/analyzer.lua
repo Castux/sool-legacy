@@ -200,7 +200,7 @@ function Class:validate_interface()
 			add_err('info','defined here',taken.defnode:pos())
 		end
 		
-		-- Add to reverse table
+		-- Add to reverse table, index by selector
 		self.methods[meth.sel] = meth
 	end
 	
@@ -458,15 +458,63 @@ end
 -- Expressions --
 -----------------
 
+-- All nodes that look like expressions get a TType through validation:
+-- self.type
+
 ---------------
 -- AtomicExp --
 ---------------
 
---self.kind = ""
+--self.kind = ""	Name | Number | String | nil | false | true | Symbol
 --self.val = nil
---self.args = nil		-- for instanciation only
 
 function AtomicExp:validate()
+	
+	if self.kind == 'Name' then
+	
+		local found = self:in_scope(self.val)
+		if not found then
+			add_err('error','unknown variable ' .. self.val,self:pos())
+			return
+		else
+			self.type = found.type
+		end
+	
+	elseif self.kind == 'Number' then
+		
+		self.type = TNum()
+		self.val = tonumber(self.val)
+		if not self.val then
+			error('AtomicExp:validate() - could not convert number string into value')
+		end
+		
+	elseif self.kind == 'String' then
+		
+		self.type = TStr()
+		-- TODO: unescape stuff
+	
+	elseif self.kind == 'nil' then
+	
+		self.type = TObject('?')
+		self.val = 0
+	
+	elseif self.kind == 'false' then
+		
+		self.type = TNum()
+		self.val = 0
+		
+	elseif self.kind == 'true' then
+		
+		self.type = TNum()
+		self.val = 1
+	
+	elseif self.kind == 'Symbol' then
+		
+		self.type = TNum()
+		-- TODO: implement actual symbols
+		self.val = 0
+		
+	end
 	
 end
 

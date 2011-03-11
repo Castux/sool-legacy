@@ -1382,6 +1382,7 @@ function AtomicExp:parse()
 	 	self:accept 'String' or
 		self:accept 'Symbol' or
 		self:accept 'nil' or
+		self:accept 'false' or
 		self:accept 'true' then
 		
 		self.kind = self.children[#self.children][1]

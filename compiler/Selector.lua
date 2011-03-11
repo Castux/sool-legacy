@@ -3,6 +3,14 @@ require 'types'
 
 local intern = {}
 
+--[[
+A selector is a combination of a method name and it's argument types,
+used - as the name indicates - to select a method to execute when
+receiving a message. Selectors are unique per class, but can be shared
+between classes, and will need to be compared a lot, and are used for 
+indexing, hence the usefulness of internizing them.
+]]
+
 Selector = class()
 
 function Selector:init(name,arg_types)
