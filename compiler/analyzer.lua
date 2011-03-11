@@ -475,7 +475,7 @@ function AtomicExp:validate()
 		local found = self:in_scope(self.val)
 		if not found then
 			add_err('error','unknown variable ' .. self.val,self:pos())
-			return
+			self.type = TUndef()
 		else
 			self.type = found.type
 		end
@@ -495,8 +495,8 @@ function AtomicExp:validate()
 	
 	elseif self.kind == 'nil' then
 	
-		self.type = TObject('?')
-		self.val = 0
+		self.type = TUndef()
+		-- TODO: to fix once we have a proper object system
 	
 	elseif self.kind == 'false' then
 		
@@ -518,32 +518,57 @@ function AtomicExp:validate()
 	
 end
 
---------------
--- BasicExp --
---------------
+---------------
+-- PackConst --
+---------------
 
---self.atom = nil
---self.tails = {}
---[[
-function BasicExp:validate()
+function PackConst:validate()
 	
-	self.left:validate()
+	local types = {}
 	
+	for i,v in ipairs(self.vals) do
+		v:validate()
+		table.insert(types,v.type)
+	end
+	
+	self.type = TPack(types)
 end
 
----------
--- Exp --
----------
+----------------
+-- ArrayConst --
+----------------
 
---self.left = nil
---self.terms = {}
-
-function Exp:validate()
+function ArrayConst:validate()
 	
-	self.left:validate()
+	local subtype = TUndef()
+	local pos
 	
+	for i,v in ipairs(self.vals) do
+		v:validate()
+		
+		local typ = v.type
+		
+		if typ == TUndef() then
+			add_err('error','cannot use expression of unknown type in array constructor',v:pos())
+			self.type = TUndef()
+			return
+		end
+		
+		if subtype == TUndef() then
+			subtype = typ
+			pos = v:pos()
+		end
+		
+		if typ ~= subtype then
+			add_err('error','expression of type ' .. typ.sig .. ' does not fit into array of ' .. subtype.sig, v:pos())
+			add_err('info','(type of array inferred by expression:)',pos)
+			return
+		end
+	end
+	
+	self.type = TArray(subtype)
 end
-]]
+
 ---------------------------
 -- Main analyzing driver --
 ---------------------------
