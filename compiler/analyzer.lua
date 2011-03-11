@@ -70,7 +70,7 @@ function Variable:init()
 	self.name = nil		-- obvious?
 	self.scope = nil	-- where does it belong? can be a class, or a block
 	
-	self.type = nil		-- type node, or nil if not yet known
+	self.type = nil		-- TType object
 	
 	self.defnode = nil	-- where was it defined? can be a member definition, an argument definition, or an assignment
 	self.deftype = nil	-- can be 'member', 'argument', 'assignment'
@@ -106,12 +106,12 @@ function Chunk:validate()
 	
 	-- Recurse breadth first: validate all interfaces first...
 	for i,v in ipairs(self.classes) do
-		v:validate()
+		v:validate_interface()
 	end
 	
 	-- ...then only the inner methods
 	for i,v in ipairs(self.classes) do
-		v:validate_methods()
+		v:validate_implementation()
 	end
 	
 end
@@ -127,13 +127,24 @@ end
 --self.methods = {}
 
 -- Added by validate():
--- self.variables = {}	members in the form of Variable
+-- self.variables = {}		members in the form of Variable
+-- self.valid_iface = bool	set to true once validation of interface has passed
 
-function Class:validate()
+function Class:validate_interface()
+	
+	-- Don't do validation if it's been done already
+	if self.valid_iface then
+		return
+	end
 	
 	-- Check that base class exists
 	if self.base and not self.parent.classes[self.base] then
 		add_err('error','base class ' .. self.base .. ' does not exist',self:pos(4,4))
+	end
+	
+	-- And make sure it's been validated first (to be able to call in_scope())
+	if self.base and self.parent.classes[self.base] then
+		self.parent.classes[self.base]:validate_interface()
 	end
 	
 	-- Members
@@ -159,7 +170,7 @@ function Class:validate()
 			name = mem.name,
 			scope = self,
 			
-			type = mem.type,
+			type = mem.type.ttype,
 			
 			defnode = mem,
 			deftype = 'member',
@@ -174,10 +185,12 @@ function Class:validate()
 	-- Same for methods
 	for i,meth in ipairs(self.methods) do
 		
-		-- Check for duplicates (use signatures, not just name)
-		if self.methods[meth:signature()] then
-			add_err('error','method ' .. meth:signature() .. ' is already defined',meth.namepos)
-			add_err('info','(here)',self.methods[meth:signature()].namepos)
+		meth:validate_interface()
+		
+		-- Check for duplicates (use selector, not just name)
+		if self.methods[meth.sel] then
+			add_err('error','method ' .. meth.sel.sig .. ' is already defined',meth.namepos)
+			add_err('info','(here)',self.methods[meth.sel].namepos)
 		end
 		
 		-- Check member-method name collision as well
@@ -188,15 +201,17 @@ function Class:validate()
 		end
 		
 		-- Add to reverse table
-		self.methods[meth:signature()] = meth
+		self.methods[meth.sel] = meth
 	end
 	
+	-- "memoize"
+	self.valid_iface = true
 end
 
-function Class:validate_methods()
+function Class:validate_implementation()
 	
 	for _,meth in ipairs(self.methods) do
-		meth:validate()
+		meth:validate_body()
 	end
 end
 
@@ -266,42 +281,6 @@ function Type:validate()
 	
 end
 
-function Type:equals(other)
-	
-	if self.type ~= other.type then
-		return false
-	end
-	
-	if self.type == 'class' then
-		return self.val == other.val
-	end
-	
-	if self.type == 'array' or self.type == 'list' then
-		return self.val:equals(other.val)
-	end
-	
-	if self.type == 'pack' then
-		return Type.list_equals(self.val,other.val)
-	end
-	
-	error('Type:equal() - unknown type ' .. self.type)
-end
-
-function Type.list_equals(a,b)
-	
-	if #a ~= #b then
-		return false
-	end
-	
-	for i = 1,#a do
-		if not a[i]:equals(b[i]) then
-			return false
-		end
-	end
-	
-	return true
-end
-
 ------------
 -- Method --
 ------------
@@ -314,42 +293,19 @@ end
 
 -- validate() adds:
 -- self.variables
+-- self.rtypes		return types
+-- self.sel			selector
+-- self.sig			signature (rtypes:selector)
 
-function Method:signature()
-	
-	if self.sig then
-		return self.sig
-	end
-	
-	local sig = ''
-	
-	for i,v in ipairs(self.ret) do
-		sig = sig .. v:str()
-		if i < #self.ret then
-			sig = sig .. ','
-		end
-	end
-	
-	sig = sig .. ':' .. self.name .. ':'
-	
-	for i,v in ipairs(self.args) do
-		sig = sig .. v.type:str()
-		if i < #self.args then
-			sig = sig .. ','
-		end
-	end
-	
-	-- Memoize
-	self.sig = sig
-	
-	return sig
-end
+-- Build return types and selector and signature
 
-function Method:validate()
+function Method:validate_interface()
 	
 	-- Check return types
+	self.rtypes = {}
 	for _,ret in ipairs(self.ret) do
 		ret:validate()
+		table.insert(self.rtypes,ret.ttype)
 	end
 	
 	-- Check arguments
@@ -383,7 +339,7 @@ function Method:validate()
 			name = arg.name,
 			scope = self,
 			
-			type = arg.type,
+			type = arg.type.ttype,
 			
 			defnode = arg,
 			deftype = 'argument',
@@ -395,9 +351,26 @@ function Method:validate()
 		self.variables[var.name] = var
 	end
 	
-	-- Recurse
-	self.body:validate()
+	-- Build selector
+	local arg_types = {}
+	for _,arg in ipairs(self.args) do
+		table.insert(arg_types,arg.type.ttype)
+	end
 	
+	self.sel = Selector(self.name,arg_types)
+	
+	-- Build signature
+	
+	local sig = ""
+	for i,v in ipairs(self.rtypes) do
+		sig = sig .. v.sig .. (i < #self.ret and ',' or '')
+	end
+	
+	self.sig = sig .. ':' .. self.sel.sig
+end
+
+function Method:validate_body()
+	self.body:validate()
 end
 
 -- Returns variable with given name if it is in current scope

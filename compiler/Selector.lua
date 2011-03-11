@@ -12,7 +12,7 @@ function Selector:init(name,arg_types)
 	self.arg_types = arg_types or {}
 	
 	local s = ""
-	for _,typ in ipairs(self.arg_types) do
+	for i,typ in ipairs(self.arg_types) do
 		s = s .. typ.sig .. (i < #self.arg_types and ',' or '')
 	end
 	
