@@ -234,7 +234,7 @@ end
 -- Checks if the class implements the given selector
 -- Return false if not, or the method if it does
 
-function Class:answers_to(sel)
+function Class:answers(sel)
 	
 	local meth = self.methods[sel]
 	
@@ -243,6 +243,21 @@ function Class:answers_to(sel)
 	end
 	
 	return false
+end
+
+-- Returns a list of methods that have the given name
+
+function Class:meths_by_name(name)
+	
+	local l = {}
+	
+	for i,v in ipairs(self.methods) do
+		if v.name == name then
+			table.insert(l,v)
+		end
+	end
+	
+	return l
 end
 
 ----------
@@ -263,7 +278,7 @@ function Type:validate()
 			add_err('error','unknown class ' .. self.val, self:pos())
 		end
 		
-		self.ttype = TObject(self.val)
+		self.ttype = TObject(classes[self.val])
 	
 	elseif self.type == 'array' then
 		self.val:validate()
@@ -502,15 +517,36 @@ end
 function AtomicExp:validate()
 	
 	if self.kind == 'Name' then
-	
+		
+		-- Check if it is a variable
 		local found = self:in_scope(self.val)
-		if not found then
-			add_err('error','unknown variable ' .. self.val,self:pos())
-			return false
-		else
+		if found then
 			self.type = found.type
+			return true
 		end
-	
+		
+		-- If not, maybe it's a method
+		-- Check if the parent node is a call. If yes, let it handle it.
+		-- If not, we might be an argumentless call ourselves
+		local cl = self:getParent(Class)
+		local sel = Selector(self.val)
+		local meth = cl:answers(sel)
+		
+		if self.parent:isa(Call) and self.parent.left == self then
+			-- exceptionally, we are a node without a type
+			return true
+		else
+			if meth then
+				self.type = meth.rtypes
+				return true
+			end
+		end
+		
+		-- Failure 
+		add_err('error','unknown variable ' .. self.val .. ' and class ' ..
+			cl.name .. ' does not answer to ' .. sel.sig ,self:pos())
+		return false
+		
 	elseif self.kind == 'Number' then
 		
 		self.type = TNum()
@@ -706,7 +742,7 @@ function ObjConst:validate()
 	-- Check existence of the proper constructor
 	local sel = Selector('init',types)
 	
-	local meth = cl:answers_to(sel)
+	local meth = cl:answers(sel)
 	
 	if not meth then
 		add_err('error','class ' .. cl.name .. ' does not answer to ' .. sel.sig, self:pos())
@@ -714,7 +750,7 @@ function ObjConst:validate()
 	end
 	
 		-- this should be moved to interface checking
-		-- should also check if constructor is not private, which would be useless
+		-- should also check if all constructors are private, which would be useless
 	if #meth.rtypes ~= 0 then
 		add_err('error','wut? constructor returns stuff', self:pos())
 		add_err('info','(constructor has signature ' .. meth.sig .. ')', meth.interfpos)
@@ -722,7 +758,165 @@ function ObjConst:validate()
 		return false
 	end
 	
-	self.type = TObject(cl.name)
+	self.type = TObject(cl)
+	
+	return true
+end
+
+------------------
+-- MemberAccess --
+------------------
+
+--self.left = nil		-- Exp node
+--self.name = nil		-- string
+
+-- This is significantly like validating a Name as atomic expression,
+-- except the object depends on the type of self.left
+
+function MemberAccess:validate()
+	
+	-- Validate base expression
+	if not self.left:validate() then
+		return false
+	end
+	
+	-- Check if it is really a member (only for user defined objects)
+	
+	if self.left.type.class == TObject then
+		local cl = self.left.type.cl
+		local mem = cl:in_scope(self.name)
+		
+		if mem then
+			self.type = mem.type
+			return true
+		end
+	end
+	
+	-- If not, maybe it's a method.
+	
+	-- Check if the parent node is a call. If yes, let it handle it.
+	-- If not, we might be an argumentless call ourselves
+	local sel = Selector(self.name)
+	
+	if self.parent:isa(Call) then
+		-- exceptionally, we are a node without a type
+		return true
+	else
+		local meth = self.left.type:answers(sel)
+		
+		if meth then
+			self.type = meth.rtypes
+			return true
+		end
+	end
+	
+	-- Failure 
+	add_err('info','expression of type ' .. self.left.type.sig , self.left:pos())
+	add_err('error','has no member ' .. self.name .. ' and does not answer to ' .. sel.sig, self:pos(2,3))
+	return false
+end
+
+--------------
+-- Indexing --
+--------------
+
+--self.left = nil	-- Exp node
+--self.index = nil	-- Exp node
+
+function Indexing:validate()
+	
+	-- Validate base expression
+	if not self.left:validate() then
+		return false
+	end
+	
+	-- Validate index
+	if not self.index:validate() then
+		return false
+	end
+	
+	-- TODO: Special case: pack, for which index must be known at compile time
+	
+	-- Check whether type answers to index
+	
+	local sel = Selector('index',{self.index.type})
+	local ret = self.left.type:answers(sel)
+	if not ret then
+		add_err('info','expression of type ' .. self.left.type.sig , self.left:pos())
+		add_err('error','does not answer to ' .. sel.sig, self:pos(2,#self.children))
+		return false
+	end
+	
+	self.type = ret
+	
+	return true
+end
+
+----------
+-- Call --
+----------
+
+--self.left = nil		-- Exp node
+--self.args = nil		-- list of Exp
+
+function Call:validate()
+	
+	-- Validate base expression
+	if not self.left:validate() then
+		return false
+	end
+	
+	-- Validate list of arguments and get types
+	local types = {}
+	for i,v in ipairs(self.args) do
+		if not v:validate() then
+			return false
+		end
+		
+		table.insert(types,v.type)
+	end
+	
+	-- Check that the last node is either a Name or a MemberAccess
+	-- (can't call anything else than methods, now can we)
+	
+	if self.left:isa(AtomicExp) and self.left.kind == 'Name' then
+		
+		-- callee is self, since this is a floating method call
+		
+		local sel = Selector(self.left.val,types)
+		local cl = self:getParent(Class)
+		local meth = cl:answers(sel)
+		
+		if meth then
+			self.type = meth.rtypes
+			return true
+		end
+		
+		-- Failure
+		add_err('error','class ' .. cl.name .. ' does not answer to ' .. sel.sig, self:pos())
+		return false
+	end
+	
+	if self.left:isa(MemberAccess) then
+		
+		local callee = self.left.left
+		local name = self.left.name
+		
+		local sel = Selector(name,types)
+		local typ = callee.type
+		local ret = typ:answers(sel)
+		
+		if ret then
+			self.type = ret
+			return true
+		end
+		
+		-- Failure
+		
+		add_err('info','expression of type ' .. typ.sig, callee:pos())
+		add_err('error','does not answer to ' .. sel.sig, self:range(self.left:lastpos(),self:lastpos()))
+		return false
+	end
 	
 	return true
 end

@@ -204,6 +204,7 @@ function Node:lastlc(n)
 	end
 end
 
+-- takes indexes of children nodes/tokens for a range. defaults to first and last
 function Node:pos(a,b)
 	local fline,fcol,file1 = self:firstlc(a)
 	local lline,lcol,file2 = self:lastlc(b)
@@ -213,7 +214,10 @@ function Node:pos(a,b)
 	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol, file = file1}
 end
 
-
+-- For the few cases we need this outside the parser.lua chunk
+function Node:range(from,to)
+	return range(from,to)
+end
 
 ------------------------
 -- Other Node classes --
@@ -1691,11 +1695,14 @@ basicexp :=		( atomicexp | '(' exp ')' | constructor )
 				{ exptail }
 ]]
 
+-- the three tail nodes have the self.left member, which is an expression
+
 Indexing = class(Node)
 
 function Indexing:init()
 	Indexing.super.init(self)
 	
+	self.left = nil		-- Exp node
 	self.index = nil	-- Exp node
 	
 	return self
@@ -1710,6 +1717,7 @@ MemberAccess = class(Node)
 function MemberAccess:init()
 	MemberAccess.super.init(self)
 	
+	self.left = nil		-- Exp node
 	self.name = nil		-- string
 	
 	return self
@@ -1724,7 +1732,8 @@ Call = class(Node)
 function Call:init()
 	Call.super.init(self)
 	
-	self.args = nil		-- list of Exp
+	self.left = nil		-- Exp node
+	self.args = {}		-- list of Exp
 	
 	return self
 end
@@ -1806,7 +1815,7 @@ function Node:basicexp()
 				tail:add(tail.index)
 			end
 			
-			if not self:expect ']' then
+			if not tail:expect ']' then
 				add_err('info','to match (indexing)',open)
 				return
 			end

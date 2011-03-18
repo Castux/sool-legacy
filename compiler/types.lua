@@ -41,6 +41,22 @@ function TUndef:init()
 	return self:internize()
 end
 
+--[[ Void type, used for function calls that return nothing ]]
+
+TVoid = class(TType)
+
+function TVoid:init()
+	
+	self.sig = 'void'
+	
+	return self:internize()
+end
+
+function TVoid:answers(sel)
+	-- cannot call anything on void
+	return false
+end
+
 --[[ Num ]]
 
 TNum = class(TType)
@@ -50,6 +66,22 @@ function TNum:init()
 	self.sig = 'num'
 	
 	return self:internize()
+end
+
+function TNum:answers(sel)
+	
+	local meths = {
+		['+:num'] = TNum(),
+		['-:num'] = TNum(),
+		['/:num'] = TNum(),
+		['*:num'] = TNum(),
+		['+=:num'] = TVoid(),
+		['-=:num'] = TVoid(),
+		['/=:num'] = TVoid(),
+		['*=:num'] = TVoid()
+	}
+	
+	return meths[sel.sig]
 end
 
 --[[ Vec ]]
@@ -78,12 +110,22 @@ end
 
 TObject = class(TType)
 
-function TObject:init(classname)
+function TObject:init(class)
 	
-	self.name = classname
-	self.sig = classname
+	self.cl = class
+	self.sig = class.name
 	
 	return self:internize()
+end
+
+function TObject:answers(sel)
+	local meth = self.cl:answers(sel)
+	
+	if meth then
+		return meth.rtypes
+	else
+		return false
+	end
 end
 
 --[[ Array ]]
@@ -103,6 +145,15 @@ function TArray:init(subtype)
 	return self:internize()
 end
 
+function TArray:answers(sel)
+	
+	local meths = {
+		['index:num'] = self.subtype
+	}
+	
+	return meths[sel.sig]
+end
+
 --[[ List ]]
 
 TList = class(TType)
@@ -118,6 +169,15 @@ function TList:init(subtype)
 	self.sig = '/' .. subtype.sig .. '/'
 	
 	return self:internize()
+end
+
+function TList:answers(sel)
+	
+	local meths = {
+		['index:num'] = self.subtype
+	}
+	
+	return meths[sel.sig]
 end
 
 --[[ Pack ]]
@@ -139,6 +199,28 @@ function TPack:init(subtypes)
 		self.sig = self.sig .. v.sig .. (i < #subtypes and ',' or '')
 	end
 	self.sig = self.sig .. '}'
+	
+	return self:internize()
+end
+
+--[[ Multiple values ]]
+
+TMulti = class(TType)
+
+function TMulti:init(subtypes)
+	
+	for i,v in ipairs(subtypes) do
+		if not v:isa(TType) then
+			error('TPack:init(subtypes) - one of given subtype is not a type')
+		end
+	end
+	
+	self.subtypes = subtypes
+	
+	self.sig = ''
+	for i,v in ipairs(subtypes) do
+		self.sig = self.sig .. v.sig .. (i < #subtypes and ',' or '')
+	end
 	
 	return self:internize()
 end
