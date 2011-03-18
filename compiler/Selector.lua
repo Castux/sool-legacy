@@ -13,18 +13,15 @@ indexing, hence the usefulness of internizing them.
 
 Selector = class()
 
-function Selector:init(name,arg_types)
+-- arg_type is a unique TType, potentially a TMulti, itself can be empty
+
+function Selector:init(name,arg_type)
 	
 	self.name = name
 	
-	self.arg_types = arg_types or {}
+	self.arg_type = arg_type or TMulti({})
 	
-	local s = ""
-	for i,typ in ipairs(self.arg_types) do
-		s = s .. typ.sig .. (i < #self.arg_types and ',' or '')
-	end
-	
-	self.arg_sig = s
+	self.arg_sig = self.arg_type.sig
 	
 	self.sig = self.name .. ':' .. self.arg_sig
 	

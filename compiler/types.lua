@@ -205,9 +205,16 @@ end
 
 --[[ Multiple values ]]
 
+-- Automagically falls back to the proper type when used with only one element
+-- And to void with zero
+
 TMulti = class(TType)
 
 function TMulti:init(subtypes)
+	
+	if #subtypes == 0 then
+		return TVoid()
+	end
 	
 	for i,v in ipairs(subtypes) do
 		if not v:isa(TType) then

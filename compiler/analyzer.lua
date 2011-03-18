@@ -326,7 +326,7 @@ end
 
 -- validate() adds:
 -- self.variables
--- self.rtypes		return types
+-- self.ret			return type (potentially TMulti)
 -- self.sel			selector
 -- self.sig			signature (rtypes .. ':' .. selector)
 
@@ -335,11 +335,13 @@ end
 function Method:validate_interface()
 	
 	-- Check return types
-	self.rtypes = {}
+	local types = {}
 	for _,ret in ipairs(self.ret) do
 		ret:validate()
-		table.insert(self.rtypes,ret.ttype)
+		table.insert(types,ret.ttype)
 	end
+	
+	self.ret = TMulti(types)
 	
 	-- Check arguments
 	self.variables = {}
@@ -390,16 +392,11 @@ function Method:validate_interface()
 		table.insert(arg_types,arg.type.ttype)
 	end
 	
-	self.sel = Selector(self.name,arg_types)
+	self.sel = Selector(self.name,TMulti(arg_types))
 	
 	-- Build signature
-	
-	local sig = ""
-	for i,v in ipairs(self.rtypes) do
-		sig = sig .. v.sig .. (i < #self.ret and ',' or '')
-	end
-	
-	self.sig = sig .. ':' .. self.sel.sig
+
+	self.sig = self.ret.sig .. ':' .. self.sel.sig
 end
 
 function Method:validate_body()
@@ -439,6 +436,8 @@ function Block:validate()
 		-- many as possible)
 		stat:validate()
 	end
+	
+	-- TODO: automatic 'return void' if not explicit
 end
 
 -- Returns variable with given name if it is in current scope
@@ -488,13 +487,32 @@ function Continue:validate()
 	return true
 end
 
+--self.vals = {}
+
 function Return:validate()
 	
 	-- Get method return types
-	local meth = self:getParent(Method).ret
+	local meth = self:getParent(Method)
+	local meth_ret = meth.ret
 	
 	-- Resolve types of expressions
-	--local types = Exp.type_list(self.vals)
+	local types = {}
+	for i,v in ipairs(self.vals) do
+		if not v:validate() then
+			return false
+		end
+		
+		table.insert(types,v.type)
+	end
+	
+	local ret = TMulti(types)
+	
+	-- And compare
+	if meth_ret ~= ret then
+		add_err('error','trying to return expression of type ' .. ret.sig, self:pos(2,#self.children))
+		add_err('info','in method declared ' .. meth.sig, meth.interfpos)
+		return false
+	end
 	
 	return true
 end
@@ -537,14 +555,14 @@ function AtomicExp:validate()
 			return true
 		else
 			if meth then
-				self.type = meth.rtypes
+				self.type = meth.ret
 				return true
 			end
 		end
 		
 		-- Failure 
 		add_err('error','unknown variable ' .. self.val .. ' and class ' ..
-			cl.name .. ' does not answer to ' .. sel.sig ,self:pos())
+			cl.name .. ' does not answer to ' .. sel.sig,self:pos())
 		return false
 		
 	elseif self.kind == 'Number' then
@@ -740,21 +758,12 @@ function ObjConst:validate()
 	end
 	
 	-- Check existence of the proper constructor
-	local sel = Selector('init',types)
+	local sel = Selector('init',TMulti(types))
 	
 	local meth = cl:answers(sel)
 	
 	if not meth then
 		add_err('error','class ' .. cl.name .. ' does not answer to ' .. sel.sig, self:pos())
-		return false
-	end
-	
-		-- this should be moved to interface checking
-		-- should also check if all constructors are private, which would be useless
-	if #meth.rtypes ~= 0 then
-		add_err('error','wut? constructor returns stuff', self:pos())
-		add_err('info','(constructor has signature ' .. meth.sig .. ')', meth.interfpos)
-		add_err('warning','that should be an analyzer internal error, do not blame yourself')
 		return false
 	end
 	
@@ -805,7 +814,7 @@ function MemberAccess:validate()
 		local meth = self.left.type:answers(sel)
 		
 		if meth then
-			self.type = meth.rtypes
+			self.type = meth.ret
 			return true
 		end
 	end
@@ -839,7 +848,7 @@ function Indexing:validate()
 	
 	-- Check whether type answers to index
 	
-	local sel = Selector('index',{self.index.type})
+	local sel = Selector('index',self.index.type)
 	local ret = self.left.type:answers(sel)
 	if not ret then
 		add_err('info','expression of type ' .. self.left.type.sig , self.left:pos())
@@ -883,12 +892,12 @@ function Call:validate()
 		
 		-- callee is self, since this is a floating method call
 		
-		local sel = Selector(self.left.val,types)
+		local sel = Selector(self.left.val,TMulti(types))
 		local cl = self:getParent(Class)
 		local meth = cl:answers(sel)
 		
 		if meth then
-			self.type = meth.rtypes
+			self.type = meth.ret
 			return true
 		end
 		
@@ -902,7 +911,7 @@ function Call:validate()
 		local callee = self.left.left
 		local name = self.left.name
 		
-		local sel = Selector(name,types)
+		local sel = Selector(name,TMulti(types))
 		local typ = callee.type
 		local ret = typ:answers(sel)
 		
