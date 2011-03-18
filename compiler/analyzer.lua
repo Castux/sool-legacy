@@ -231,6 +231,20 @@ function Class:in_scope(name)
 	return nil
 end
 
+-- Checks if the class implements the given selector
+-- Return false if not, or the method if it does
+
+function Class:answers_to(sel)
+	
+	local meth = self.methods[sel]
+	
+	if meth then
+		return meth
+	end
+	
+	return false
+end
+
 ----------
 -- Type --
 ----------
@@ -268,6 +282,10 @@ function Type:validate()
 		end
 		
 		self.ttype = TPack(ttypes)
+		
+		if #self.val < 2 then
+			add_err('warning','packing less than 2 elements is useless',self:pos())
+		end
 	
 	elseif self.type == 'num' then
 			self.ttype = TNum()
@@ -295,7 +313,7 @@ end
 -- self.variables
 -- self.rtypes		return types
 -- self.sel			selector
--- self.sig			signature (rtypes:selector)
+-- self.sig			signature (rtypes .. ':' .. selector)
 
 -- Build return types and selector and signature
 
@@ -402,6 +420,8 @@ function Block:validate()
 	self.variables = {}
 	
 	for i,stat in ipairs(self.stats) do
+		-- Validate statement, but ignore if failed (try validating as
+		-- many as possible)
 		stat:validate()
 	end
 end
@@ -425,13 +445,20 @@ end
 -- Statement --
 ---------------
 
+-- All nodes at statement level or below return true if the validation
+-- succeeded, or false otherwise. Any error must be reported up and 
+-- cancels validation of the whole statement
+
 function Break:validate()
 	
 	local loop = self:getParent(While,For,GenericFor)
 	
 	if not loop then
 		add_err('error','break statement is not inside a loop',self:pos())
+		return false
 	end
+	
+	return true
 end
 
 function Continue:validate()
@@ -440,7 +467,10 @@ function Continue:validate()
 	
 	if not loop then
 		add_err('error','continue statement is not inside a loop',self:pos())
+		return false
 	end
+	
+	return true
 end
 
 function Return:validate()
@@ -451,6 +481,7 @@ function Return:validate()
 	-- Resolve types of expressions
 	--local types = Exp.type_list(self.vals)
 	
+	return true
 end
 
 
@@ -475,7 +506,7 @@ function AtomicExp:validate()
 		local found = self:in_scope(self.val)
 		if not found then
 			add_err('error','unknown variable ' .. self.val,self:pos())
-			self.type = TUndef()
+			return false
 		else
 			self.type = found.type
 		end
@@ -516,6 +547,7 @@ function AtomicExp:validate()
 		
 	end
 	
+	return true
 end
 
 ---------------
@@ -527,11 +559,20 @@ function PackConst:validate()
 	local types = {}
 	
 	for i,v in ipairs(self.vals) do
-		v:validate()
+		
+		if not v:validate() then
+			return false
+		end
+		
 		table.insert(types,v.type)
 	end
 	
+	if #self.vals < 2 then
+		add_err('warning','packing less than 2 elements is useless',self:pos())
+	end
+	
 	self.type = TPack(types)
+	return true
 end
 
 ----------------
@@ -544,14 +585,16 @@ function ArrayConst:validate()
 	local pos
 	
 	for i,v in ipairs(self.vals) do
-		v:validate()
+		
+		if not v:validate() then
+			return false
+		end
 		
 		local typ = v.type
 		
 		if typ == TUndef() then
 			add_err('error','cannot use expression of unknown type in array constructor',v:pos())
-			self.type = TUndef()
-			return
+			return false
 		end
 		
 		if subtype == TUndef() then
@@ -561,12 +604,127 @@ function ArrayConst:validate()
 		
 		if typ ~= subtype then
 			add_err('error','expression of type ' .. typ.sig .. ' does not fit into array of ' .. subtype.sig, v:pos())
-			add_err('info','(type of array inferred by expression:)',pos)
-			return
+			add_err('info','(type of array inferred from expression:)',pos)
+			return false
 		end
 	end
 	
 	self.type = TArray(subtype)
+	return true
+end
+
+---------------
+-- ListConst --
+---------------
+
+function ListConst:validate()
+	
+	local subtype = TUndef()
+	local pos
+	
+	for i,v in ipairs(self.vals) do
+	
+		if not v:validate() then
+			return false
+		end
+		
+		local typ = v.type
+		
+		if typ == TUndef() then
+			add_err('error','cannot use expression of unknown type in list constructor',v:pos())
+			return false
+		end
+		
+		if subtype == TUndef() then
+			subtype = typ
+			pos = v:pos()
+		end
+		
+		if typ ~= subtype then
+			add_err('error','expression of type ' .. typ.sig .. ' does not fit into list of ' .. subtype.sig, v:pos())
+			add_err('info','(type of list inferred from expression:)',pos)
+			return false
+		end
+	end
+	
+	self.type = TList(subtype)
+	return true
+end
+
+-----------------
+-- VectorConst --
+-----------------
+
+function VectorConst:validate()
+	
+	for i,v in ipairs(self.vals) do
+		
+		if not v:validate() then
+			return false
+		end
+		
+		local typ = v.type
+		
+		if typ ~= TNum() then
+			add_err('error','vector constructor expects expressions of type num, found a ' .. typ.sig .. ' instead', v:pos())
+			return false
+		end
+	end
+	
+	self.type = TVec()
+	return true
+end
+
+--------------
+-- ObjConst --
+--------------
+
+--self.class = nil
+--self.args = {}
+
+function ObjConst:validate()
+	
+	-- Does the class exist?
+	local classes = self:getParent(Chunk).classes
+	local cl = classes[self.class]
+	
+	if not cl then
+			add_err('error','unknown class ' .. self.class, self.children[1][3])
+			return false
+	end
+	
+	-- Verify arguments, build type list
+	local types = {}
+	for i,v in ipairs(self.args) do
+		if not v:validate() then
+			return false
+		end
+		
+		table.insert(types,v.type)
+	end
+	
+	-- Check existence of the proper constructor
+	local sel = Selector('init',types)
+	
+	local meth = cl:answers_to(sel)
+	
+	if not meth then
+		add_err('error','class ' .. cl.name .. ' does not answer to ' .. sel.sig, self:pos())
+		return false
+	end
+	
+		-- this should be moved to interface checking
+		-- should also check if constructor is not private, which would be useless
+	if #meth.rtypes ~= 0 then
+		add_err('error','wut? constructor returns stuff', self:pos())
+		add_err('info','(constructor has signature ' .. meth.sig .. ')', meth.interfpos)
+		add_err('warning','that should be an analyzer internal error, do not blame yourself')
+		return false
+	end
+	
+	self.type = TObject(cl.name)
+	
+	return true
 end
 
 ---------------------------

@@ -554,7 +554,8 @@ function Method:init()
 	self.args = {}		-- small Node with fields {type,name} (and proper children)
 	self.body = nil
 	
-	self.namepos = nil
+	self.namepos = nil		-- position of the method name
+	self.interfpos = nil	-- position of the entire method interface (privacity, return types, name, arguments)
 	
 	return self:parse()
 end
@@ -659,6 +660,8 @@ function Method:parse()
 		add_err('info','to close argument list started at',paren)
 		return
 	end
+	
+	self.interfpos = range(open,self:lastpos())
 	
 	-- block
 	self.body = Block()
@@ -1638,7 +1641,7 @@ function ObjConst:parse()
 
 	-- ClassName [ '(' [ listexp ] ')' ]
 	if not self:expect 'ClassName' then
-		add_err('info','in insstanciation',peekpos())
+		add_err('info','in instanciation',peekpos())
 		return
 	end
 
