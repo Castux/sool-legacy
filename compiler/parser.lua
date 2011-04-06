@@ -1262,6 +1262,7 @@ end
 function Assignment:parse()
 	
 	-- all cases start with basic expression(s)
+	-- TODO: false, it can be a Unop too
 	self.lval = self:listbasicexp()
 	if not self.lval then
 		return
@@ -1928,7 +1929,7 @@ function Node:exp(left)
 	
 	local left = left
 	
-	-- if not left side is provided, parse it
+	-- if left side is not provided, parse it
 	if not left then
 
 		-- [ Unop ] basicexp

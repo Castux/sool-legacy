@@ -41,7 +41,7 @@ On argument passing, the compiler may optimize and pass a direct pointer to the 
 - The big question is: do we do automatic nil testing before member access/method calling? Safer, but slower. As a compiler option, maybe, for debug builds?
 
 - Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
-- Can use as scripts: automatically enclosed in main() if none found (? maybe. But we don't know yet how to deal with main() so...)
+- Must define one Main class (or "Entry" or something), of which exactly one instance is created at runtime (and its num:init: or num:init:num,[str] method called.
 - A "pack". Kind of struct without named fields, that can be used without declaring it. Still type checked when adding it to arrays or passing to functions. Always copied (like numbers), cannot be refered to. Allows tight packing in arrays without the class overhead (pointer to class). Accessed using numerical indexes (like would do for heterogenous lists in Lua). Anything "bigger" or which needs named fields or pass by reference should be a class (even a methodless class, which would still inherit init, and copy and such)
 - "unreachable" return keyword.
 - Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)

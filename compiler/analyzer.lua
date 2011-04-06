@@ -57,6 +57,11 @@ function Node:in_scope(name)
 	return nil
 end
 
+-- To overload
+function Node:validate()
+	error('Node:validate() - please overload me!')
+end
+
 --------------------
 -- Variable class --
 --------------------
@@ -929,6 +934,13 @@ function Call:validate()
 	
 	return true
 end
+
+----------
+-- Unop --
+----------
+
+--self.op = nil			-- string
+--self.expr = nil		-- Exp node
 
 ---------------------------
 -- Main analyzing driver --
