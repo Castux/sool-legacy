@@ -110,19 +110,20 @@ end
 
 TObject = class(TType)
 
-function TObject:init(class)
+function TObject:init(cl)
 	
-	self.cl = class
-	self.sig = class.name
+	self.cl = cl
+	self.sig = cl.name
 	
 	return self:internize()
 end
 
 function TObject:answers(sel)
+	
 	local meth = self.cl:answers(sel)
 	
 	if meth then
-		return meth.rtypes
+		return meth.ret
 	else
 		return false
 	end

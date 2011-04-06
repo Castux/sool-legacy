@@ -811,10 +811,10 @@ function MemberAccess:validate()
 		-- exceptionally, we are a node without a type
 		return true
 	else
-		local meth = self.left.type:answers(sel)
+		local ret = self.left.type:answers(sel)
 		
-		if meth then
-			self.type = meth.ret
+		if ret then
+			self.type = ret
 			return true
 		end
 	end
