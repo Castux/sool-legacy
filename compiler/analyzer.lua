@@ -40,7 +40,7 @@ function Node:getParent(...)
 	return self.parent:getParent(...)
 end
 
--- Default name searcher: up the parse tree
+-- Default variable name searcher: up the parse tree
 -- (overloaded for classes who search up the class tree)
 function Node:in_scope(name)
 	
@@ -55,6 +55,48 @@ function Node:in_scope(name)
 	end
 	
 	return nil
+end
+
+-- Default check for name availability: 
+function Node:taken_name(name,pos,what)
+	
+	-- Either a variable
+	local taken = self:in_scope(name)
+	
+	if taken and taken.deftype == 'member' then
+		add_err('error',what .. ' ' .. name ..
+			' shadows class member',pos)
+		add_err('info','defined here',taken.defpos)
+	end
+	
+	if taken and taken.deftype == 'argument' then
+		add_err('error',what .. ' ' .. name ..
+			' shadows argument',pos)
+		add_err('info','defined here',taken.defpos)
+	end
+	
+	if taken and taken.deftype == 'local' then
+		add_err('error',what .. ' ' .. name ..
+			' shadows local variable',pos)
+		add_err('info','defined here',taken.defpos)
+	end
+	
+	if taken then
+		return true
+	end
+	
+	-- Or a method name
+	local cl = self:getParent(Class)
+	taken = cl:meths_by_name(name)
+	
+	if #taken > 0 then
+		add_err('error',what .. ' ' .. name ..
+			' shadows method name',pos)
+		add_err('info','defined here',taken[1].namepos)
+		return true
+	end
+	
+	return false
 end
 
 -- To overload
@@ -77,8 +119,8 @@ function Variable:init()
 	
 	self.type = nil		-- TType object
 	
-	self.defnode = nil	-- where was it defined? can be a member definition, an argument definition, or an assignment
-	self.deftype = nil	-- can be 'member', 'argument', 'assignment'
+	self.defpos = nil	-- where was it defined? can be a member definition, an argument definition, or an assignment
+	self.deftype = nil	-- can be 'member', 'argument', 'local'
 	self.assnum = nil	-- in case of (multi) assignment, assignment number
 	
 	self.const = nil	-- if has a compile-time known value, put it here (represent array, lists, vectors and packs
@@ -161,30 +203,28 @@ function Class:validate_interface()
 		mem.type:validate()
 		
 		-- Check for duplicates
-		local taken = self:in_scope(mem.name)
-		if taken then
-			add_err('error','member ' .. mem.name .. ' is already defined',mem:pos())
-			add_err('info','(here)',taken.defnode:pos())
+		
+		if not self:taken_name(mem.name, mem:pos(), 'member') then
+		
+			-- Build inverse member table
+			self.members[mem.name] = mem
+			
+			-- Build variables table
+			local var = {
+				name = mem.name,
+				scope = self,
+				
+				type = mem.type.ttype,
+				
+				defpos = mem:pos(),
+				deftype = 'member',
+				assnum = nil,
+				
+				const = nil
+			}
+			
+			self.variables[var.name] = var
 		end
-		
-		-- Build inverse member table
-		self.members[mem.name] = mem
-		
-		-- Build variables table
-		local var = {
-			name = mem.name,
-			scope = self,
-			
-			type = mem.type.ttype,
-			
-			defnode = mem,
-			deftype = 'member',
-			assnum = nil,
-			
-			const = nil
-		}
-		
-		self.variables[var.name] = var
 	end
 	
 	-- Same for methods
@@ -247,19 +287,27 @@ function Class:answers(sel)
 		return meth
 	end
 	
+	if self.base and self.parent.classes[self.base] then
+		return self.parent.classes[self.base]:answers(sel)
+	end
+	
 	return false
 end
 
 -- Returns a list of methods that have the given name
 
-function Class:meths_by_name(name)
+function Class:meths_by_name(name,l)
 	
-	local l = {}
+	local l = l or {}
 	
 	for i,v in ipairs(self.methods) do
 		if v.name == name then
 			table.insert(l,v)
 		end
+	end
+	
+	if self.base and self.parent.classes[self.base] then
+		return self.parent.classes[self.base]:meths_by_name(name,l)
 	end
 	
 	return l
@@ -356,39 +404,27 @@ function Method:validate_interface()
 		-- Check type
 		arg.type:validate()
 		
-		-- Check that name is not already taken
-		local taken = self:in_scope(arg.name)
-		
-		if taken and taken.deftype == 'member' then
-			add_err('error','argument ' .. arg.name ..
-				' shadows class member of the same name',arg:pos())
-			add_err('info','defined here',taken.defnode:pos())
+		if not self:taken_name(arg.name, arg:pos(), 'argument') then
+			
+			-- Add to reverse args table
+			self.args[arg.name] = arg
+			
+			-- Add to variables table
+			local var = {
+				name = arg.name,
+				scope = self,
+				
+				type = arg.type.ttype,
+				
+				defpos = arg:pos(),
+				deftype = 'argument',
+				assnum = nil,
+				
+				const = nil
+			}
+			
+			self.variables[var.name] = var
 		end
-		
-		if taken and taken.deftype == 'argument' then
-			add_err('error','argument ' .. arg.name ..
-				' already defined',arg:pos())
-			add_err('info','(here)',taken.defnode:pos())
-		end
-		
-		-- Add to reverse args table
-		self.args[arg.name] = arg
-		
-		-- Add to variables table
-		local var = {
-			name = arg.name,
-			scope = self,
-			
-			type = arg.type.ttype,
-			
-			defnode = arg,
-			deftype = 'argument',
-			assnum = nil,
-			
-			const = nil
-		}
-		
-		self.variables[var.name] = var
 	end
 	
 	-- Build selector
@@ -406,20 +442,6 @@ end
 
 function Method:validate_body()
 	self.body:validate()
-end
-
--- Returns variable with given name if it is in current scope
--- (for a method: argument name or upper scope)
--- or nil if there is none
-function Method:in_scope(name)
-	
-	-- Check self
-	if self.variables[name] then
-		return self.variables[name]
-	end
-	
-	-- Forward to class
-	return self.parent:in_scope(name)
 end
 
 -----------
@@ -444,21 +466,6 @@ function Block:validate()
 	
 	-- TODO: automatic 'return void' if not explicit
 end
-
--- Returns variable with given name if it is in current scope
--- (for a block: locals or upper scope)
--- or nil if there is none
-function Method:in_scope(name)
-	
-	-- Check self
-	if self.variables[name] then
-		return self.variables[name]
-	end
-	
-	-- Forward to class
-	return self.parent:in_scope(name)
-end
-
 
 ---------------
 -- Statement --
@@ -1065,6 +1072,68 @@ function If:validate()
 	end
 	
 	return res
+end
+
+---------
+-- For --
+---------
+
+--self.var = ""
+--self[1] = nil
+--self[2] = nil
+--self[3] = nil
+--self.body = nil
+
+function For:validate()
+	
+	local ret = true
+	
+	self.variables = {}
+	
+	-- Check that name is not already taken
+	if not self:taken_name(self.var, self.children[2][3],'numeric iterator') then
+		
+		-- Add to variables table
+		local var = {
+			name = self.var,
+			scope = self,
+			
+			type = TNum(),
+			
+			defpos = self.children[2][3],
+			deftype = 'local',
+			assnum = nil,
+			
+			const = nil
+		}
+		
+		self.variables[var.name] = var
+	end
+	
+	-- Check that expressions are numbers
+	local val1 = self[1]:validate()
+	local val2 = self[2]:validate()
+	
+	local val3 = self[3] and self[3]:validate() or true
+	
+	if not val1 or not val2 or not val3 then
+		ret = false
+	end
+	
+	for i = 1,#self do
+		if self[i].type ~= TNum() then
+			add_err('error','boundary in numeric if is not of type num',self[i]:pos())
+			add_err('info','(is of type ' .. self[i].type.sig .. ' instead)')
+			ret = false
+		end
+	end
+	
+	-- Validate body
+	if not self.body:validate() then
+		ret = false
+	end
+	
+	return ret
 end
 
 ---------------------------
