@@ -604,7 +604,7 @@ function Method:parse()
 		end
 	end	
 	
-	-- ( Name | 'op' Binop )
+	-- ( Name [ '=' ] | 'op' Binop )
 	if self:accept 'op' then
 		if self:binop() then
 			self.name = self:lastval()
@@ -617,6 +617,12 @@ function Method:parse()
 		if self:expect 'Name' then
 			self.name = self:lastval()
 			self.namepos = self:lastpos()
+			
+			if self:accept '=' then
+				self.name = self.name .. '='
+				self.namepos = range(self.namepos,self:lastpos())
+			end
+			
 		else
 			add_err('info','for method name in method definition',range(open,peekpos()))
 			return
@@ -1226,6 +1232,8 @@ function GenericFor:parse()
 	self.body = Block()
 	if not self.body then
 		return
+	else
+		self:add(self.body)
 	end
 	
 	if not self:expect 'end' then

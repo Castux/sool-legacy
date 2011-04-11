@@ -797,8 +797,9 @@ end
 
 -- This is significantly like validating a Name as atomic expression,
 -- except the object depends on the type of self.left
+-- rtype = is a TType if we need to check member as a lvalue (adds '=' to the method lookup)
 
-function MemberAccess:validate()
+function MemberAccess:validate(rtype)
 	
 	-- Validate base expression
 	if not self.left:validate() then
@@ -813,6 +814,7 @@ function MemberAccess:validate()
 		
 		if mem then
 			self.type = mem.type
+			
 			return true
 		end
 	end
@@ -821,7 +823,7 @@ function MemberAccess:validate()
 	
 	-- Check if the parent node is a call. If yes, let it handle it.
 	-- If not, we might be an argumentless call ourselves
-	local sel = Selector(self.name)
+	local sel = Selector(self.name .. (rtype and '=' or ''), rtype)
 	
 	if self.parent:isa(Call) then
 		-- exceptionally, we are a node without a type
@@ -1091,7 +1093,7 @@ function For:validate()
 	self.variables = {}
 	
 	-- Check that name is not already taken
-	if not self:taken_name(self.var, self.children[2][3],'numeric iterator') then
+	if not self:taken_name(self.var, self.children[2][3],'numeric index') then
 		
 		-- Add to variables table
 		local var = {
@@ -1145,6 +1147,210 @@ function For:validate()
 	if not self.body:validate() then
 		ret = false
 	end
+	
+	return ret
+end
+
+----------------
+-- GenericFor --
+----------------
+
+--self[1] = ""
+--self.exp = nil
+--self.body = nil
+
+function GenericFor:validate()
+	
+	local ret = true
+	
+	-- Check first the type of the expression (needed for local variables setting)
+	if not self.exp:validate() then
+		ret = false
+	end
+	
+	-- Check if expression answers to iterN(), where N is the number of required names
+	local num = #self
+	
+	local sel = Selector('iter' .. num, TVoid())
+	local typ = self.exp.type:answers(sel)
+	
+	if not typ then
+		add_err('error','expression in generic for does not answer to ' .. sel.sig, self.exp:pos())
+		ret = false
+	end
+	
+	local types = typ.subtypes or {typ}
+	
+	if #types ~= num then
+		add_err('error','iterator returns type ' .. typ.sig .. ' which does not match ' .. num .. ' values',self.exp:pos())
+		ret = false
+	end
+	
+	-- Validate names
+	self.variables = {}
+	
+	if ret then
+		-- Check that names are not already taken
+		for i,name in ipairs(self) do
+			if not self:taken_name(name, self.children[i+1][3],'generic index') then
+				
+				-- Add to variables table
+				local var = {
+					name = name,
+					scope = self,
+					
+					type = types[i],
+					
+					defpos = self.children[i+1][3],
+					deftype = 'local',
+					assnum = nil,
+					
+					const = nil
+				}
+				
+				self.variables[var.name] = var
+			else
+				ret = false
+			end
+		end
+	end
+	
+	-- Validate body
+	
+	if not self.body:validate() then
+		ret = false
+	end
+	
+	return true
+end
+
+----------------
+-- Assignment --
+----------------
+
+--self.lval = nil
+--self.rval = nil
+
+function Assignment:validate()
+	
+	local ret = true
+	
+	-- Validate rvalues
+	
+	local rtypes = {}
+	
+	for i,v in ipairs(self.rval) do
+		if not v:validate() then
+			ret = false
+		else
+			table.insert(rtypes,v.type)
+		end
+	end
+	
+	-- Build association between Nth rtype and Mth rvalue
+	local assoc = {}
+	for i,v in ipairs(rtypes) do
+		if v:isa(TMulti) then
+			for j = 1,#v.subtypes do
+				table.insert(assoc,i)
+			end
+		else
+			table.insert(assoc,i)
+		end
+	end
+	
+	-- Build type
+	local rtype = TMulti(rtypes)
+	
+	-- Build back list of types (solves expressions that have several types)
+	rtypes = rtype.subtypes or {rtype}
+	
+	-- Check number of types match
+	if #rtypes ~= #self.lval then
+		add_err('error','wrong number of values (' ..#self.lval .. ') in assignment',self:range(self.lval[1]:pos(),self.lval[#self.lval]:pos()))
+		add_err('info','(right hand side is of type ' .. rtype.sig .. ')',self:range(self.rval[1]:pos(),self.rval[#self.rval]:pos()))
+		return false
+	end
+	
+	for i,v in ipairs(rtypes) do print(i,v.sig) end
+	
+	-- Check that all left values are indeed valid lvalues (names or member accesses or name= method)
+	
+	for i,v in ipairs(self.lval) do
+		
+		-- Easy case, Name
+		if v:isa(AtomicExp) and v.kind == 'Name' then
+			
+			-- If it's already a variable, check type
+			local var = self:in_scope(v.val)
+			local meths = self:getParent(Class):meths_by_name(v.val .. '=')
+			
+			if var then
+				if var.type ~= rtypes[i] then
+					add_err('error','incompatible type (' .. var.type.sig .. ') in assignment',v:pos())
+					add_err('info','(corresponding right hand side term is of type ' .. self.rval[assoc[i]].type.sig .. ')', self.rval[assoc[i]]:pos())
+				end
+			
+			-- Check presence of a name= method
+			elseif #meths > 0 then
+				local found = false
+				
+				for j,meth in ipairs(meths) do
+					if meth.sel.arg_type == rtypes[i] then
+						found = true
+					end
+				end
+				
+				if not found then
+					add_err('error','incompatible type (' .. rtypes[i].sig .. ') in assignment', self.rval[assoc[i]]:pos())
+					add_err('info','candidate setter methods are:')
+					for j,meth in ipairs(meths) do
+						add_err('info',meth.sig,meth.interfpos)
+					end
+					ret = false
+				end
+			
+			-- Otherwise check if it is a valid name, make new variable
+			elseif not self:taken_name(v.val,v:pos(),'new local variable') then
+			
+				local block = self:getParent(Block)
+				
+				-- Add to variables table
+				local var = {
+					name = v.val,
+					scope = block,
+					
+					type = rtypes[i],
+					
+					defpos = self:pos(),
+					deftype = 'local',
+					assnum = i,
+					
+					const = nil
+				}
+				
+				block.variables[var.name] = var
+				
+				-- Also give node a type
+				v.type = rtypes[i]
+				
+			else
+				ret = false
+			end
+		
+		-- Easier, MemberAccess
+		elseif v:isa(MemberAccess) then
+			
+			-- Just validate as lvalue, that will give it a type
+			if not v:validate(rtypes[i]) then
+				ret = false
+			end
+			
+		end
+		
+	end
+	
+
 	
 	return ret
 end

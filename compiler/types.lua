@@ -160,7 +160,9 @@ function TArray:answers(sel)
 	
 	local meths = {
 		['index:num'] = self.subtype,
-		['#:void'] = TNum()
+		['#:void'] = TNum(),
+		['iter1:void'] = self.subtype,
+		['iter2:void'] = TMulti({TNum(),self.subtype})
 	}
 	
 	return meths[sel.sig]
@@ -234,7 +236,18 @@ function TMulti:init(subtypes)
 		end
 	end
 	
-	self.subtypes = subtypes
+	-- Flatten sub TMultis while acquiring subtypes
+	self.subtypes = {}
+	
+	for i,v in ipairs(subtypes) do
+		if v:isa(TMulti) then
+			for j,w in ipairs(v.subtypes) do
+				table.insert(self.subtypes,w)
+			end
+		else
+			table.insert(self.subtypes,v)
+		end
+	end
 	
 	self.sig = ''
 	for i,v in ipairs(subtypes) do
