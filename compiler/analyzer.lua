@@ -942,6 +942,64 @@ end
 --self.op = nil			-- string
 --self.expr = nil		-- Exp node
 
+function Unop:validate()
+	
+	-- Validate base expression
+	if not self.expr:validate() then
+		return false
+	end
+	
+	-- Check that object answers to unop method
+
+	local sel = Selector(self.op,TVoid())
+	local typ = self.expr.type
+	local ret = typ:answers(sel)
+	
+	if ret then
+		self.type = ret
+		return true
+	end
+	
+	-- Failure
+	add_err('info','expression of type ' .. typ.sig, self.expr:pos())
+	add_err('error','does not answer to ' .. sel.sig, self.children[1][3])
+	
+	return false
+end
+
+-----------
+-- Binop --
+-----------
+
+--self.left = nil
+--self.op = nil
+--self.right = nil
+
+function Binop:validate()
+	
+	-- Validate left and right expression
+	if not self.left:validate() or not self.right:validate() then
+		return false
+	end
+	
+	-- Check that object answers to unop method
+
+	local sel = Selector(self.op,self.right.type)
+	local typ = self.left.type
+	local ret = typ:answers(sel)
+	
+	if ret then
+		self.type = ret
+		return true
+	end
+	
+	-- Failure
+	add_err('info','expression of type ' .. typ.sig, self.left:pos())
+	add_err('error','does not answer to ' .. sel.sig, self:pos(2,#self.children))
+	
+	return false
+end
+
 ---------------------------
 -- Main analyzing driver --
 ---------------------------

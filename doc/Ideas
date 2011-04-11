@@ -25,27 +25,29 @@ Design
 - "import" command includes class definitions from other files, Lua like: run the interpreter/compiler on the main file, and classes from every other file are included in the chunk.
 - Arrays/Lists are homogenous: can contain different types only if they are children of the base type, or by using obj
 - for loops are either numeric, or iterative over arrays/lists/user defined classes
-- Methods can return several values (<- Lua), but it is part of their signature. Methods with similar names can have a different number of return values (ex: iterators with just values or index(es) + value)
+- Methods can return several values (<- Lua), and it is part of their signature, but not of the associated selector. Methods cannot have the same selector (name + argument types).
 - Multivalued assignments (<- Lua)
 - Variables are always references to objects. Method parameters and return values are always by reference (except numbers and packs, which are always copied)
 - Forbid aliasing! There can be only one ref to an object at a given time. Possession can either be passed to another variable (and own value is set to nil), or abandonned, and object is killed. ( ????? Solves memory management. Might be unpractical at usage. But cool. )
+
 Have a 'ref' type be actually a reference to the unique owner, and deref if automatically, so when the unique owner is set to nil, this ref knows it too (safer but slower). Can also do ref = nil for remote deletion, but it's not done automatically at assignment or when going out of scope. Refs are also what are actually passed as arguments to methods. That way, can delete or reassign to an outside variable from inside a method.
+
+Problem: some unique owners can change, thus making refs invalid (eg. elements in an array, after insertion or deletion, or object member after object freeing). One solution is to have every object hold a list of all its refs (and use it to signal them of a change), but that would void the use of the ref to ref concept, as ref to object would be enough.
 
 This means: existence of an object is determined by non-nil-ness of *its* reference to it (or any, since they all actually point to the unique one). Magic. No more problem of freeing a pointer within a function and still having an address out of it. Also, nice deleting syntax "a = nil".
 
 This forced ownership gives memory a natural tree-like structure (which is what I do most of the time anyway). Deleting an object automatically deletes all the objects it references, and so on. Similarly, copying an object forces a deep copy (otherwise, the copied object would have all its members set to nil). There is even no need to overload the copy method, since it's always done the same way (?)
 Refs are: class members (explicitely declared so 'ref Blah blah', so that the destructor does not try to free the object), method arguments (implicit, objects are *always* passed by ref to ref), or local variables, requested by .ref method.
 Since they are always transparently deferenced, they do not show a special type (kept internally by compiler), they cannot be repointed at another object pointer (that would repoint the pointer itself to another object), they cannot be copied (have to call .ref again to get another ref or .copy to get another object), etc.
-On argument passing, the compiler may optimize and pass a direct pointer to the object if it sees there is no assignment involving it.
 
 - The big question is: do we do automatic nil testing before member access/method calling? Safer, but slower. As a compiler option, maybe, for debug builds?
 
 - Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
 - Must define one Main class (or "Entry" or something), of which exactly one instance is created at runtime (and its num:init: or num:init:num,[str] method called.
 - A "pack". Kind of struct without named fields, that can be used without declaring it. Still type checked when adding it to arrays or passing to functions. Always copied (like numbers), cannot be refered to. Allows tight packing in arrays without the class overhead (pointer to class). Accessed using numerical indexes (like would do for heterogenous lists in Lua). Anything "bigger" or which needs named fields or pass by reference should be a class (even a methodless class, which would still inherit init, and copy and such)
-- "unreachable" return keyword.
+- "unreachable" return keyword. (?)
 - Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)
-- "symbols": hashed string casted to num for quick comparison (<- Ruby, Lua). For instance FVN-32. Regular strings can be hashed if need be but there are character restrictions
+- "symbols": internized hashed string casted to num for quick comparison (<- Ruby, Lua). Regular strings can be converted to symbol if need be
 - association tables? Indexing stuff by strings is pretty nifty... (<- Lua)
 - numbers can also be "nil" (floating point representation of NaN). Allows omiting parameters in method calls?
 - 0 and num nil evaluate to false in a condition, true otherwise. obj nil to false, true otherwise. (overloadable to_bool() ?)
@@ -71,7 +73,7 @@ Multi iterator solution: if the given object answers to next() consider it the i
 	for w in file.words do end
 	for c in file do end
 
-- This re	minds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
+- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
 
 Lexing
 ======

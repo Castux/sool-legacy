@@ -78,7 +78,8 @@ function TNum:answers(sel)
 		['+=:num'] = TVoid(),
 		['-=:num'] = TVoid(),
 		['/=:num'] = TVoid(),
-		['*=:num'] = TVoid()
+		['*=:num'] = TVoid(),
+		['-:void'] = TNum(),
 	}
 	
 	return meths[sel.sig]
@@ -149,7 +150,8 @@ end
 function TArray:answers(sel)
 	
 	local meths = {
-		['index:num'] = self.subtype
+		['index:num'] = self.subtype,
+		['#:void'] = TNum()
 	}
 	
 	return meths[sel.sig]

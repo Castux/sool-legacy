@@ -752,6 +752,9 @@ function Block:parse()
 		elseif peek() == 'for' then
 			st = GenericFor()
 			
+		elseif peek() == 'not' or peek() == '-' or peek() == '#' then
+			st = self:exp()
+			
 		elseif begin_exp(peek()) then
 			st = Assignment()
 			
@@ -1262,8 +1265,8 @@ end
 function Assignment:parse()
 	
 	-- all cases start with basic expression(s)
-	-- TODO: false, it can be a Unop too
 	self.lval = self:listbasicexp()
+	
 	if not self.lval then
 		return
 	end
@@ -1898,6 +1901,8 @@ function Unop:parse()
 		add_err('info','as operand of unary operator',self:pos())
 		return
 	end
+	
+	self:add(self.expr)
 	
 	return self
 end
