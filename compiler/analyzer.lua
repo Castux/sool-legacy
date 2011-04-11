@@ -1108,22 +1108,34 @@ function For:validate()
 		}
 		
 		self.variables[var.name] = var
+	else
+		ret = false
 	end
 	
 	-- Check that expressions are numbers
 	local val1 = self[1]:validate()
 	local val2 = self[2]:validate()
 	
-	local val3 = self[3] and self[3]:validate() or true
-	
-	if not val1 or not val2 or not val3 then
+	if val1 and val2 then
+		for i = 1,2 do
+			if self[i].type ~= TNum() then
+				add_err('error','boundary in numeric if is not of type num',self[i]:pos())
+				add_err('info','(is of type ' .. self[i].type.sig .. ' instead)')
+				ret = false
+			end
+		end
+	else
 		ret = false
 	end
 	
-	for i = 1,#self do
-		if self[i].type ~= TNum() then
-			add_err('error','boundary in numeric if is not of type num',self[i]:pos())
-			add_err('info','(is of type ' .. self[i].type.sig .. ' instead)')
+	if self[3] then
+		if self[3]:validate() then
+			if self[3].type ~= TNum() then
+				add_err('error','step in numeric if is not of type num',self[3]:pos())
+				add_err('info','(is of type ' .. self[3].type.sig .. ' instead)')
+				ret = false
+			end
+		else
 			ret = false
 		end
 	end
