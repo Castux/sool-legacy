@@ -107,6 +107,15 @@ function TStr:init()
 	return self:internize()
 end
 
+function TStr:answers(sel)
+	
+	local meths = {
+		['#:void'] = TNum()
+	}
+	
+	return meths[sel.sig]
+end
+
 --[[ Object ]]
 
 TObject = class(TType)

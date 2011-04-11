@@ -915,6 +915,8 @@ function Do:parse()
 	self.body = Block()
 	if not self.body then
 		return
+	else
+		self:add(self.body)
 	end
 	
 	if not self:expect 'end' then

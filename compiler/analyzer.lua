@@ -514,7 +514,11 @@ function Return:validate()
 	
 	-- And compare
 	if meth_ret ~= ret then
-		add_err('error','trying to return expression of type ' .. ret.sig, self:pos(2,#self.children))
+		if ret == TVoid() then
+			add_err('error','trying to return void', self:pos())
+		else
+			add_err('error','trying to return expression of type ' .. ret.sig, self:pos(2,#self.children))
+		end
 		add_err('info','in method declared ' .. meth.sig, meth.interfpos)
 		return false
 	end
@@ -998,6 +1002,69 @@ function Binop:validate()
 	add_err('error','does not answer to ' .. sel.sig, self:pos(2,#self.children))
 	
 	return false
+end
+
+------------------------
+-- Control structures --
+------------------------
+
+--------
+-- Do --
+--------
+
+--self.body = nil
+
+function Do:validate()
+	
+	if not self.body:validate() then
+		return false
+	end
+	
+	return true
+end
+
+-----------
+-- While --
+-----------
+
+--self.cond = nil
+--self.body = nil
+
+function While:validate()
+	
+	local val1, val2 = self.cond:validate(), self.body:validate()
+	
+	if not val1 or not val2 then
+		return false
+	end
+	
+	return true
+end
+
+--------
+-- If --
+--------
+
+--self.tests = {}
+--self.default = nil
+
+function If:validate()
+	
+	local res = true
+	
+	for i,v in ipairs(self.tests) do
+		local val1, val2 = v.cond:validate(), v.body:validate()
+		
+		if not val1 or not val2 then
+			res = false
+		end
+	end
+	
+	if self.default and not self.default:validate() then
+		res = false
+	end
+	
+	return res
 end
 
 ---------------------------
