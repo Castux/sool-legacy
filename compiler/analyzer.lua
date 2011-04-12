@@ -799,6 +799,8 @@ end
 -- except the object depends on the type of self.left
 -- rtype = is a TType if we need to check member as a lvalue (adds '=' to the method lookup)
 
+-- add self.var, the associated variable if it's a member
+
 function MemberAccess:validate(rtype)
 	
 	-- Validate base expression
@@ -814,7 +816,7 @@ function MemberAccess:validate(rtype)
 		
 		if mem then
 			self.type = mem.type
-			
+			self.var = mem
 			return true
 		end
 	end
@@ -832,7 +834,10 @@ function MemberAccess:validate(rtype)
 		local ret = self.left.type:answers(sel)
 		
 		if ret then
-			self.type = ret
+			-- As lvalue lookup, don't assign a type (the setter method should return void anyway)
+			if not rtype then
+				self.type = ret
+			end
 			return true
 		end
 	end
@@ -840,6 +845,7 @@ function MemberAccess:validate(rtype)
 	-- Failure 
 	add_err('info','expression of type ' .. self.left.type.sig , self.left:pos())
 	add_err('error','has no member ' .. self.name .. ' and does not answer to ' .. sel.sig, self:pos(2,3))
+	
 	return false
 end
 
@@ -850,7 +856,9 @@ end
 --self.left = nil	-- Exp node
 --self.index = nil	-- Exp node
 
-function Indexing:validate()
+-- rtype for validating as a lvalue
+
+function Indexing:validate(rtype)
 	
 	-- Validate base expression
 	if not self.left:validate() then
@@ -866,7 +874,12 @@ function Indexing:validate()
 	
 	-- Check whether type answers to index
 	
-	local sel = Selector('index',self.index.type)
+	local sel
+	if not rtype then
+		sel = Selector('index',self.index.type)
+	else
+		sel = Selector('index=',TMulti({self.index.type,rtype}))
+	end
 	local ret = self.left.type:answers(sel)
 	if not ret then
 		add_err('info','expression of type ' .. self.left.type.sig , self.left:pos())
@@ -1247,6 +1260,8 @@ function Assignment:validate()
 		end
 	end
 	
+	if not ret then return false end
+	
 	-- Build association between Nth rtype and Mth rvalue
 	local assoc = {}
 	for i,v in ipairs(rtypes) do
@@ -1263,35 +1278,40 @@ function Assignment:validate()
 	local rtype = TMulti(rtypes)
 	
 	-- Build back list of types (solves expressions that have several types)
-	rtypes = rtype.subtypes or {rtype}
+	local rtypes
+	if rtype:isa(TMulti) then
+		rtypes = rtype.subtypes
+	else
+		rtypes = {rtype}
+	end
 	
-	-- Check number of types match
+	-- Check that number of types match
 	if #rtypes ~= #self.lval then
-		add_err('error','wrong number of values (' ..#self.lval .. ') in assignment',self:range(self.lval[1]:pos(),self.lval[#self.lval]:pos()))
+		add_err('error','wrong number of left values (' ..#self.lval .. ') in assignment',self:range(self.lval[1]:pos(),self.lval[#self.lval]:pos()))
 		add_err('info','(right hand side is of type ' .. rtype.sig .. ')',self:range(self.rval[1]:pos(),self.rval[#self.rval]:pos()))
 		return false
 	end
 	
-	for i,v in ipairs(rtypes) do print(i,v.sig) end
-	
-	-- Check that all left values are indeed valid lvalues (names or member accesses or name= method)
+	-- Check that all left values are indeed valid lvalues (names or member accesses or name= or []= methods)
+	-- TODO: for local variables, deal with incomplete types /?/ and [?]
 	
 	for i,v in ipairs(self.lval) do
 		
-		-- Easy case, Name
+		-- Name
 		if v:isa(AtomicExp) and v.kind == 'Name' then
 			
-			-- If it's already a variable, check type
 			local var = self:in_scope(v.val)
 			local meths = self:getParent(Class):meths_by_name(v.val .. '=')
 			
+			-- If it's already a variable, check type
 			if var then
 				if var.type ~= rtypes[i] then
-					add_err('error','incompatible type (' .. var.type.sig .. ') in assignment',v:pos())
-					add_err('info','(corresponding right hand side term is of type ' .. self.rval[assoc[i]].type.sig .. ')', self.rval[assoc[i]]:pos())
+					add_err('error','incompatible type (' .. self.rval[assoc[i]].type.sig .. ') in assignment',self.rval[assoc[i]]:pos())
+					add_err('info','(corresponding left value is of type ' .. var.type.sig .. ')', v:pos())
+					add_err('info','(as declared here)', var.defpos)
 				end
 			
-			-- Check presence of a name= method
+			-- Check presence of a name= method on self
 			elseif #meths > 0 then
 				local found = false
 				
@@ -1303,7 +1323,7 @@ function Assignment:validate()
 				
 				if not found then
 					add_err('error','incompatible type (' .. rtypes[i].sig .. ') in assignment', self.rval[assoc[i]]:pos())
-					add_err('info','candidate setter methods are:')
+					add_err('info','candidate setter methods are:',v:pos())
 					for j,meth in ipairs(meths) do
 						add_err('info',meth.sig,meth.interfpos)
 					end
@@ -1311,6 +1331,7 @@ function Assignment:validate()
 				end
 			
 			-- Otherwise check if it is a valid name, make new variable
+			-- (the only conflict that might be left is a 'name' method, but let's use the general name checker)
 			elseif not self:taken_name(v.val,v:pos(),'new local variable') then
 			
 				local block = self:getParent(Block)
@@ -1338,19 +1359,40 @@ function Assignment:validate()
 				ret = false
 			end
 		
-		-- Easier, MemberAccess
+		-- MemberAccess
 		elseif v:isa(MemberAccess) then
 			
-			-- Just validate as lvalue, that will give it a type
+			-- Just validate as lvalue, that will give it a type and a var (if it's a member), or fail if there is no proper member or setter
 			if not v:validate(rtypes[i]) then
+				-- If lvalue validation failed, we're done, but we can add info message
+				add_err('info','(as required by corresponding right value of type ' .. self.rval[assoc[i]].type.sig .. ')',self.rval[assoc[i]]:pos())
+				ret = false
+			else
+				
+				if v.type and v.type ~= rtypes[i] then
+					add_err('error','incompatible type (' .. self.rval[assoc[i]].type.sig .. ') in assignment',self.rval[assoc[i]]:pos())
+					add_err('info','(corresponding left value is of type ' .. v.type.sig .. ')', v:pos())
+					add_err('info','(as declared here)', v.var.defpos)
+				end
+				
+			end
+		
+		-- Indexing
+		elseif v:isa(Indexing) then
+			
+			if not v:validate(rtypes[i]) then
+				add_err('info','(as required by corresponding right value of type ' .. self.rval[assoc[i]].type.sig .. ')',self.rval[assoc[i]]:pos())
 				ret = false
 			end
 			
+		-- All else fails
+		else
+			add_err('error','invalid left value',v:pos())
+			add_err('info','(expected Name, member access or indexing)')
+		
 		end
 		
 	end
-	
-
 	
 	return ret
 end

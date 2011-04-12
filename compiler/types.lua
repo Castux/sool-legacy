@@ -160,6 +160,7 @@ function TArray:answers(sel)
 	
 	local meths = {
 		['index:num'] = self.subtype,
+		['index=:num,' .. self.subtype.sig] = TVoid(),
 		['#:void'] = TNum(),
 		['iter1:void'] = self.subtype,
 		['iter2:void'] = TMulti({TNum(),self.subtype})
