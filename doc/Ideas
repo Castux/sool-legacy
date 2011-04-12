@@ -73,7 +73,9 @@ Multi iterator solution: if the given object answers to next() consider it the i
 	for w in file.words do end
 	for c in file do end
 
-- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop.
+- The problem of that is that it requires additional iterator objects that have a sool side interface, which we would like to avoid for the built-in collections. An alternative is that the next() method takes in a parameter which is the current position, or nil for the start. Signature could be {index,value},internal_index:next:internal_index. For arrays, would be an integer, for lists and hashes an opaque pointer to some internal structure.
+
+- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop. Or possible, have an alternative for where the exp is simply evaluated and assigned to the var until it returns nil. Hence 'for c in getchar do' wouldn't need iterators that feed back data, and would be a nice replacement for 'while( c = getchar() ){}'
 
 Lexing
 ======

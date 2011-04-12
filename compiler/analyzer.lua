@@ -462,6 +462,11 @@ function Block:validate()
 		-- Validate statement, but ignore if failed (try validating as
 		-- many as possible)
 		stat:validate()
+		
+		-- Forbid lone expressions other than void
+		if stat.type and stat.type ~= TVoid() then
+			add_err('warning','non void expression (' .. stat.type.sig .. ') as a statement, value is lost',stat:pos())
+		end
 	end
 	
 	-- TODO: automatic 'return void' if not explicit
@@ -691,6 +696,8 @@ function ListConst:validate()
 	
 	local subtype = TUndef()
 	local pos
+	
+	-- TODO: deal with TMulti (flatten list first)
 	
 	for i,v in ipairs(self.vals) do
 	

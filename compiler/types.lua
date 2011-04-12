@@ -257,3 +257,7 @@ function TMulti:init(subtypes)
 	
 	return self:internize()
 end
+
+function TMulti:answers(sel)
+	return nil
+end
