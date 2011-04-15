@@ -435,6 +435,25 @@ function Method:validate_interface()
 	
 	self.sel = Selector(self.name,TMulti(arg_types))
 	
+	-- Special case: setter takes exactly one arg, returns none
+	if self.name:match('=$') then
+		if #arg_types ~= 1 then
+			add_err('error','setter methods must take exactly one argument (found ' .. self.sel.arg_type.sig .. ' instead)',self.argpos)
+		end
+		
+		if self.ret ~= TVoid() then
+			add_err('error','setter methods must return void (found ' .. self.ret.sig .. ' instead)',self.retpos)
+		end
+	end
+	
+	-- Special case: constructor must return object of given class
+	if self.name == 'init' then
+		local cl = self:getParent(Class)
+		if self.ret ~= TObject(cl) then
+			add_err('error','constructor method must return ' .. cl.name .. ' (found ' .. self.ret.sig .. ' instead)', self.retpos or self.interfpos)
+		end
+	end
+	
 	-- Build signature
 
 	self.sig = self.ret.sig .. ':' .. self.sel.sig
@@ -885,7 +904,7 @@ function Indexing:validate(rtype)
 	if not rtype then
 		sel = Selector('index',self.index.type)
 	else
-		sel = Selector('index=',TMulti({self.index.type,rtype}))
+		sel = Selector('newindex',TMulti({self.index.type,rtype}))
 	end
 	local ret = self.left.type:answers(sel)
 	if not ret then

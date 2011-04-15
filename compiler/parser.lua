@@ -558,7 +558,9 @@ function Method:init()
 	self.args = {}		-- small Node with fields {type,name} (and proper children)
 	self.body = nil
 	
+	self.retpos = nil		-- position of the return types
 	self.namepos = nil		-- position of the method name
+	self.argpos = nil		-- position of the argument list
 	self.interfpos = nil	-- position of the entire method interface (privacity, return types, name, arguments)
 	
 	return self:parse()
@@ -579,6 +581,8 @@ function Method:parse()
 	-- [ type { ',' type } ]
 	
 	if peek() ~= 'Name' and peek() ~= 'op' then
+		
+		local retopen = peekpos()
 		
 		local typ = Type()
 		if not typ then
@@ -602,7 +606,9 @@ function Method:parse()
 				self:add(typ)
 			end
 		end
-	end	
+		
+		self.retpos = range(retopen,self:lastpos())
+	end
 	
 	-- ( Name [ '=' ] | 'op' Binop )
 	if self:accept 'op' then
@@ -672,6 +678,7 @@ function Method:parse()
 	end
 	
 	self.interfpos = range(open,self:lastpos())
+	self.argpos = range(paren,self:lastpos())
 	
 	-- block
 	self.body = Block()
