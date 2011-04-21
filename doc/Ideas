@@ -43,7 +43,7 @@ Since they are always transparently deferenced, they do not show a special type 
 - The big question is: do we do automatic nil testing before member access/method calling? Safer, but slower. As a compiler option, maybe, for debug builds?
 
 - Bitwise operations defined for numbers. Converted to and back from uint32. 64 not necessary since double cannot hold a full int64. A long double could, though (configurable?)
-- Must define one Main class (or "Entry" or something), of which exactly one instance is created at runtime (and its num:init: or num:init:num,[str] method called.
+- Must define one Main class (or "Entry" or something), of which exactly one instance is created at runtime (and its num:init: or num:init:[str] method called.
 - A "pack". Kind of struct without named fields, that can be used without declaring it. Still type checked when adding it to arrays or passing to functions. Always copied (like numbers), cannot be refered to. Allows tight packing in arrays without the class overhead (pointer to class). Accessed using numerical indexes (like would do for heterogenous lists in Lua). Anything "bigger" or which needs named fields or pass by reference should be a class (even a methodless class, which would still inherit init, and copy and such)
 - "unreachable" return keyword. (?)
 - Automatic string<->number coercion when type cast is forced by function call (otherwise, available as method)
@@ -57,25 +57,48 @@ Since they are always transparently deferenced, they do not show a special type 
 - No variable shadowing (<- C#). Fits well that there is no declaration syntax either. If it already exists, it's the outside one, else, it's a new local one. Lexical scoping, though (lose stuff at block end).
 - Fancy var-in-string replacement with light syntax. No ${aha}, more like #expr, whitespace delimited: "5 + 5 = #5+5". Or something...
 
-- Collections provide the iter() method that returns an iterator object, that itself answers to next(). Return type of iter() tells the compiler which object it is, and return type(s) of next() for the local variables. next() itself can have several forms (like returns value or index + value).
-	for a in v do ... end
+- Collections provide the next() method to use in generic for. It returns whatever local values are needed, plus an "iterator id" used internally by the object to keep track of state. Loops exits when next returns nils.
+
+	for i,v in l do ... end
 	--->
-	it = iter v
-	a = next it
-	while a do
+	i,v,it = l.next(nil)
+	while it do
 		...
-		a = next it
+		i,v,it = l.next(it)
 	end
 
-Multi iterator solution: if the given object answers to next() consider it the iterator. Else, look for iter().
+Simple objects can use it directly as index (if they have easy access to elements). More complex objects should use it really as iterator id and have an internal associated structure, making it possible to have several concurrent iterations (nested for loops). Such iterators can also be updated when other method calls are made (typically insertion/deletion).
 
-	for l in file.lines do end
-	for w in file.words do end
-	for c in file do end
+- Also, depending on the number of lvalues, call next, next2, next3, etc, so we can have constructs like "for v in l do" and "for i,v in l do", etc.
 
-- The problem of that is that it requires additional iterator objects that have a sool side interface, which we would like to avoid for the built-in collections. An alternative is that the next() method takes in a parameter which is the current position, or nil for the start. Signature could be {index,value},internal_index:next:internal_index. For arrays, would be an integer, for lists and hashes an opaque pointer to some internal structure.
+- This reminds: the construct with two similar assignments and a while loop, due to the fact that an assignment has no value and cannot be use as a while condition, is kind of ugly. All the "producer" type objects that give nil at the end should provide the next() method to be iterated on with a general for loop.
 
-- This reminds: the construct with two similar assignment with a while loop, due to the fact that an assignment has no value, is kind of ugly. All the "producer" type objects that give nil at the end should provide the iter() method to be iterated on with a general for loop. Or possible, have an alternative for where the exp is simply evaluated and assigned to the var until it returns nil. Hence 'for c in getchar do' wouldn't need iterators that feed back data, and would be a nice replacement for 'while( c = getchar() ){}'
+Or an alternative while! "while getchar as c do". That's a nice one! Replace
+
+local meh = dothis()
+while meh do
+	-- do stuff with meh
+	meh = dothis()
+end
+
+with
+
+while dothis() as meh do
+
+end
+
+Actually, could add it to 'if' as well. Often in Lua we have the construct:
+
+local blah = somethin()
+if blah then
+	-- do stuff with blah
+end
+
+That could be neatly compacted into
+
+if something() as blah then
+	--
+end
 
 Lexing
 ======

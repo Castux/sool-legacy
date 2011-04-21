@@ -13,7 +13,7 @@ l <~ someobj	-- ownership is transfered
 l2 = /10,11,12/
 
 l <~ l2 	-- l == /1,2,3,4,5,10,11,12/
-			-- l == //	in fact internally, the same list nodes are used
+			-- l2 == //	in fact internally, the same list nodes are used
 			
 
 -- if transfer is not wanted, use copy append:
@@ -51,19 +51,13 @@ a ~~ index
 a ~~ {start,end}
 
 -- iterators: for [i,]v in l do
+-- deleting the current element will break the loop. insertion/deletion before and after is fine. "Cleaning" is better done by setting to nil and using trim.
 
-it = l.iter
-while it do
-	i = it.index	-- type: num
-	v = it.value	-- type: ref for an object
-	
-	-- internally, the iterator is used for set/getting and insertion and stuff at index i (and close)
-	-- instead of using the general l.insert/remove which is in linear time
-	-- also deals with updating the iterator correctly if the current element is removed (or a range around)
-	-- of course, that works only if the operation is in the body of the loop, not deeper in a function
-	
-	it.next
-end
+The "iterators" are part of the list itself: an index->node association, with an iterator ID. When doing index/set/insert/delete, first check whether there is an "iterator" there (or close) and do it from there. That way we have O(1) access during iteration. When deleting an element pointed at by an iterator, be sure to nil it so we don't crash randomly (in effect, this will break out of the loop). In practice, there's rarely more than 2 iterators at the same time (nested for loops) so that's not too much overhead.
+Anyway, lists are not meant for random access, so that's better that nothing. Reading all values is O(n) (value is returned by next()), writing to all is a slower O(n) (need to access using index, which is accelerated by the presence of the iterator). Read/writing to random is still O(n).
+And that's nicely integrated with the generic for loop:
+l.next(nil) returns l[1],id, and then l.next(id) advances the given iterator by one until it reaches the end, at which point the list forgets about it.
+Have also next2 that returns the index too.
 
 Array
 =====
@@ -72,14 +66,9 @@ Array
 
 -- iterators: for [i,]v in l do
 
-i = 1
-while i < l.size do
-	v = l[i]	-- type: ref for an object
-	
-	-- in case of removals, i is updated properly? (but that works only if in the body of the loop)
-	
-	i += 1
-end
+Insertion/removal after the current index is ok.
+Ins/rem before or at current will skip/repeat elements, but should not crash, since indexing is always bound-checked. We could potentially implement an iterator system similar to the one in lists, but that seems far fetched.
+Cleaning is better done by setting to nil and using l.trim after the loop
 
 -- the copy append/concat operation are optimized to avoid doing double copies:
 -- the whole length is computed first and the contents are copied directly.
@@ -96,3 +85,29 @@ String
 ======
 
 -- same again, with same optimizations as for arrays
+
+Array/List standard lib
+=======================
+
+merge: if subtype answers to '<~', concatenate all elements.
+flatten: recursively put all sub elements in a single list/array (is like applying merge as many time as there are levels)
+
+(these change the type, so it can't be applied in place, it must return a new object)
+
+sort: uses quicksort in arrays and mergesort on lists, and requires the contained objects to answer to '<'. (returns a new object. have a sort! method to sort in place, since it's how it's done on arrays anyway?)
+
+tostring, tostring(str): applies tostring recursively and concatenates, using the optional str argument as separator
+
+reverse: well, reverse. (can be done in place with reverse! ?)
+
+find: returns first index where can be found the argument, or nil. expects contained objects to answer to '=='
+findall: returns a list/array of all indices where arg can be found, or nil (since empty lists still evaluate as true, that makes it easier)
+
+trim: remove all nil elements. can be useful after a "cleaning loop", since deletion within array loops can be problematic
+
+String standard lib
+===================
+
+slicing/indexing/setting as in arrays
+
+Pattern stuff as in Lua: match (return list of captures or nil), find (returns {start,end} indices of first match, and a list of captures. can also take a num parameter where to start searching), rawfind (no patterns, no captures), gsub (takes either a string, or a str->str table). once we figure out the iterated loop thing, a gmatch and gfind could be good. or they could be non iterated and just return a list of all results from the start.
