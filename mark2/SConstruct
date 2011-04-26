@@ -1,0 +1,5 @@
+env = Environment()
+
+sources = env.Glob('*.cpp')
+
+env.Program('soolc', sources)
