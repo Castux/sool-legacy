@@ -204,7 +204,13 @@ function Class:validate_interface()
 		
 		-- Check for duplicates
 		
-		if not self:taken_name(mem.name, mem:pos(), 'member') then
+		local taken = self:in_scope(mem.name)
+		if taken then
+			
+			add_err('error','member ' .. mem.name .. ' is already defined',mem:pos())
+			add_err('info','(here)',taken.defnode:pos())
+		
+		else
 		
 			-- Build inverse member table
 			self.members[mem.name] = mem
@@ -217,6 +223,7 @@ function Class:validate_interface()
 				type = mem.type.ttype,
 				
 				defpos = mem:pos(),
+				defnode = mem,
 				deftype = 'member',
 				assnum = nil,
 				
@@ -294,7 +301,7 @@ function Class:answers(sel)
 	return false
 end
 
--- Returns a list of methods that have the given name
+-- Returns a list of validated methods that have the given name
 
 function Class:meths_by_name(name,l)
 	
@@ -1324,6 +1331,14 @@ function Assignment:validate()
 		add_err('error','wrong number of left values (' ..#self.lval .. ') in assignment',self:range(self.lval[1]:pos(),self.lval[#self.lval]:pos()))
 		add_err('info','(right hand side is of type ' .. rtype.sig .. ')',self:range(self.rval[1]:pos(),self.rval[#self.rval]:pos()))
 		return false
+	end
+	
+	-- Check that no rvalue is void
+	for i,v in ipairs(rtypes) do
+		if v == TVoid() then
+			add_err('error','void expression as right hand side in assignment',self.rval[assoc[i]]:pos())
+			return false
+		end
 	end
 	
 	-- Check that all left values are indeed valid lvalues (names or member accesses or name= or []= methods)
