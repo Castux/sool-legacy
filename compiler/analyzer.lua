@@ -329,9 +329,10 @@ function Type:validate()
 		
 		if not classes[self.val] then
 			add_err('error','unknown class ' .. self.val, self:pos())
+			self.ttype = TUndef()
+		else
+			self.ttype = TObject(classes[self.val])
 		end
-		
-		self.ttype = TObject(classes[self.val])
 	
 	elseif self.type == 'array' then
 		self.val:validate()
@@ -446,11 +447,10 @@ function Method:validate_interface()
 		end
 	end
 	
-	-- Special case: constructor must return object of given class
+	-- Special case: constructor must return void
 	if self.name == 'init' then
-		local cl = self:getParent(Class)
-		if self.ret ~= TObject(cl) then
-			add_err('error','constructor method must return ' .. cl.name .. ' (found ' .. self.ret.sig .. ' instead)', self.retpos or self.interfpos)
+		if self.ret ~= TVoid() then
+			add_err('error','constructor method must return void (found ' .. self.ret.sig .. ' instead)', self.retpos or self.interfpos)
 		end
 	end
 	
@@ -461,6 +461,14 @@ end
 
 function Method:validate_body()
 	self.body:validate()
+	
+	-- Check presence of return statement
+	local last = self.body.stats[#self.body.stats]
+	
+	if self.ret ~= TVoid() and (not last or not last:isa(Return)) then
+		add_err('error','non void method reaches end without a return statement',self.children[#self.children][3])
+		add_err('info','(method was declared ' .. self.sig .. ')',self.interfpos)
+	end
 end
 
 -----------
@@ -1034,7 +1042,7 @@ function Binop:validate()
 		return false
 	end
 	
-	-- Check that object answers to unop method
+	-- Check that object answers to binop method
 
 	local sel = Selector(self.op,self.right.type)
 	local typ = self.left.type

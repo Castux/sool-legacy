@@ -35,7 +35,7 @@ local function peekpos()
 	end
 end
 
--- Look ahead: hole token
+-- Look ahead: whole token
 local function head()
 	return tokens[current]
 end
