@@ -1,0 +1,250 @@
+sool: rise and shine
+
+In a previous post, I whine and rambled about how no high level programming language was perfect, and concluded on interrogations on what was my ideal programming language. Since then, I took the thing one step further and started designing and implementing my own.
+
+Of course, I don't expect that to happen fast, and I don't expect the result to be interesting, or even usable. The final product (if ever final) is only part of the treat.
+
+Motivations
+===========
+
+1. Personal learning experience. I don't expect anyone else to take part in this, especially in these early stages. Also "experimenting". Trial and error, good ideas and very bad ideas. Both in design and implementation. I'm already learning a lot, and understanding better the design decisions in other languages (in particular those that I disagreed on in the previous post...)
+2. The language is meant to be a real life general purpose language. Not an esoteric funny one. One true goal of the endeavour (besides the learning experience) is to end up with a language that I like "better" than the ones I currently use. And if I manage to push it to a stable version, I would actually use it. So it's a toy, but with the aim of making it a tool.
+3. Fun. So far, designing the language and implementing the compiler has proven to be an awesome programing and computer science project. Very challenging, rewarding and just plain cool.
+
+One liner goal description
+==========================
+
+sool should have a simple Lua-like syntax and flexibility, with native object orientation and partial static typing, and provide higher performance by being a lower-level compiled language.
+
+As a second main goal, the compiler should be clever enough to guess what you mean most of the time and avoid you lots of typing. It should have sensible defaults, and fill in automatically all the stuff that you keep rewriting all the time in, say, C++. Let's call that rule "Less Writing, More Meaning". LWMM.
+
+Now I do realise that I probably won't beat a 15 years old language with my first try, and I won't be able to claim I "improved" it before sool actually rocks. If ever. But that's a good guideline. By inspiring heavily on a very good language, and "fixing" what I don't like in it, I shouldn't end up with something totally bad.
+
+Also, performance of LuaJIT is getting very very high, so I won't beat that either. But again, the end product is only one goal of the project.
+
+Name
+====
+
+"sool" means many things, at your convenience. Simple Object Oriented Language is the official initial one. It's also a homage to Lua, its inspiration, as lua and sol mean moon and sun in portuguese.
+
+Or it could be a recursive acronym as the "sool object oriented language", but then any first letter would have worked, like "cool", "tool", "lool", etc. I'm actually surprised that no one had the idea before (assuming my googling didn't fail).
+
+I normally write it uncapitalized because it's nicer, and pronounce it like "soul" and "sole", which according to Wiktionary are pronounced the same in general American English. 
+
+Current state
+=============
+
+I have decided on a syntax/grammar, and some core features and data types. Implemented a lexer, parser and semantic analyser in Lua, mostly complete, but with lots of holes. Sadly, I feel like I'm hitting the limitations of Lua for a "big project", that is, it requires absolute rigor from me since the language itself is so lenient. It made coding fast at first, but it lends itself to spaghetti code, to the point where I'm wondering if a complete refactoring is needed. Ironically, these are exactly the pitfalls that I wish to fix with sool.
+
+Furthermore, the language changes continuously during implementation. I get new ideas, dismiss previous ones, even fundamental ones. I plan on freezing the language into a "version zero" which is meant to be the first fully functional implementation. Start using this in real life to find its flaws and entirely fix a new version "one" before starting implementing it. Then implement it in Lua, and finally bootstrap it in sool itself. I'm positive writing a sool compiler in sool will be the first challenging tast, and will prove (or disprove) robustness of the language.
+
+I am in fact not totally satisfied with some parts of the grammar and core, and will change them soon. This post will therefore not only list features, but also pending design decisions, options and their pros and cons.
+
+Types
+=====
+
+As a lexical rule, user-built class names start with a capital.
+
+instance = ClassName( -- optional init parameters )
+
+Built-in classes have no sool-side name, which enforces the fact that they can't be subclassed (core feature allowing mega optimization on the core types). To give type information on the built-in classes, we use lowercase keywords, available only for type descriptions. They aren't even instanciated like user-made objects, since the class name is not available, they have syntactically defined constructors.
+
+I fancy the idea that every variable or value in sool is an object, to which you send messages (like in Ruby or SmallTalk). At least in terms of semantic analysis. Implementation can bypass that internally.
+
+About types. Two basic types:
+1. Number ("num"). A double, like in Lua. Doubles are cool, they include all integers from/to -/+ 2^53, they're fast on modern computers, and only one type make things simpler. And LWMM. If the compiler wants to optimise a number into an integer, let it do it but don't bother the user.
+
+n = 5.3
+
+For division, it could be nice to have an integer division operator to avoid having to call floor() later, or resort to an ugly method call à la "a.intdiv(b)". "//" (Python) is ugly.
+
+2. Vector ("vec"). A pair/triplet/quadruplet of numbers. To be manipulated as the mathematical vector over the reals. With geometry and math (plus complex and quaternion), and automatic use of CPU extensions like SSE and such.
+
+v = <1,2>
+v = <1,2,3>
+v = <1,2,3,4>
+
+Operators on vectors have the same meaning as on reals, except with '*' which could be complex product for 2-vector and quaternion product for 4-vector. Then we'd need another operator for dot and cross product (possibly "dot" and "cross" for clarity). Also there's two divisions in quaternions, since multiplication is not commutative, but that's a detail.
+
+LWMM -> we shouldn't need a different sool-side type/declaration for different dimensions. The compiler can remember how many numbers there were in the constructor/initializer.
+
+Containers:
+1. Array ("[subtype]"). Like a C++ std::vector, it's dynamic and growable, and does boundary checking.
+2. List ("/subtype/"). Doubly linked list, does also automatic size management.
+
+They present the same unified interface. It is up to the user to choose the one that fits most his situation.
+
+They are homogenous and statically typed, as in, the compiler must know the type they will contain. That is declared (members, arguments), or inferred from first assignment (locals).
+
+a = [1,2,3]
+l = /1,2,3/
+
+They can also be initialized empty, and type is inferred from first insertion:
+
+a = []
+a[1] = 2
+
+Their indices start at one, because the tyranny of C pointer arithmetics has no reason to survive in this context. They can be indexed from the end with negative indices. Now should non-integer indices generate runtime errors, or return nil, or be silently rounded? We must think of both safety, flexibility, and performance.
+
+Also, should they allow out of bound setting (and silently grow accordingly, initializing new cells to nil), and out of bound getting (and nicely return nil), or generate runtime errors?
+
+2. Table ("{keytype,valuetype}", or something). An any-to-any hash table. Statically typed for both its keys and values, but with possible type inferring as well.
+
+t = { blah = bloh, bluh = blih }
+t[bleh] = blyh
+
+Here set/getting should never generate run-time errors, as in Lua (which suggests that is what should happen with arrays and lists too)
+
+Strings:
+1. Mutable string ("str"). Knows its length, can contain \0. Works pretty much like an array of bytes. See to have a unified interface with arrays.
+
+s = "yay"
+
+2. Symbol ("sym", maybe). Immutable static string, fixed and internized during compilation process. Is used mostly as constants like we do in Lua where every string is immutable and internized. It resolves to a unique address and therefore has cheap comparison. Supports the reading methods of string (and can be compared with one), and can be copied to a full blown string.
+
+s = 'yay'
+
+Since symbols are static data in the executable, there is no need for fancy memory management (see later), so the address can simply be copied without worry. In that, it appears that symbols behave like the basic numbers.
+
+If needed later, can be turned into a runtime internizing, which requires a global hash table to maintain, and more memory management.
+
+That's it for the built-in. Things that we might want in a sool 2.0 are anonymous functions and closures (they are very useful in Lua) but that is not for now.
+
+Generic object ("obj"): to allow for late binding and flexibility, a type 'obj' is available, which can contain any user-defined object (no built-in, because basic types work differently, and built-in real objects are optimised). Of course it means that all type information is lost to the compiler, and everything is delayed to runtime, quite similarly to the "id" type in ObjC. That also allows containers to contain objects of different types.
+
+Memory use:
+
+Basic objects are always copied. You can't reference them. Numbers and vectors are "small enough" that you can afford to have them passed by copy, present directly in an object, allocated and destroyed in the stack, etc. Also, they're tightly packed in containers.
+
+All the other objects are, on the other hand, always allocated on the heap, and handled with pointers. They are passed and assigned by reference, never copied unless explicitely asked. These references are always transparent (no "pointer to" type) and automatically dereferenced like Lua tables. We cannot let the user manipulate memory adddresses directly, that is not safe. See memory management.
+
+An important feature is that every user-defined object holds run-time information about its class. Built-in do not need it, since they are always statically typed, and no inheritance can occur. For unified interface (everything is an object), the runtime may still hold class information about the built-in types, but the objects themselves do not need to point to it, since all can be resolved at compilation.
+
+nil: nil is not a type, but a value that exists for all types (nil number, nil string, nil anything). For an object, it acts as a NULL pointer. It means no object is actually on the other side, and no message can be sent (this is actually always checked at runtime before sending messages! Slower but safer). For numbers and vectors, it is implemented as NaN (not a number), so that arithmetic operations silently fail and return another Nan/nil.
+This is also used as the boolean false. Anything else is true.
+
+About type information, objects can always be casted to a parent class (in assignments or argument passing), but then we loose the ability to call non inherited methods. They can also be casted to "obj", at which point the compiler completely stops validating method calls.
+
+I wonder about downcast. We want to ensure type safety, so a downcast would mean that:
+1. at compiling, the analyzer will from now on assume the object is of the downcasted type.
+2. at runtime, where the downcast occurs in code, the object type is checked and an error is thrown if the downcast is invalid.
+But is downcast really useful? Constructs like:
+
+if someobj.class == 'Blah' then
+	someobj.dothis
+elseif someobj.class == 'Bloh' then
+	someobj.dothat
+end
+
+can be made "more OO" by having Blah and Bloh both derive from a same parent and implement each their own "doit" method.
+
+If no implicit downcasts are available, it means that an obj can only be assigned (or passed) as an obj, and therefore forces all the remaining program to deal with obj only. Which can be slow. Late binding is "all or nothing".
+
+This in fact asks the question: what do we need obj for? In what case do we need so much flexibility that a parent class of similar-behaving objects is not enough? Not sure. But a completely runtime based type system is interesting. So that may be enough for motivation point 1 up there.
+
+As for implementation of method calls/message sending, all the built-in classes get direct function calls resolved at compiling. User-made objects which have static types (but could be of any child class because of upcasting) use virtual tables for the potentially inherited methods. Generic objects have no choice but to do complete runtime dispatch, using for instance hash tables indexed on method selectors (which are symbols).
+
+For virtual tables, since the compiler needs the entire source to compile, it may optimize the methods that are never overloaded and turn them into direct calls. That would be like the "final" keyword in Java, but LWMM -> let the compiler search which methods are indeed never overloaded instead of asking the user to do it. In the same vein, having a "non virtual" keyword (that would still allow overloading but force static binding) is a no. In the spirit of OO, an object must always answer to a message with its own version of the method (receiver decides, not sender).
+
+This means that on low level, every object holds a pointer to its class (a construct filled in by the compiler), which knows:
+1. its name
+2. its parent class
+3. a list of its members with types
+4. a list of methods (with return types and argument types)
+5. a partial virtual table
+6. a complete dispatch hash table
+
+Multiple types: in some contexts, when we say "types", we actually mean a list of types. Indeed, methods can take several arguments, return several values, and in general, we have multiple assignment as in Lua. We write multiple types separated by commas.
+
+Classes
+=======
+
+A class is the usual combination of members (data) and methods (actions on this data). Members are named and typed. Declaring a member does two things:
+1. reserving room in the object (except if we are making a high level interpreter, but we aren't)
+2. adding a getter and a setter method to the object. In the spirit of OO, reading and writing to members is done as a method call. Obviously this is inlined to a direct read/write in local code, but that allows late binding in obj's.
+
+The name must be free (no other member in this class or inherited with the same name), and the generated methods must not exist already in a parent class.
+
+After all members have been treated, the methods are. Methods have a name, a return type, and an argument type. Name and argument types form the selector. Selector and return type form the signature. No two methods in the same class can have the same selector. That's obviously because the selector is exactly what is used to "select" the method to execute after a message.
+When adding a method, the compiler checks that the class does not already answer to that selector (that takes in account the automatically generated setter and getters and the inherited methods).
+
+For now, the compiler representation of a selector is "name:argtype" and the complete signature is "returntype:name:argtype". A "dothing" method that takes a list of numbers and a vector and returns a number and a string would be:
+
+num,str:dothing:/num/,vec
+
+Private: methods can be declared private, which means that they can only be called by self (this is more restrictive than the C++ definition that says that it should be called only by an object of the same class). A member can be declared private, in which case the automatically filled setter and getter method are also private.
+
+If not user writen, the compiler also provides an automatic void:init:void method so that argumentless instanciations do not make it complain.
+
+At allocation, all basic members (numbers, vectors, symbols) are initialised to nil, and actual objects are recursively allocated and refered to. So making one object actually builds the whole tree below it, and all values are initialized (to nil or to existing objects). At destruction, the same occurs. Children objects are freed first, then self.
+
+Now should we have a better initialisation system? The usual idiom of giving significant initial values in init() repeats all the names of the basic members. Also, we might not want the complex members to always be automatically allocated. Plus, these might need initialisation too anyway. Perhaps the member declaration and initialisation should be combined. That would bring:
+1. less typing
+2. members always start with a significant wanted value
+
+But, in many cases we need to initialize to a non default value, so that would be either:
+
+myobj = MyClass
+myobj.member1 = initialvalue1
+myobj.member2 = initialvalue2
+myobj.member3 = initialvalue3
+
+or using a fancier initializer:
+
+myobj = MyClass(initialvalue1,initialvalue2,initialvalue3)
+
+However, these initializers start sucking when there are simply too many values, and we end up having stupid C++/ObjC like trivial constructors:
+
+meth init(type arg1, type arg2, type arg3)
+	super.init(arg1)
+	mem2 = arg2
+	mem3 = arg3
+end
+
+A nice solution would be syntactic sugar such as:
+
+newobj = MyClass(
+	mem1 = val1,
+	mem2 = val2,
+	mem3 = val3
+)
+
+that would call init:void and then call the setters.
+Uninitialized member is not so bad, as long as it is set to nil, which is testable.
+
+About automatically allocated object members, see more discussion in memory management.
+
+Note that a class should provide at least one non private initializer, if it wants to be ever instanciated. The compiler should whine if that is not the case.
+
+Local variables
+===============
+
+The only other named memory than object members are local variables. We want lexical scoping, that is, a name lives only as long as the block of code it is declared in. We do not allow name shadowing, that is a new local variable cannot have the same name as a local in an enclosing scope. It also cannot have the same name as a setter or getter method (and a fortiori as a member of the class).
+
+Declaring a new local variable is done either explicitely:
+1. as method argument
+2. in some control flow constructs like "for name in exp do" or "while exp as name do"
+
+or implicitely by assigning a value to an unused name "newname = exp". This goes well with the no shadowing rule: if the name is taken (setter method or already a local), it is type checked and used, if the name is taken but not usable (getter method only), an error is given, and if the name is free, a new local variable is created with the type of the right hand side expression.
+
+When a local goes out of scope, it is checked for non-nil-ness and the object is freed. See memory management.
+
+Grammar/syntax
+==============
+
+Class
+-----
+
+The class definition now separates members and methods with the "methods" keyword, which makes it nicely LL1 and easy to parse. But not so nice:
+
+class ClassName : ParentClass
+	-- members
+methods
+	-- methods
+end
+
+The choice of that separator is arbitrary and difficult. In Objective-C, members are enclosed in curly braces and the rest are methods. In C++, you can just mix them but since at the moment methods and members start the same (with a type), that makes parsing difficult. To keep the parsing simple (close to LL1), it would need a keyword to start either members or methods. Ruby uses "def" for methods. It could be something more meaningful like "meth". Or a symbol like ObjC has +/- for class and instance methods. But like in Lua, I'd like to keep as many tokens to be keywords as possible. It's more clear and easier to learn.
+
+On the other hand, LWMM. That already ruled out separate header/implementation files to keep in sync, and replaced it with a single "class" block. Maybe typing "meth" in front of every method is acceptable.
+
+The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.
