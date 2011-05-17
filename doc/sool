@@ -229,6 +229,137 @@ or implicitely by assigning a value to an unused name "newname = exp". This goes
 
 When a local goes out of scope, it is checked for non-nil-ness and the object is freed. See memory management.
 
+Memory management
+=================
+
+The big nasty. In the previous post, I mentionned that I liked how in C++ you can have automatic objects, on the stack, that are freed automatically when they go out of scope. As opposed for instance to Objective-C where every object has to be explicitely allocated and freed. On the other hand, in many cases you'll need objects to live a big longer than for one block or function, so we definitely need another mechanism for keeping objects alive and keeping references to them.
+
+To simplify the coder's job, both should be done with the same syntax. And to ensure memory safety, well, both methods should be memory safe. No memory should leak and no reference should ever become invalid, whatever the programer does. An obvious answer to that is automatic garbage collection. Once in a while, follow pointers and mark every "reachable" object, and delete all the others, as it is done in Lua. This makes life a lot easier. Of course, everything comes at a price, and the price here is that it can be slow and can happen at rather random times, which is a problem performance wise. And it is apparently quite difficult to fine tune.
+
+I'd like to avoid garbage collection, but still have the safe-memory property. I came up with one idea that seems interesting, but maybe too experimental.
+
+The idea is: no pointer aliasing ever. No two variables can refer to the same object at a given time. One object has exactly one reference to it.
+To enforce this, assignment needs not only to copy the address, but also set the previous one to nil:
+
+a = SomeClass	-- an object is allocated, and its address put in a
+b = a			-- b now points to the object, and a is nil
+
+And to ensure no memory leaks, before assigning a new value to a variable, we must first free the previous object
+
+a = SomeClass("foo")
+b = SomeClass("bar")
+b = a					-- b now points to the "foo" object, and the "bar" object has been properly freed
+
+As a special case, assigning nil has the effect of freeing the object
+
+a = SomeClass	-- a holds the object
+a = nil			-- the object has been freed
+
+And of course to avoid NULL pointer dereference, every variable is checked for non-nil-ness before trying to free the object. As a general rule, before sending any message to it.
+
+That works well with local variables too:
+
+do
+	mylocal = SomeClass				-- object is created
+	someobject.somemember = mylocal	-- ownership is transfered and mylocal set to nil
+end									-- mylocal goes out of scope, but since it is nil, nothing happens
+
+Obviously, when an object is destroyed, all the objects it owns are recursively freed as well (member variables "going out of scope").
+
+Having the non aliasing rule gives a tree-like structure to memory. Each object owns every object it points at, and they own theirs, and so on. That is often how memory is organised anyway. And ownership transfer is implicit: any assignment nils the previous owner, so that trees of objects are passed around until freed.
+
+No memory can leak, no invalid pointer can be dereferenced. Mission accomplished.
+
+Well, obviously there are huge problems with this approach. The first is practicality. A program is often composed of several modules that need to talk to each other. To send a message to someone you need its address. And in this scheme, only one person can have the address of a particular object. So theoretically, messages can only come from the top to the children.
+
+Second issue, passing arguments to functions:
+
+-- caller
+
+a = SomeClass			-- make object
+someobj.somemethod(a)	-- pass it as argument
+
+-- callee
+
+meth somemethod(SomeClass b)
+	-- the local b is now the unique owner, and the original a is nil
+end	-- b goes out of scope, object is freed
+
+When the function returns, a is nil, and the object has been freed. Or it may have been saved somewhere else, but in anycase, we can't access it anymore. A language in which function calls kill their arguments will not go very far.
+
+A solution would be passing the address of a to the function as well, so that in-function assignments can be resolved. Obviously we would not pass both the address and the value, so we'd need to pass only the address. In C terms, every object argument passing would look like:
+
+// caller
+SomeClass *a = SomeClass();
+function(&a);
+
+// callee
+void function(SomeClass **b)
+{
+	// Do stuff with the object **b
+	// In case of assignment, do *b = NULL
+}
+
+Double dereference... Wouldn't that be slow if generalised? It also presents deeper problems. What if during the execution of the function, the address of the pointer becomes invalid? If it was in an array for instance, that got reallocated:
+
+-- caller
+
+arr = [o1, o2, o3]
+o4.foo( arr, arr[1] )
+
+-- callee
+
+meth foo( [SomeClass] array, SomeClass object )
+	-- for now, all is fine
+	
+	for i in 1,1000 do
+		array.insert( SomeClass )
+	end
+	
+	-- yikes, the insertions forced the array to reallocate somewhere else,
+	-- the C-like "SomeClass **object" points at nothing
+	
+	mylocal = object		-- super yikes! "*object = NULL" is invalid and may segfault
+end
+
+OK so that is broken. New idea. Return in secret the final value of the local variable, back to the caller.
+
+// caller
+SomeClass *a = SomeClass();
+a = function(a);
+
+// callee
+SomeClass *function(SomeClass *b)
+{
+	// Do stuff with the object *b
+	// In case of assignment, do the regular local management b = NULL
+	
+	// And return it back
+	return b;
+}
+
+Obvious issues are: when the number of arguments grows, so does the number of values to return, so there is a lot of address passing. Returning multiple values might not be the problem (use a struct or something. Anyway, sool functions do, so we'll need to find a way.)
+
+But we have the same problem as the previous method. We need to worry about the "assigning back" part. When it's a local like in the example, no problem. If it's a member of an object, we need to check if the object still exist first, same for elements in a collection, etc. Thanks to the no aliasing rule, we know that the problem will occur only if:
+1. an object and one of its children in the memory tree are both passed as arguments
+2. the parent object is freed/moved within the function, invalidating the very existance/address of the child object
+
+Doing case by case analysis would be impossible. So bad idea.
+
+Oh, and it's all without counting that the destination of the message is also always passed as a hidden argument. So all these problem are true for any method call, even one that does not have visible arguments.
+
+So what to do? Abandon completely the "no aliasing" rule? It did make memory management simple, without the need of garbage collection. Except for the argument passing problem, of course. What other solutions exist?
+
+1. Reference counting -> cannot handle circular references without additional effort
+2. Some kind of smart pointer like the C++ auto_ptr, that has the same "one owner" mechanics as described before. But instead of being a raw address in memory, it is a whole separate object that can be signaled to be invalid (typically when its owner is freed). When passing an "object" to a function, pass the address of the smart pointer. It is used inside the function to access the object, and in case of assignment, to correctly pass ownership to another smart pointer, and set the previous one to nil. Also the passing back is trivial, since there is nothing to do. The local argument variable is not considered to own the object. It is merely a reference to the rightful owner. (Except if assigned to another local or something else, in which case the smart pointer ownership passing is done).
+Applying reference counting is done to the smart pointer, not the object. When an object is passed to a function, its counter is increased, and descreased at return. If the unique owner is freed during the function call, the object is freed and the smart pointer marked as invalid (points to nil). Once invalid, if the count reaches 0, also free the smart pointer. That should solve the previous problem of "the address of the pointer has changed/disapeared while we were in a subfunction". The problem is the memory overhead (every object variable needs a smart pointer), and processing overhead (double dereferences everywhere).
+3. Browsing Wikipedia about the subject brings up tombstones. In that case, aliasing is allowed, there is no unique owner. The principle is simple: instead of pointing at the data, point at an intermediary signpost that itself points at the data. If anyone frees the data, they should set this sign to NULL so that everyone else knows it too, turning it into a "tombstone". It has less memory overhead than the smart pointers (one extra per object, instead of one per reference to it) but the same amount of processing overhead (everything is still doubly addressed). On the other hand, it allows aliasing, which was probably needed in any practical situation.
+It's interesting to see that my "unique owner" thing was a sort of tombstone, in that the unique owner's pointer to the object was the one that everybody else would be looking at. The problem was that this pointer itself could become invalid. Here, it is a separate place in memory, than never gets freed uncontrolably. This solves the invalid pointer problem. Not the leak one. Reference counting still has the cycle problem. We can retain the "main owner" idea by saying that only one can do the freeing, all the others are only weak references. But that requires an additional syntax to signify "pass ownership" or "make a simple weak reference". And therefore we need "reference to" type in the sool side (although that be transparently hidden).
+As for collecting the memory of the tombstone itself, a trivial reference counting is enough.
+
+That last solution seems the simplest, both in concept and implementation. We could see how well it compares to Lua-like tracing garbage collection, and if the processing overhead is really too high compared to C++ like stuff.
+
+
 Grammar/syntax
 ==============
 
