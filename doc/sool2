@@ -1,0 +1,117 @@
+Memory management 2
+===================
+
+After giving a bit of thought to the comments that concluded the last post, I decided that I really liked the idea of tombstone + main owner + weak references. Let's see what would be the implications of such a system. First what I mean by that:
+
+1. By "main owner" and "weak references" we mean variables that hold the address of the object (or rather its tombstone, but let's forget the second level of indirection for now).
+2. Only the main owner can perform memory release. If it is a local, when it goes out of scope. If it is a member of another object, when the object is itself freed.
+3. Ownership of the object can be transfered from variable to variable.
+4. Weak references can be made from the main owner, or from other weak references.
+
+To avoid even more memory/processing overhead, the ownership/weakness information must be known at compile time. This means that a given variable acts either as a simple weak reference, or as "one that must deal with ownership". Let's call that a strong reference.
+
+So the rule of unique ownership translates as "for any given object, there is one and only one strong reference to it, and an arbitrary number of weak ones". Memory management is now simple and almost cheap: when the unique strong reference to an object disapears, kill the object. And by the tombstone mechanism, safely invalidate all the weak ones that may remain.
+
+What about the problems mentioned in the last post? Passing an object as function argument. Two possibilities: either pass a strong reference, and thereby abandon ownership (let the function do whatever they want, including freeing it), or pass a weak reference (in which case when the function returns, we are sure to still have the object where we had left it). Excellent. Note that in most cases, we want to pass only a weak reference. In some cases we actually want to give away the object (producer -> consumer).
+
+Return values, too, need the distinction. In some cases, you build an object locally, and want to give away its ownership as well. In other cases, you just want to return a weak reference to it.
+
+What about assignment? 4 possibilities.
+
+1. strong old -> strong new: ownership is passed. new is freed (if non nil), new is set to old, old is set to nil.
+2. strong old -> weak new: simple address copy.
+3. weak old -> weak new: simple address copy too.
+4. weak old -> strong new: aah, problem. Compiler must complain. Since old is weak, it is not allowed to perform memory management on the object. Furthermore it has no idea where the unique strong reference is, let alone can it set it to nil.
+
+Point 4 illustrates the fact that only the owner can relinquish ownership, it cannot be stolen from it.
+Also, note that argument passing is just a case of assignment (from one variable to the function's local), so the same applies exactly. Since the compiler must know in the function's body whether the variable is weak or strong, and must also know in the caller's body (to perform ownership passing if needed), that means that the strong/weakness information of the argument must be included in the function's interface.
+Likewise, the returned values are a kind of assignment as well. If you return a weak reference and try to assign it to a strong one, it should fail. There again, the information must be included in the function's return information.
+
+Now see, that's getting complicated. I was going to say "well, it's just an additional type information, so that will be included in a method signature, and that will be easy". But no. It's actually very different.
+
+An object has type. Not a variable. A variable is restricted to point to only objects of a given type, so that static binding works. But at runtime, a variable contains only an address. Strong/weakness is a property of the variable, not the object. See where I'm going?
+
+So, it is not type information, it is "variable information", but it still must be included along with the argument and return types. "On the other side of this function call is a weak variable, you do not need to relinquish ownership". Or "On the other side of this function is a strong variable, please relinquish ownership first (and if you are yourself weak, generate an error)". The 4 types of assignments can occur.
+It's more strict for return values. Indeed, from within the function, we have no access to the outsiders which will receive the return values. So we do not know if they are weak or strong, and therefore we do not know which of the 4 kinds of assignment to apply.
+
+The called function must decide if it releases ownership of the returned object (in which case a strong variable must be waiting outside), or if it only returns a weak reference (in which case only a weak variable can receive it). And in any case, the information must be given to the caller, through the method's signature.
+
+(Note that it is stupid to return a weak reference to a local variable, since it will be freed at return. But this causes no memory invalidation like in C, thanks to the tombstones.)
+
+Well, that could work. What about syntax? We know that every variable must have the strong/weak information along with its type. So members and function arguments must be declared with it. Locals (which are not declared) must infer it from first assignment, like their type.
+
+For members, we can assume that strong will be the most common. So strong should be default. Weak variables could have a "weak" keyword appended?
+
+class Blah
+	Bloh strongvar
+	weak Bloh weakvar
+end
+
+Sadly, for arguments, we said that weak references would be more common. Damn. LWMM -> arguments are weak by default and can be made strong by explicitely asking so?
+
+meth tehlulz(strong Foo f, Bar b)
+	-- woot, we own f, but not b
+end
+
+I do not like the idea that the default is different depending on context. To improve things a bit more, we said that return values would be mostly strong (generating stuff), but quite often weak too (think of all the getter methods. They are getters, not "stealers"). Blast.
+
+I'm suspecting that the "arguments are most often passed as weak references" statement is the most important. Furthermore, unique ownership is an important concept. Maybe then, strong variables should be marked:
+
+class Blah
+	own Foo foo		-- look, I'm emphazising the tree-like structure of memory
+	own Bar bar
+	Foobar foobar	-- this guy actually lives somewhere else
+	
+	meth justlook(Foo f, Bar b, Foobar fb)	-- we're just using them, that's all
+		f.dothis
+		b.dothat
+		foobar = fb		-- oh well, i'd like to remember this one, even if it's not mine
+	end
+	
+	meth takeit(own Foo f)		-- now it's mine, I do what i want
+		foo = f
+	end
+	
+	meth own Bar give()		-- I don't want it anymore
+		return b
+	end
+	
+end
+
+"own" is a short keyword that marks ownership quite clearly. I like it.
+
+And finally, the "simple" assignments. When both sides exist, it's easy, just check which of the 4 points it is. When it is a declarative assignment, we have to infer whether the newly created left side will be strong or weak. If right is weak, then left must be weak too. But if right is strong, then left can be one or the other.
+
+a = Foo
+b = a		-- is b weak or strong? is a nil or not? who owns the object? aaah!
+
+I somehow think that locals should have ownership as much as possible. Weak references are meant for outsiders mostly. Here we made the object, it's ours, we don't need to keep hundreds or different pointers to it. So if the declarative "a = b" with strong b makes a strong by default, how to signify that b should be only a weak reference?
+
+b = a.weak	-- built-in pseudo method that returns a weak reference to self?
+b = &a		-- Unary prefix operator? I don't like them much. I try to keep
+			-- them to a minimum
+b <~ a		-- Different symbol? That will break syntax, since '=' is not an
+			-- operator, but a part of a special statement
+
+A good question would be: do we really need a "strong to weak" declarative assignment? Why would we want a weak local other than an argument?
+The mechanics are interesting, so the syntax should reflect that and be clever. If the syntax sucks, then it looks like the mechanic sucks as well.
+
+Grammar/syntax
+==============
+
+Class
+-----
+
+The class definition now separates members and methods with the "methods" keyword, which makes it nicely LL1 and easy to parse. But not so nice:
+
+class ClassName : ParentClass
+	-- members
+methods
+	-- methods
+end
+
+The choice of that separator is arbitrary and difficult. In Objective-C, members are enclosed in curly braces and the rest are methods. In C++, you can just mix them but since at the moment methods and members start the same (with a type), that makes parsing difficult. To keep the parsing simple (close to LL1), it would need a keyword to start either members or methods. Ruby uses "def" for methods. It could be something more meaningful like "meth". Or a symbol like ObjC has +/- for class and instance methods. But like in Lua, I'd like to keep as many tokens to be keywords as possible. It's more clear and easier to learn.
+
+On the other hand, LWMM. That already ruled out separate header/implementation files to keep in sync, and replaced it with a single "class" block. Maybe typing "meth" in front of every method is acceptable.
+
+The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.
