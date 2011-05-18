@@ -95,23 +95,3 @@ b <~ a		-- Different symbol? That will break syntax, since '=' is not an
 
 A good question would be: do we really need a "strong to weak" declarative assignment? Why would we want a weak local other than an argument?
 The mechanics are interesting, so the syntax should reflect that and be clever. If the syntax sucks, then it looks like the mechanic sucks as well.
-
-Grammar/syntax
-==============
-
-Class
------
-
-The class definition now separates members and methods with the "methods" keyword, which makes it nicely LL1 and easy to parse. But not so nice:
-
-class ClassName : ParentClass
-	-- members
-methods
-	-- methods
-end
-
-The choice of that separator is arbitrary and difficult. In Objective-C, members are enclosed in curly braces and the rest are methods. In C++, you can just mix them but since at the moment methods and members start the same (with a type), that makes parsing difficult. To keep the parsing simple (close to LL1), it would need a keyword to start either members or methods. Ruby uses "def" for methods. It could be something more meaningful like "meth". Or a symbol like ObjC has +/- for class and instance methods. But like in Lua, I'd like to keep as many tokens to be keywords as possible. It's more clear and easier to learn.
-
-On the other hand, LWMM. That already ruled out separate header/implementation files to keep in sync, and replaced it with a single "class" block. Maybe typing "meth" in front of every method is acceptable.
-
-The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.

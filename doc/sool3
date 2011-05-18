@@ -1,0 +1,383 @@
+Grammar/syntax
+==============
+
+In the spirit of "let's keep things simple", I want the language to be simple to parse. A simple parser to write is the "recursive descent" parser, in which each rule of the grammar is a function, which recursively calls its sub components. Take for instance the production rule for the "while":
+
+while_statement ::= 'while' expression 'dö́' block 'end'
+
+The parsing function will look like this:
+
+function ParseWhile()
+	expect('while')
+	ParseExpression()
+	expect('do')
+	ParseBlock()
+	expect('end')
+end
+
+Of course, for optional tokens, you'd call "accept()" instead of expect. And it gets a little bit more complicated for rules that have a "choice". Imagine a rule
+
+statement ::= ( while_statement | for_statement | if_statement ) [';']
+
+How to know which sub rule parser to call? In a recursive descent parser, you would "look ahead", that is check what are the next few token, and hope that it will disambiguate the situation. Of course, the simpler the grammar, the less token you'd have to look ahead. The most simple situation is called "LL(1)", as in "left-to right, leftmost-derivation, 1 look-ahead". I won't explain the whole thing, Wikipedia does that well. But briefly, it means that tokens are read left to right, and that rules are applied on the left in priority, so typically, the expression "1+1+1" will be parsed "((1+1)+1)". The part that interests us is the "one token of look ahead". The parser should be able to know which rule to apply by only looking at the following token.
+For our statement rule, it could look like this:
+
+function ParseStatement()
+	switch(next_token)
+		'while' -> ParseWhile()
+		'for' -> ParseFor()
+		'if' -> ParseIf()
+		default -> "Error, cannot parse a statement here"
+	end
+end
+
+The great thing about a recursive descent LL(1) parser is that it never has to backtrack. At each step there is only one possible choice, determined by the next token. If we arrive to an impossibility, it means that the source is malformed, and the parser can legitimately complain. And all of this is done in linear time with the number of tokens.
+Marvellous! So where's the catch? Well, a language in LL(1) form has to be pretty simple. The restrictions are big. Again, Wikipedia and the rest of the web have extensive documentation about this, but here's the idea.
+Call FIRST the set of tokens that can be appear at the beginning of a certain rule. So for our "while_statement" rule it would be just 'while', and for our "statement" rule, ['while','for','if].
+Call FOLLOW the set of tokens that can appear after a certain rule. With our small example, 'do' would be in the FOLLOW set of "expression", and ';' would be in the FOLLOW set of "while_statement", "for_statement" and "if_statement".
+
+The restrictions that make a language LL(1) are simple. But restrictive...
+
+1. In a rule, when a choice between several subrules appear, they must have distinct FIRST sets. Indeed, if two subrules can start with the same token, we won't be able to choose between the two by only looking at the next token.
+2. If a rule "R" has a certain token "t" in its FIRST and FOLLOW set, then the following ambiguity can appear:
+
+OtherRule ::= [ R ] t
+
+Optional R followed by "t". Since "t" can start an R, I don't know if I should try and parse an R, or skip it and consume directly the "t".
+
+3. Left-recursivity. It is a conflict between a rule's FIRST set with itself, that appears if the rule appears as its own first subrule. The classic example is the expression:
+
+Expr ::= Expr Operator Expr | Number
+
+If I have to parse an Expr and I see a Number, should I apply the right choice, or the left choice? Impossible to choose. Anyway, in simple programming terms, my recursive descent parser would look like:
+
+function ParseExpr()
+	ParseExpr()
+	ParseOperator()
+	ParseExpr()
+end
+
+Oh noes, infinite recursion. It can also be indirect left-recursion through other rules, but that has the same effect. To avoid it, there must always be at least one token consumed before a rule can include itself.
+
+There are methods to transform a grammar into LL(1) form, but they cannot always be applied. Some grammars are simply just too complex and need more complex parsers.
+
+Anyway, all this to say that LL(1) parsers are easy to write, so we should try to restrict our grammar to the LL(1) form. We could occasionally cheat and look ahead a few more tokens, but not too much. If the language can be described with a simple grammar, it means that it has very few ambiguities, and therefore should be easy to read and write. We will have enough semantic complications later, no need to wrap them into a diabolically complex appearance. C and C++ are for instance very far from LL(1). Try reading one token at a time, hiding the rest, and guessing what will be the following construct. Good luck with that.
+
+Flow control
+============
+
+No need to be very original here. while and if can look pretty much like Lua's:
+
+while expr do
+	block
+end
+
+if expr then
+	block
+elseif expr then
+	block
+else
+	block
+end
+
+One idea I have and like is to avoid the classic Lua:
+
+local blah = something()
+if blah then
+	-- use blah
+end
+
+that comes from the fact that an assignment is not an expression (which I agree with) and therefore cannot be used as condition like in C.
+
+Similarly with:
+
+local c = something()
+while c do
+	-- use c
+	c = something()
+end
+
+that happens for functions that produce results until they return nil.
+
+My idea is to optionally assign the result of the test expression to a variable local to the loop:
+
+if expr as name then
+	-- use name
+end
+
+while expr as name do
+	-- use name
+end
+
+That simple enough and explicit.
+
+For loop
+========
+
+The for loop is always a bit more complex. In C it's really just a shortcut for a while loop with initialisation and update. In Lua we have a numeric loop:
+
+for i = 1,5 do end
+
+and a generic for loop that uses iterators:
+
+for k,v in pairs(tab) do end
+
+It does lots of stuff internally so that it just works. You can also provide your own iterable objects, but they rely on Lua's functions being first class and actually closures. I don't really plan on these just yet in sool.
+
+For now I see my generic for to work like this. "for i,v in l do ... end" would become (with "it" being a hidden variable):
+	
+i,v,it = l.next(nil)
+while it do
+	...
+	i,v,it = l.next(it)
+end
+
+The given expression must answer to the next:num method, that returns whatever it wants (usually indices and values in a container), plus an "iterator number" that is used by the object to return the next thing.
+Simple objects can use it directly as index (if they have easy access to elements). More complex objects should use it really as iterator id and have an internal associated structure, making it possible to have several concurrent iterations (nested for loops). Such iterators can also be updated when other method calls are made (typically insertion/deletion).
+
+I have to say I hate the C++ iterators. I don't like having additional objects to use other objects. Plus, the less "standard classes" I have to make, the better. Also, for instance C++ vector iterator is not memory safe (if the vector is reallocated, iterators become nastily invalid). But it is true that some objects have poor random access times (typically lists), so we need a way to traverse them efficiently, as well as do insertions/deletions.
+
+For arrays there is no special magic happening. The "iterator" can simply be the index and the call to next() can even be optimized to a simple increment. But for lists we can't simply do that. Linear access time in a linear loop would mean quadratic traversal. Boohoo. Hence the iterator. C++ has a separate object, that points at a node. Linked lists in C do too. But we don't really want a separate object here. My idea:
+The "iterators" are part of the list itself: an index->node association, with an iterator ID. When doing index/set/insert/delete, first check whether there is an "iterator" there (or close) and do it from there. That way we have O(1) access during iteration. When deleting an element pointed at by an iterator, be sure to nil it so we don't crash randomly (in effect, this will break out of the loop). In practice, there's rarely more than 2 iterators at the same time (nested for loops) so that's not too much overhead.
+Anyway, lists are not meant for random access, so that's better that nothing. Reading all values is O(n) (value is returned by next()), writing to all is a slower O(n) (need to access using index, which is accelerated to constant time by the presence of the internal iterator). Read/writing to random is still O(n). And that's nicely integrated with the generic for loop: l.next(nil) returns l[1],id, and then l.next(id) returns l[2],id and advances the internal pointer associated with id by one until it reaches the end, at which point next() returns nil and the list forgets about it.
+
+A bit far fetched perhaps... But somehow I never liked the idea of having external objects reading and writing into a container. Encapsulation says it shouldn't happen. The container should gracefully provide its environment with efficient ways of probing it.
+
+Numeric for loop
+================
+
+Lua's syntax is all right, but I wonder if I could have something more unified. One obvious way would be to have an object which, when iterated, returns numerical values:
+
+for i in Range(1,10) do end
+
+That would work, and be ugly. This range object could be made directly from a number:
+
+for i in 1.upto(10) do end
+
+like in Ruby. That's still a bit ugly, but we could always use an operator to make it look nicer:
+
+for i in 1..10 do end
+
+I think Python has that one. But still, it forces to have another class of objects with a sool interface and that annoys me. Within this exact context, it could be optimized by the compiler (no way we actually instanciate a "range" object and call "next" on it to have a simple loop), but nothing would prevent anyone to call
+
+blah = 1..10
+
+anywhere, and for correctness, an real object would need to be there.
+
+So what about syntactic sugar instead? The Lua way is:
+
+for i = 1,10 do end	-- default increment is 1
+for i = 40,2,-2 do end
+
+We could just unify the parsing by having:
+
+for i in 1,10 do end
+for i in 40,2,-2 do end
+
+And why not even a "default start from 1" with:
+
+for i in 10 do end
+
+The parser would be simplified to a single rule:
+
+for_statement ::= 'for' name_list 'in' exp_list 'do' block 'end'
+
+The job of figuring it out would be left out to the semantic analyzer:
+
+1. If there is only one expression on the right, it's generic, use the next() method on it
+2. If there's two or three expressions on the right, it's numeric, so check that there is only one name on the left, and replace the whole thing with initialisation, while loop and increment.
+
+Note that we could expand the "numeric" loop to accept any type that answers to addition and comparison. Note also that for some built-in types, the loops could be simplified to avoid calling next(), or at least inline everything. What matters is that the interface is consistant. Again, if the compiler wants to get fancy, that's its problem.
+
+Expressions
+===========
+
+They are, with statements, the second main element of a language. I use the definition that "an expression is any part of the parse tree that has a value and a type". Of course you can combine expressions to make more expressions. It's the most complex part of the grammar. I tried to follow a strict classification:
+
+1. The atomic expression. It is the one made of a single token. The most basic you can find. In the grammar:
+
+atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' | Symbol
+
+(Note that as for everything here, it will probably be changed. I'm not decided on the status of nil and of booleans yet, but that gives an idea)
+
+2. The constructor. It is used to build objects:
+
+constructor :=	'[' [ listbasicexp ] ']' |
+		'/' [ listbasicexp ] '/' |
+		'<' [ listbasicexp ] '>' |
+		ClassName [ '(' [ listexp ] ')' ]
+
+These do not yet include the hash table constructor (haven't thought about it but it might be something like "tab = {foo = bar, blah = bloh}" like in Lua). And as I wrote before, maybe the user-made object instanciation could use more syntactic sugar (that would actually look a lot like the table constructor).
+
+Note with joy that all the subrules start with different tokens, so we're still LL(1). Also, the list and vector take lists of "basic expressions" because as we will see later, these cannot containt binary operators, in particular '/' and '<' and '>' that would mess up with the constructors boundaries. The array could ('[' and ']' are not operators) but for consistency it should do like the others. The object instanciation is basically like a method call, so it should be consistent with method calls.
+
+3. Basic expression. I don't have a better name for it. It's one that is clearly delimited by itself:
+
+basicexp :=	( atomicexp | '(' exp ')' | constructor )
+		{ exptail }
+
+Atomic expressions and constructors, or full blown expressions delimited by parentheses can be followed by any number of "tails", that are:
+
+exptail :=	'.' Name [ '(' [ listexp ] ')' ] |
+		'[' exp ']'
+
+The first one is a method call, with an optional list of arguments. Second one is indexing. Since these two actions are in fact method calls, they might return a value, which itself can be subject to method call. The tails can be chained as much as we want.
+
+Also, it's still LL(1). When parsing a basicexp, we can have either:
+1. '(' -> apply '(' exp ')'
+2. any of the single tokens that form atomic expressions -> apply atomicexp
+3. '[', '<', '/' or ClassName -> apply constructor
+
+Then as long as you find '.' or '[', parse exptails. Hurray.
+
+However there's a problem. This does not describe the method call to self with argument, like in the right hand side of this statement:
+
+blah = tehlolz(yay)
+
+Indeed, trying to parse a basicexp here will make apply atomicexp, and Name ("tehlolz"), then trying an exptail, not finding one. "(yay)" will be part of whatever is parsed next.
+
+One try to solve this is to add
+
+'(' [ listexp ] ')'
+
+as a possible choice for exptail. It's still LL(1), and would parse tehlolz(yay) correctly, but then suddenly every basic expression can be followed by it. That would make valid stuff like:
+
+youpidoo(waah)(badah)
+"haha"(lol)
+
+But we don't want that. Not everything can be called. In Lua yes, because functions are first level objects. In sool, no, only methods can be called, and method calls always start by a name (that can itself be preceded by a dot and a basic expression).
+
+Well, it will break my nice classification, but the call to self must be placed at the same level as atomic expressions and constructors.
+
+methodcall :=	Name '(' [ listexp ] ')'
+basicexp :=	( atomicexp | '(' exp ')' | constructor | methodcall )
+		{ exptail }
+
+Eeeeek, we're not LL(1) anymore! If we parse a basicexp and find a Name, we don't know if we should go down to atomicexp -> Name, or methodcall -> Name. A simple transformation makes it right again:
+
+atomicexp :=	Number | String | 'nil' | 'false' | 'true' | Symbol
+methodcall :=	Name [ '(' [ listexp ] ')' ]
+basicexp :=	( atomicexp | '(' exp ')' | constructor | methodcall )
+		{ exptail }
+
+Remove 'Name' from atomicexp (sad, but necessary), and include the "single name" into the methodcall rule by making the argument list optional. Perfect. LL(1)-ness is restored. It actually makes even more sense semantically, since a single name as an expression is actually an argumentless method call to self (or reading a local, or reading a member, but it looks the same).
+Now we can even avoid writing the same code twice and notice that the exptail rule is in fact:
+
+exptail :=	'.' methodcall |
+		'[' exp ']'
+
+Woot, magic.
+
+4. (Yes the formatting of this post is crap so we had forgotten long ago that we were in a numbered list) Unary prefix operator. As I wrote somewhere, I don't like these much, so I will restrict myself to the ones in Lua: unary minus (it's not so useful, but it would just look so stupid to initialize something with "a = 0 - 4"), boolean "not" and '#' the length operator. For the length, I'm not even sure, but I admit it's also hard, when writing containers, to decide on the word to use. "length", "size" or "len" are quite OK for linear containers, but they don't mean much for unordered ones like tables. One symbol to rule them all, and anyway I'm used to it from Lua. Then again, I might change my mind.
+
+unaryoperation := Unop basicexp
+
+It's rare to have to chain them. If I ever want to be able to do "-#blah" or "not -lol", I'll just change the rule to
+
+unaryoperation := Unop unaryoperation
+
+For now, "-(#blah)" and "not (-lol)" will have to do...
+
+I'm not sure about semantics yet either, but "#" is definitely a method call. "not" is a bit special because I don't want to let objects overload it, the boolean evaluation should always be the same (nil or non nil). Unary minus could actually also be a method call. It's going to be for numbers and vectors, why not let anyone have fun with it.
+
+5. Binary operation. The top level expression. It could be trivially written as:
+
+exp := unaryoperation | basicexp | exp Binop exp
+
+Well, that is obviously left recursive, so no. We need to rewrite it otherwise.
+
+exp := ( unaryoperation | basicexp ) [ Binop exp ]
+
+That is better. At least one token (actually two with the Binop) is consumed before recursively parsing another exp. No infinite recursions from Hell. But now we need to talk about associativity. With that current rule, the now famous "1+1+1" would be parsed as (1+(1+1)). For addition of numbers, I know, it's the same. But do we want that to happen in the general case?
+
+Programming languages usually solve this by saying "well, parse the whole series of operands and operators as one big list" and by applying operator precedence. The rule that says that "1+2*3" is really "1+(2*3)", and that, in C, "1/2<3|4&5%6" is "((1/2)<3)|(4&(5%6))". How did I know? Well I didn't. Not a clue. That's the problem. I went to Wikipedia and checked the table of operator precedence, and then it took me 5 minutes to make sure I didn't screw it up. And I had. So I corrected it, five more minutes. It might still be wrong, actually.
+Then, over this is the associativity rule that says from what side operators should be associated if they have the same precedence. Ahem.
+
+So sure, in math we all know that * wins over +. But beyond that, in my personal opinion, operator precedence is mega crap. There is no way to remember it, and it is arbitrary. And anyway, since no one wants to check the tables all the time, when they're not sure, they just put parentheses everywhere. Except for + and *, and maybe logical "and" and "or", and yet, I always mix these up.
+
+So I say screw it. My operators have all the same precedence. There is not such thing as precedence. The only thing left is associativity, and I say it's left to right, because that's the most common.
+
+"1/2<3|4&5%6" is really "((((1/2)<3)|4)&5)%6"
+
+Left associativity also makes sense when you say it like this:
+
+Take 1. Divide it by 2. Compare result with 3. Bitwise or result with 4. etc.
+
+Each operation (which is really a method call) yields a result, on which you can apply a new operation. We are just chaining method calls. And in C, C++ and probably every language, method call all have the same precedence, and left associativity.
+
+1.divide(2).compare(3).bitor(4).bitand(5)...
+
+Actually, that's how it works in Smalltalk too, so it's not entirely novel. And yes, 1+2*3 == (1+2)*3 might take some getting used to coming from C or Lua, but it's not so bad. You shouldn't have huge one-liner expressions anyway.
+
+Well, it's a decision I might regret later, but I like the "purity" of the idea.
+
+Anyway, all this to come back to my rule
+
+exp := ( unaryoperation | basicexp ) [ Binop exp ]
+
+To remove left recursivity, we transormed it into right recursivity, which results in right association, which is the opposite of what we want. Well it's not so bad. Make it iterative instead of recursive:
+
+operand := unaryoperation | basicexp
+exp := operand { Binop operand }
+
+Get all the operands and operators in one single parse tree node. Then you can happily rebuild a left-associated tree, or even keep it in this form, depending on what the analyzer behind expects.
+
+And that needs verification, but that looks pretty LL(1) to me.
+
+Wow, that was hard. But fruitful.
+
+Blocks and statements
+=====================
+
+The usual definition of a block is a sequence of statements. There's imperative programming for you. With the slight nuance that some statements can only appear at the end of a block. That gives:
+
+block := 	{ stat [ ';' ] }
+		[ break | continue | return [ listexp ] ]
+
+continue is missing cruely from Lua. break and return, not much to say there.
+Optional ';' to end a statement as in Lua. Both for clarity when writing stuff on one line (ah, copy pastes to IRC...), and also to force the parser to stop a statement. As we'll see soon, a single expression is a valid statement. So there are things that are ambiguous. Consider the block:
+
+foo.bar
+(1+2).print
+
+Since whitespace is non significant, the parser will read that as methodcall "foo", methodcall ".bar(1+2)", methodcall ".print". Same fun can happen with
+
+foo.bar
+<1,3>.whatever
+
+The "<" will be parsed as a binary operator, and "foo.bar<1" as an expression, and the next "," will generate a complaint such as "meh, cannot start a statement with a comma, I quit".
+
+Granted, these are extreme cases, but that's the second L of LL(1): leftmost derivation. Applying rules from the left as far as we can. You can help the parser by putting ';' at the end of statements. After methodcall "foo", when parsing a methodcall as exptail, it will find ".bar" and then no opening parenthesis, so it will skip the optional argument list. Then back in basicexp, the next token is neither '.' or '[', so no more exptails. Then up to exp, ';' is not a binary operand, so the expression is complete. Then the statement is complete. Then the block eats up the optional ';'. Beautiful.
+
+stat :=		'do' block 'end' |
+		'while' exp [ 'as' Name ] 'dö́' block 'end' |
+		'if' exp [ 'as' Name ] 'then' block
+			{ 'elseif' exp 'then' block }
+			[ 'else' block ]
+			'end' |
+		'for' listname 'in' listexp 'do' block 'end' |
+		exp |
+		assignment
+
+Statements are all the flow control things (including a simple "do" that even though it's not really a flow control thing, allows lexical scoping), single expressions, and the dreaded... assignments!
+
+More about them later. They are nasty too.
+
+-------------------------------
+
+Class
+=====
+
+The class definition now separates members and methods with the "methods" keyword, which makes it nicely LL(1) and easy to parse. But not so nice:
+
+class ClassName : ParentClass
+	-- members
+methods
+	-- methods
+end
+
+The choice of that separator is arbitrary and difficult. In Objective-C, members are enclosed in curly braces and the rest are methods. In C++, you can just mix them but since at the moment methods and members start the same (with a type), that makes parsing difficult. To keep the parsing simple (close to LL(1)), it would need a keyword to start either members or methods. Ruby uses "def" for methods. It could be something more meaningful like "meth". Or a symbol like ObjC has +/- for class and instance methods. But like in Lua, I'd like to keep as many tokens to be keywords as possible. It's more clear and easier to learn.
+
+On the other hand, LWMM. That already ruled out separate header/implementation files to keep in sync, and replaced it with a single "class" block. Maybe typing "meth" in front of every method is acceptable (that's what I did in all the examples so far, which also transpires the fact that I'm not writing these blog posts in order :) )
+
+The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.
