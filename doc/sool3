@@ -31,7 +31,7 @@ function ParseStatement()
 	end
 end
 
-The great thing about a recursive descent LL(1) parser is that it never has to backtrack. At each step there is only one possible choice, determined by the next token. If we arrive to an impossibility, it means that the source is malformed, and the parser can legitimately complain. And all of this is done in linear time with the number of tokens.
+The great thing about a recursive descent LL(1) parser is that it never has to backtrack. At each step there is only one possible choice, determined by the next token. If we arrive to an impossibility, it means that the source is malformed, and the parser can legitimately complain. And all of this is done in linear time with the number of tokens. Linear time is great, especially for a language that is meant to be compiled on the fly. Parsing can be done transparently while reading the file. My experimental compiler, at the moment, reads the whole file in, then does the full lexing first, and passes the list of tokens to the parser, which parses them into a parse tree. But any reasonable implementation would do the three at the same time: call parse(), which will call "getNextToken()" quite often, which will itself read in characters from the file as they are needed. Super fast.
 Marvellous! So where's the catch? Well, a language in LL(1) form has to be pretty simple. The restrictions are big. Again, Wikipedia and the rest of the web have extensive documentation about this, but here's the idea.
 Call FIRST the set of tokens that can be appear at the beginning of a certain rule. So for our "while_statement" rule it would be just 'while', and for our "statement" rule, ['while','for','if].
 Call FOLLOW the set of tokens that can appear after a certain rule. With our small example, 'do' would be in the FOLLOW set of "expression", and ';' would be in the FOLLOW set of "while_statement", "for_statement" and "if_statement".
@@ -43,13 +43,13 @@ The restrictions that make a language LL(1) are simple. But restrictive...
 
 OtherRule ::= [ R ] t
 
-Optional R followed by "t". Since "t" can start an R, I don't know if I should try and parse an R, or skip it and consume directly the "t".
+Optional R followed by "t". If we need to parse an OtherRule, and see a "t", we're stuck. Since "t" can start an R, we don't know if we should try and parse an R, or skip it and consume directly the "t".
 
 3. Left-recursivity. It is a conflict between a rule's FIRST set with itself, that appears if the rule appears as its own first subrule. The classic example is the expression:
 
 Expr ::= Expr Operator Expr | Number
 
-If I have to parse an Expr and I see a Number, should I apply the right choice, or the left choice? Impossible to choose. Anyway, in simple programming terms, my recursive descent parser would look like:
+If I have to parse an Expr and I see a Number, should I apply the right choice, or the left choice? Impossible to choose. Furthermore, in simple programming terms, my recursive descent parser would look like:
 
 function ParseExpr()
 	ParseExpr()
@@ -57,7 +57,7 @@ function ParseExpr()
 	ParseExpr()
 end
 
-Oh noes, infinite recursion. It can also be indirect left-recursion through other rules, but that has the same effect. To avoid it, there must always be at least one token consumed before a rule can include itself.
+Oh noes, infinite recursion. It can also be indirect left-recursion through other rules, but that has the same effect. To avoid it, there must always be at least one token consumed before a rule can call itself.
 
 There are methods to transform a grammar into LL(1) form, but they cannot always be applied. Some grammars are simply just too complex and need more complex parsers.
 
@@ -109,7 +109,7 @@ while expr as name do
 	-- use name
 end
 
-That simple enough and explicit.
+That's simple enough and explicit.
 
 For loop
 ========
@@ -162,7 +162,7 @@ I think Python has that one. But still, it forces to have another class of objec
 
 blah = 1..10
 
-anywhere, and for correctness, an real object would need to be there.
+anywhere, and for correctness, a real object would need to be there.
 
 So what about syntactic sugar instead? The Lua way is:
 
@@ -187,12 +187,12 @@ The job of figuring it out would be left out to the semantic analyzer:
 1. If there is only one expression on the right, it's generic, use the next() method on it
 2. If there's two or three expressions on the right, it's numeric, so check that there is only one name on the left, and replace the whole thing with initialisation, while loop and increment.
 
-Note that we could expand the "numeric" loop to accept any type that answers to addition and comparison. Note also that for some built-in types, the loops could be simplified to avoid calling next(), or at least inline everything. What matters is that the interface is consistant. Again, if the compiler wants to get fancy, that's its problem.
+Note that we could expand the "numeric" loop to accept any type that answers to addition and comparison. Note also that for some built-in types, the loops could be simplified to avoid calling next(), or at least inline everything. What matters is that the interface is consistant. Again, if the compiler wants to get fancy, that's its problem (and mine, a fortiori).
 
 Expressions
 ===========
 
-They are, with statements, the second main element of a language. I use the definition that "an expression is any part of the parse tree that has a value and a type". Of course you can combine expressions to make more expressions. It's the most complex part of the grammar. I tried to follow a strict classification:
+They are, with statements, the second main parsable element of the language. I use the definition that "an expression is any part of the parse tree that will have a value and a type after semantic analysis". Of course you can combine expressions to make more expressions. It's the most complex part of the grammar. I tried to follow a strict classification:
 
 1. The atomic expression. It is the one made of a single token. The most basic you can find. In the grammar:
 
@@ -207,9 +207,9 @@ constructor :=	'[' [ listbasicexp ] ']' |
 		'<' [ listbasicexp ] '>' |
 		ClassName [ '(' [ listexp ] ')' ]
 
-These do not yet include the hash table constructor (haven't thought about it but it might be something like "tab = {foo = bar, blah = bloh}" like in Lua). And as I wrote before, maybe the user-made object instanciation could use more syntactic sugar (that would actually look a lot like the table constructor).
+These do not yet include the hash table constructor (haven't thought about it but it might be something like "tab = {foo = bar, blah = bloh}" like in Lua). And as I wrote before, maybe the user-made object instanciation could use more syntactic sugar (that would actually look a lot like the table constructor). Anyway, after I finish this series of posts and sorts out the good and bad ideas, the next iteration of compiler writing will be incremental. By that I mean that I will make a fully functionnal compiler for a very minimal set of features, and then add things one at a time. No need to parse table constructors if you have no runtime table to plug it in to.
 
-Note with joy that all the subrules start with different tokens, so we're still LL(1). Also, the list and vector take lists of "basic expressions" because as we will see later, these cannot containt binary operators, in particular '/' and '<' and '>' that would mess up with the constructors boundaries. The array could ('[' and ']' are not operators) but for consistency it should do like the others. The object instanciation is basically like a method call, so it should be consistent with method calls.
+Note with joy that all the subrules start with different tokens, so we're still LL(1). Also, the list and vector take lists of "basic expressions" because as we will see later, these cannot contain binary operators, in particular '/' and '<' and '>' that would mess up with the constructors boundaries. The array could ('[' and ']' are not operators) but for consistency it should do like the others. The object instanciation is semantically a method call, so it's syntax should be consistent with method calls.
 
 3. Basic expression. I don't have a better name for it. It's one that is clearly delimited by itself:
 
@@ -245,7 +245,7 @@ as a possible choice for exptail. It's still LL(1), and would parse tehlolz(yay)
 youpidoo(waah)(badah)
 "haha"(lol)
 
-But we don't want that. Not everything can be called. In Lua yes, because functions are first level objects. In sool, no, only methods can be called, and method calls always start by a name (that can itself be preceded by a dot and a basic expression).
+But we don't want that. Not everything can be called. In Lua yes, because functions are first level objects. In sool, no, only methods can be called, and method call always start by a name (that can itself be preceded by a dot and a basic expression).
 
 Well, it will break my nice classification, but the call to self must be placed at the same level as atomic expressions and constructors.
 
@@ -260,7 +260,7 @@ methodcall :=	Name [ '(' [ listexp ] ')' ]
 basicexp :=	( atomicexp | '(' exp ')' | constructor | methodcall )
 		{ exptail }
 
-Remove 'Name' from atomicexp (sad, but necessary), and include the "single name" into the methodcall rule by making the argument list optional. Perfect. LL(1)-ness is restored. It actually makes even more sense semantically, since a single name as an expression is actually an argumentless method call to self (or reading a local, or reading a member, but it looks the same).
+Remove 'Name' from atomicexp (sad, but necessary), and include the "single name" into the methodcall rule by making the argument list optional. Perfect. LL(1)-ness is restored. It actually makes even more sense semantically, since a single name as an expression is actually an argumentless method call to self (or reading a local, or reading a member, but it looks the same. It means something else, but the semantic analyzer will have to deal with that).
 Now we can even avoid writing the same code twice and notice that the exptail rule is in fact:
 
 exptail :=	'.' methodcall |
@@ -272,32 +272,38 @@ Woot, magic.
 
 unaryoperation := Unop basicexp
 
-It's rare to have to chain them. If I ever want to be able to do "-#blah" or "not -lol", I'll just change the rule to
+It's rare to have to chain them. But for the sake of thoroughness, I want to be able to do "-#blah" or "not -lol", so I'll just change the rule to
 
 unaryoperation := Unop unaryoperation
 
-For now, "-(#blah)" and "not (-lol)" will have to do...
-
 I'm not sure about semantics yet either, but "#" is definitely a method call. "not" is a bit special because I don't want to let objects overload it, the boolean evaluation should always be the same (nil or non nil). Unary minus could actually also be a method call. It's going to be for numbers and vectors, why not let anyone have fun with it.
+
+Now I'm thinking that as it is written now, you cannot use unary operators within constructors.
+
+myvec = <1,-2,-3>
+
+would complain that "-2" is not a basic expression. Meh. So let's define "something" that is a basic expression, with an optional unary operator. Call it operand, because of what will come next:
+
+operand := unaryoperation | basicexp
 
 5. Binary operation. The top level expression. It could be trivially written as:
 
-exp := unaryoperation | basicexp | exp Binop exp
+exp := operand | exp Binop exp
 
-Well, that is obviously left recursive, so no. We need to rewrite it otherwise.
+An expression is either a "lower level expression", or a combination of two of these separated by an operator. That works, on a language description level. Sadly, that is obviously left recursive, so no. We need to rewrite it otherwise.
 
-exp := ( unaryoperation | basicexp ) [ Binop exp ]
+exp := operand [ Binop exp ]
 
 That is better. At least one token (actually two with the Binop) is consumed before recursively parsing another exp. No infinite recursions from Hell. But now we need to talk about associativity. With that current rule, the now famous "1+1+1" would be parsed as (1+(1+1)). For addition of numbers, I know, it's the same. But do we want that to happen in the general case?
 
-Programming languages usually solve this by saying "well, parse the whole series of operands and operators as one big list" and by applying operator precedence. The rule that says that "1+2*3" is really "1+(2*3)", and that, in C, "1/2<3|4&5%6" is "((1/2)<3)|(4&(5%6))". How did I know? Well I didn't. Not a clue. That's the problem. I went to Wikipedia and checked the table of operator precedence, and then it took me 5 minutes to make sure I didn't screw it up. And I had. So I corrected it, five more minutes. It might still be wrong, actually.
+Programming languages usually solve this by saying "well, parse the whole series of operands and operators as one big list and apply operator precedence". The rule that says that "1+2*3" is really "1+(2*3)", and that, in C, "1/2<3|4&5%6" is "((1/2)<3)|(4&(5%6))". How did I know? Well I didn't. Not a clue. That's the problem. I went to Wikipedia and checked the table of operator precedence, and then it took me 5 minutes to make sure I didn't screw it up. And I had. So I corrected it, five more minutes. It might still be wrong, actually.
 Then, over this is the associativity rule that says from what side operators should be associated if they have the same precedence. Ahem.
 
 So sure, in math we all know that * wins over +. But beyond that, in my personal opinion, operator precedence is mega crap. There is no way to remember it, and it is arbitrary. And anyway, since no one wants to check the tables all the time, when they're not sure, they just put parentheses everywhere. Except for + and *, and maybe logical "and" and "or", and yet, I always mix these up.
 
-So I say screw it. My operators have all the same precedence. There is not such thing as precedence. The only thing left is associativity, and I say it's left to right, because that's the most common.
+So I say screw it. My operators have all the same precedence. There is not such thing as precedence. The only thing needed is associativity, and I say it's left to right, because that's the most common.
 
-"1/2<3|4&5%6" is really "((((1/2)<3)|4)&5)%6"
+In sool, "1/2<3|4&5%6" is really "((((1/2)<3)|4)&5)%6"
 
 Left associativity also makes sense when you say it like this:
 
@@ -313,16 +319,15 @@ Well, it's a decision I might regret later, but I like the "purity" of the idea.
 
 Anyway, all this to come back to my rule
 
-exp := ( unaryoperation | basicexp ) [ Binop exp ]
+exp := operand [ Binop exp ]
 
 To remove left recursivity, we transormed it into right recursivity, which results in right association, which is the opposite of what we want. Well it's not so bad. Make it iterative instead of recursive:
 
-operand := unaryoperation | basicexp
 exp := operand { Binop operand }
 
 Get all the operands and operators in one single parse tree node. Then you can happily rebuild a left-associated tree, or even keep it in this form, depending on what the analyzer behind expects.
 
-And that needs verification, but that looks pretty LL(1) to me.
+And that needs verification, but that looks pretty LL(1) to me. Anyway, if it is not, I'll realise it very soon when trying to write a recursive descent parser with 1 token of lookahead. Because I won't be able to.
 
 Wow, that was hard. But fruitful.
 
@@ -381,3 +386,110 @@ The choice of that separator is arbitrary and difficult. In Objective-C, members
 On the other hand, LWMM. That already ruled out separate header/implementation files to keep in sync, and replaced it with a single "class" block. Maybe typing "meth" in front of every method is acceptable (that's what I did in all the examples so far, which also transpires the fact that I'm not writing these blog posts in order :) )
 
 The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.
+
+classdef := ClassName [ ':' ClassName ]
+		{ memberdef | methoddef }
+		end
+
+That works as long as memberdef and methoddef cannot start with a same token. Which is true, since methoddef will start with "meth".
+
+Members need a name, a type, and private attribute:
+
+memberdef := [ 'private' ] type Name
+
+Easy enough. If the concept of ownership described in the previous post holds, that could even become
+
+memberdef := [ 'private' ] [ 'own' ] type Name
+
+For a method, there is a bit more information, but it's still quite classic:
+
+methoddef := 'meth' [ 'private' ] [ listtype ]
+		( Name [ '=' ] | Binop )
+		'(' [ listarg ] ')'
+		block
+		'end'
+
+Method name can be either a valid name (optionally followed by '=' for setters) or a binary operator (all operators can be overloaded, except maybe a few special ones such as boolean "and" and "or" that exceptionally are not method calls). Return types and arguments are optional too, so a minimal method could be:
+
+meth blah() end
+
+Note that we need the empty parentheses, because otherwise we wouldn't be LL(1) anymore (the block could start with a single expression, that itself starts with an opening parenthesis). Also it gives a bit of visual structure.
+
+An argument declaration looks a lot like a member declaration, without the private:
+
+argdef := [ 'own' ] type Name
+
+I forgot the "own" in the return types. In fact, despite the already mentionned difference between type and strong/weakness, we realise that everywhere we need to declare a type, we need to declare ownership as well (member, argument, return). So as far as the parser is concerned, we can actually parse "own" along with type and simplify:
+
+memberdef := [ 'private' ] type Name
+argdef := type Name
+
+About types, we're getting there.
+
+type := [ 'own' ]
+	( 'num' | 'vec' | 'str' | 'sym' |
+	ClassName |
+	'[' type ']' | '/' type '/' | '{' type ',' type '}' )
+
+The built-in non composed types have a short lowercase identifier. User defined classes use simply the class name. Built-in compound types use the subtype(s) and characters that remind of their constructors.
+A note about "own". Since it applies only to actual objects, and those that are always copied, we could restrict the grammar to:
+
+type := ( 'num' | 'vec' | 'sym' ) | 
+	[ 'own' ] ( 'str' | ClassName | '[' type ']' | '/' type '/' | '{' type ',' type '}' )
+
+Or we could delay that to semantic analysis. Doesn't matter much, since the parse tree will probably be generic for the whole "type" rule. It's more details of implementation of the parser. Note also that this syntax looks exactly like the internal representation for selectors and method signatures (except for "own" that I don't know yet how to represent).
+
+It illustrates also the fact that built-in compound types are always statically typed. A string of Blah will always contain only Blah's. I like the natural recursivity it has, [/num/], {str,//[sym]//}. In practice, I guess it will be rare to have more than a few levels.
+
+That reminds me, although it is not a syntax problem, that if ownership is now clearly defined for user-made classes, it is not for built-in containters. Should arrays own their elements or not? Or both?
+
+Clearly, not both at the same time (how could we make the difference between arr[1] and arr[2]?). All elements must have the same strongness. And in fact, static typing says that a given variable must point to one or the other, it cannot switch from an array of strong to an array of weak.
+So either we decide from the start that containers always own their elements, or that they don't. Or we allow both and therefore need to keep this additional information when doing type analysis. And finally, a declarative syntax that goes accordingly. In fact, the grammar rule above for type already handles this, by the magic of recursivity:
+
+[/own Blah/]
+/own [str]/
+{num,own Foo}
+
+Is that becoming a bit heavy? I often cringe at templates in C++ and type declarations that can end up being long, especially if you use pairs and maps and stuff like that.
+Then again, you would usually make intermediary classes instead of using directly arrays of arrays of lists of tables of arrays to numbers.
+
+So I guess it's about it for classes. You declare their interface, and directly fill the bodies of the methods with blocks.
+
+Top-level
+=========
+
+We're left with the initial rule, the top of the top, the first one that the parser will call when you give it a file (or "chunk").
+
+chunk := { class }
+
+Easy enough. All we have is definitions of classes. Since everything is an object, all we need is classes. And since there are no globals in sool (only the class names are "global"), nothing else can appear at top level. Which leads to one question: where does the program start?
+
+I haven't decided that yet. You could have a reserved method name "main", that can appear only once in the whole program, declared num:main:[str] to follow the usual "take command line arguments as strings, return an error status".
+Or for more object-orientedness, have instead a special class called Main or Root, that the compiler would instanciate for you, and run init:[str] on. From there the whole tree hierarchy of memory would be populated and stuff would be run from init until all returns, and init() returns, and the main object is freed. That's nicer.
+
+A note about "everything is an object and every call is a message sent to an object". It does not always make sense. Sometimes, we need simple global "functions" that do not act on static data, but rather only with their arguments. Say I often need to generate a large amount of random numbers and put them in an array. I don't want to repeat
+
+a = []
+for i in 1000 do
+	a.insert(rand())
+end
+
+all the time. So naturally I'd make a function out of it. But where to put that function? It does not belong to any particular object, in fact it never even uses "self".
+
+In C++ you could make a normal global function, or a static member function in a certain class (if I generate random Foo's, it makes sense to store that function in the class Foo). I decided not to have class variables and methods, (the "static" in C++, or the ones with "+" in Objective-C). I consider the overhead of passing the "self" extra argument to be negligeable.
+
+So imagine you have lots of "selfless" methods. If they have related purposes, you could even put them in the same class. But then to call them, you'd need to instanciate a dummy object of that class (it wouldn't even have members), to send the message to it. That is not pretty.
+
+The Main, or Root class could solve that nicely, by being at the Root of the inheritance tree. Implement your "selfless" methods in Root, and have (implicitely or not) all the other classes inherit from it. Then all these functions become available as calls to self, without having to specify the receiver. Of course there would still be the hidden argument, never used, but that could even be detected and optimized by the compiler. Free "global functions".
+
+Same goes for "extending" the built-in classes. Since they have no sool-side class name, you can't use them as parent class. But if there are common operations that you need to perform on them, you can have pseudo global functions to do that too.
+
+Beware though. If the Root class is also the root of the inheritence hierarchy, all its members will be inherited too. They won't be global or anything, each object will have its own. Also the init method, meant to be the entry point of the program, if not overloaded, will be executed by smaller objects, hence entering a nice infinite recursion where each small object will in fact try to run its own copy of the whole program... Fractal madness! So it might not be a good idea after all.
+
+
+----------
+
+put 5 in lol
+5 as lol
+
+
