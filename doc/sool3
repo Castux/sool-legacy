@@ -274,7 +274,7 @@ unaryoperation := Unop basicexp
 
 It's rare to have to chain them. But for the sake of thoroughness, I want to be able to do "-#blah" or "not -lol", so I'll just change the rule to
 
-unaryoperation := Unop unaryoperation
+unaryoperation := Unop ( basicexp | unaryoperation )
 
 I'm not sure about semantics yet either, but "#" is definitely a method call. "not" is a bit special because I don't want to let objects overload it, the boolean evaluation should always be the same (nil or non nil). Unary minus could actually also be a method call. It's going to be for numbers and vectors, why not let anyone have fun with it.
 
@@ -282,9 +282,13 @@ Now I'm thinking that as it is written now, you cannot use unary operators withi
 
 myvec = <1,-2,-3>
 
-would complain that "-2" is not a basic expression. Meh. So let's define "something" that is a basic expression, with an optional unary operator. Call it operand, because of what will come next:
+would complain that "-2" is not a basic expression. Meh. So let's define "something" that is a basic expression, with optional unary operators. Call it operand, because of what will come next:
 
 operand := unaryoperation | basicexp
+
+And then have constructors use listoperand instead of listbasicexp. Note that we can also rewrite
+
+unaryoperation := Unop operand
 
 5. Binary operation. The top level expression. It could be trivially written as:
 
