@@ -8,11 +8,11 @@ while_statement ::= 'while' expression 'dö́' block 'end'
 The parsing function will look like this:
 
 function ParseWhile()
-	expect('while')
-	ParseExpression()
-	expect('do')
-	ParseBlock()
-	expect('end')
+    expect('while')
+    ParseExpression()
+    expect('do')
+    ParseBlock()
+    expect('end')
 end
 
 Of course, for optional tokens, you'd call "accept()" instead of expect. And it gets a little bit more complicated for rules that have a "choice". Imagine a rule
@@ -23,12 +23,12 @@ How to know which sub rule parser to call? In a recursive descent parser, you wo
 For our statement rule, it could look like this:
 
 function ParseStatement()
-	switch(next_token)
-		'while' -> ParseWhile()
-		'for' -> ParseFor()
-		'if' -> ParseIf()
-		default -> "Error, cannot parse a statement here"
-	end
+    switch(next_token)
+        'while' -> ParseWhile()
+        'for' -> ParseFor()
+        'if' -> ParseIf()
+        default -> "Error, cannot parse a statement here"
+    end
 end
 
 The great thing about a recursive descent LL(1) parser is that it never has to backtrack. At each step there is only one possible choice, determined by the next token. If we arrive to an impossibility, it means that the source is malformed, and the parser can legitimately complain. And all of this is done in linear time with the number of tokens. Linear time is great, especially for a language that is meant to be compiled on the fly. Parsing can be done transparently while reading the file. My experimental compiler, at the moment, reads the whole file in, then does the full lexing first, and passes the list of tokens to the parser, which parses them into a parse tree. But any reasonable implementation would do the three at the same time: call parse(), which will call "getNextToken()" quite often, which will itself read in characters from the file as they are needed. Super fast.
@@ -52,9 +52,9 @@ Expr ::= Expr Operator Expr | Number
 If I have to parse an Expr and I see a Number, should I apply the right choice, or the left choice? Impossible to choose. Furthermore, in simple programming terms, my recursive descent parser would look like:
 
 function ParseExpr()
-	ParseExpr()
-	ParseOperator()
-	ParseExpr()
+    ParseExpr()
+    ParseOperator()
+    ParseExpr()
 end
 
 Oh noes, infinite recursion. It can also be indirect left-recursion through other rules, but that has the same effect. To avoid it, there must always be at least one token consumed before a rule can call itself.
@@ -69,22 +69,22 @@ Flow control
 No need to be very original here. while and if can look pretty much like Lua's:
 
 while expr do
-	block
+    block
 end
 
 if expr then
-	block
+    block
 elseif expr then
-	block
+    block
 else
-	block
+    block
 end
 
 One idea I have and like is to avoid the classic Lua:
 
 local blah = something()
 if blah then
-	-- use blah
+    -- use blah
 end
 
 that comes from the fact that an assignment is not an expression (which I agree with) and therefore cannot be used as condition like in C.
@@ -93,8 +93,8 @@ Similarly with:
 
 local c = something()
 while c do
-	-- use c
-	c = something()
+    -- use c
+    c = something()
 end
 
 that happens for functions that produce results until they return nil.
@@ -102,11 +102,11 @@ that happens for functions that produce results until they return nil.
 My idea is to optionally assign the result of the test expression to a variable local to the loop:
 
 if expr as name then
-	-- use name
+    -- use name
 end
 
 while expr as name do
-	-- use name
+    -- use name
 end
 
 That's simple enough and explicit.
@@ -125,11 +125,11 @@ for k,v in pairs(tab) do end
 It does lots of stuff internally so that it just works. You can also provide your own iterable objects, but they rely on Lua's functions being first class and actually closures. I don't really plan on these just yet in sool.
 
 For now I see my generic for to work like this. "for i,v in l do ... end" would become (with "it" being a hidden variable):
-	
+    
 i,v,it = l.next(nil)
 while it do
-	...
-	i,v,it = l.next(it)
+    ...
+    i,v,it = l.next(it)
 end
 
 The given expression must answer to the next:num method, that returns whatever it wants (usually indices and values in a container), plus an "iterator number" that is used by the object to return the next thing.
@@ -166,7 +166,7 @@ anywhere, and for correctness, a real object would need to be there.
 
 So what about syntactic sugar instead? The Lua way is:
 
-for i = 1,10 do end	-- default increment is 1
+for i = 1,10 do end -- default increment is 1
 for i = 40,2,-2 do end
 
 We could just unify the parsing by having:
@@ -196,16 +196,16 @@ They are, with statements, the second main parsable element of the language. I u
 
 1. The atomic expression. It is the one made of a single token. The most basic you can find. In the grammar:
 
-atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' | Symbol
+atomicexp :=    Name | Number | String | 'nil' | 'false' | 'true' | Symbol
 
 (Note that as for everything here, it will probably be changed. I'm not decided on the status of nil and of booleans yet, but that gives an idea)
 
 2. The constructor. It is used to build objects:
 
-constructor :=	'[' [ listbasicexp ] ']' |
-		'/' [ listbasicexp ] '/' |
-		'<' [ listbasicexp ] '>' |
-		ClassName [ '(' [ listexp ] ')' ]
+constructor :=  '[' [ listbasicexp ] ']' |
+        '/' [ listbasicexp ] '/' |
+        '<' [ listbasicexp ] '>' |
+        ClassName [ '(' [ listexp ] ')' ]
 
 These do not yet include the hash table constructor (haven't thought about it but it might be something like "tab = {foo = bar, blah = bloh}" like in Lua). And as I wrote before, maybe the user-made object instanciation could use more syntactic sugar (that would actually look a lot like the table constructor). Anyway, after I finish this series of posts and sorts out the good and bad ideas, the next iteration of compiler writing will be incremental. By that I mean that I will make a fully functionnal compiler for a very minimal set of features, and then add things one at a time. No need to parse table constructors if you have no runtime table to plug it in to.
 
@@ -213,13 +213,13 @@ Note with joy that all the subrules start with different tokens, so we're still 
 
 3. Basic expression. I don't have a better name for it. It's one that is clearly delimited by itself:
 
-basicexp :=	( atomicexp | '(' exp ')' | constructor )
-		{ exptail }
+basicexp := ( atomicexp | '(' exp ')' | constructor )
+        { exptail }
 
 Atomic expressions and constructors, or full blown expressions delimited by parentheses can be followed by any number of "tails", that are:
 
-exptail :=	'.' Name [ '(' [ listexp ] ')' ] |
-		'[' exp ']'
+exptail :=  '.' Name [ '(' [ listexp ] ')' ] |
+        '[' exp ']'
 
 The first one is a method call, with an optional list of arguments. Second one is indexing. Since these two actions are in fact method calls, they might return a value, which itself can be subject to method call. The tails can be chained as much as we want.
 
@@ -249,22 +249,22 @@ But we don't want that. Not everything can be called. In Lua yes, because functi
 
 Well, it will break my nice classification, but the call to self must be placed at the same level as atomic expressions and constructors.
 
-methodcall :=	Name '(' [ listexp ] ')'
-basicexp :=	( atomicexp | '(' exp ')' | constructor | methodcall )
-		{ exptail }
+methodcall :=   Name '(' [ listexp ] ')'
+basicexp := ( atomicexp | '(' exp ')' | constructor | methodcall )
+        { exptail }
 
 Eeeeek, we're not LL(1) anymore! If we parse a basicexp and find a Name, we don't know if we should go down to atomicexp -> Name, or methodcall -> Name. A simple transformation makes it right again:
 
-atomicexp :=	Number | String | 'nil' | 'false' | 'true' | Symbol
-methodcall :=	Name [ '(' [ listexp ] ')' ]
-basicexp :=	( atomicexp | '(' exp ')' | constructor | methodcall )
-		{ exptail }
+atomicexp :=    Number | String | 'nil' | 'false' | 'true' | Symbol
+methodcall :=   Name [ '(' [ listexp ] ')' ]
+basicexp := ( atomicexp | '(' exp ')' | constructor | methodcall )
+        { exptail }
 
 Remove 'Name' from atomicexp (sad, but necessary), and include the "single name" into the methodcall rule by making the argument list optional. Perfect. LL(1)-ness is restored. It actually makes even more sense semantically, since a single name as an expression is actually an argumentless method call to self (or reading a local, or reading a member, but it looks the same. It means something else, but the semantic analyzer will have to deal with that).
 Now we can even avoid writing the same code twice and notice that the exptail rule is in fact:
 
-exptail :=	'.' methodcall |
-		'[' exp ']'
+exptail :=  '.' methodcall |
+        '[' exp ']'
 
 Woot, magic.
 
@@ -340,8 +340,8 @@ Blocks and statements
 
 The usual definition of a block is a sequence of statements. There's imperative programming for you. With the slight nuance that some statements can only appear at the end of a block. That gives:
 
-block := 	{ stat [ ';' ] }
-		[ break | continue | return [ listexp ] ]
+block :=    { stat [ ';' ] }
+        [ break | continue | return [ listexp ] ]
 
 continue is missing cruely from Lua. break and return, not much to say there.
 Optional ';' to end a statement as in Lua. Both for clarity when writing stuff on one line (ah, copy pastes to IRC...), and also to force the parser to stop a statement. As we'll see soon, a single expression is a valid statement. So there are things that are ambiguous. Consider the block:
@@ -358,21 +358,19 @@ The "<" will be parsed as a binary operator, and "foo.bar<1" as an expression, a
 
 Granted, these are extreme cases, but that's the second L of LL(1): leftmost derivation. Applying rules from the left as far as we can. You can help the parser by putting ';' at the end of statements. After methodcall "foo", when parsing a methodcall as exptail, it will find ".bar" and then no opening parenthesis, so it will skip the optional argument list. Then back in basicexp, the next token is neither '.' or '[', so no more exptails. Then up to exp, ';' is not a binary operand, so the expression is complete. Then the statement is complete. Then the block eats up the optional ';'. Beautiful.
 
-stat :=		'do' block 'end' |
-		'while' exp [ 'as' Name ] 'dö́' block 'end' |
-		'if' exp [ 'as' Name ] 'then' block
-			{ 'elseif' exp 'then' block }
-			[ 'else' block ]
-			'end' |
-		'for' listname 'in' listexp 'do' block 'end' |
-		exp |
-		assignment
+stat :=     'do' block 'end' |
+        'while' exp [ 'as' Name ] 'dö́' block 'end' |
+        'if' exp [ 'as' Name ] 'then' block
+            { 'elseif' exp 'then' block }
+            [ 'else' block ]
+            'end' |
+        'for' listname 'in' listexp 'do' block 'end' |
+        exp |
+        assignment
 
 Statements are all the flow control things (including a simple "do" that even though it's not really a flow control thing, allows lexical scoping), single expressions, and the dreaded... assignments!
 
 More about them later. They are nasty too.
-
--------------------------------
 
 Class
 =====
@@ -380,9 +378,9 @@ Class
 The class definition now separates members and methods with the "methods" keyword, which makes it nicely LL(1) and easy to parse. But not so nice:
 
 class ClassName : ParentClass
-	-- members
+    -- members
 methods
-	-- methods
+    -- methods
 end
 
 The choice of that separator is arbitrary and difficult. In Objective-C, members are enclosed in curly braces and the rest are methods. In C++, you can just mix them but since at the moment methods and members start the same (with a type), that makes parsing difficult. To keep the parsing simple (close to LL(1)), it would need a keyword to start either members or methods. Ruby uses "def" for methods. It could be something more meaningful like "meth". Or a symbol like ObjC has +/- for class and instance methods. But like in Lua, I'd like to keep as many tokens to be keywords as possible. It's more clear and easier to learn.
@@ -391,9 +389,9 @@ On the other hand, LWMM. That already ruled out separate header/implementation f
 
 The whole "methods" block is already optional, that would still be true a fortiori. Good for small struct-like objects.
 
-classdef := ClassName [ ':' ClassName ]
-		{ memberdef | methoddef }
-		end
+classdef := 'class' ClassName [ ':' ClassName ]
+        { memberdef | methoddef }
+        'end'
 
 That works as long as memberdef and methoddef cannot start with a same token. Which is true, since methoddef will start with "meth".
 
@@ -408,10 +406,10 @@ memberdef := [ 'private' ] [ 'own' ] type Name
 For a method, there is a bit more information, but it's still quite classic:
 
 methoddef := 'meth' [ 'private' ] [ listtype ]
-		( Name [ '=' ] | Binop )
-		'(' [ listarg ] ')'
-		block
-		'end'
+        ( Name [ '=' ] | Binop )
+        '(' [ listarg ] ')'
+        block
+        'end'
 
 Method name can be either a valid name (optionally followed by '=' for setters) or a binary operator (all operators can be overloaded, except maybe a few special ones such as boolean "and" and "or" that exceptionally are not method calls). Return types and arguments are optional too, so a minimal method could be:
 
@@ -431,21 +429,21 @@ argdef := type Name
 About types, we're getting there.
 
 type := [ 'own' ]
-	( 'num' | 'vec' | 'str' | 'sym' |
-	ClassName |
-	'[' type ']' | '/' type '/' | '{' type ',' type '}' )
+    ( 'num' | 'vec' | 'str' | 'sym' |
+    ClassName |
+    '[' type ']' | '/' type '/' | '{' type ',' type '}' )
 
 The built-in non composed types have a short lowercase identifier. User defined classes use simply the class name. Built-in compound types use the subtype(s) and characters that remind of their constructors.
 A note about "own". Since it applies only to actual objects, and those that are always copied, we could restrict the grammar to:
 
 type := ( 'num' | 'vec' | 'sym' ) | 
-	[ 'own' ] ( 'str' | ClassName | '[' type ']' | '/' type '/' | '{' type ',' type '}' )
+    [ 'own' ] ( 'str' | ClassName | '[' type ']' | '/' type '/' | '{' type ',' type '}' )
 
 Or we could delay that to semantic analysis. Doesn't matter much, since the parse tree will probably be generic for the whole "type" rule. It's more details of implementation of the parser. Note also that this syntax looks exactly like the internal representation for selectors and method signatures (except for "own" that I don't know yet how to represent).
 
 It illustrates also the fact that built-in compound types are always statically typed. A string of Blah will always contain only Blah's. I like the natural recursivity it has, [/num/], {str,//[sym]//}. In practice, I guess it will be rare to have more than a few levels.
 
-That reminds me, although it is not a syntax problem, that if ownership is now clearly defined for user-made classes, it is not for built-in containters. Should arrays own their elements or not? Or both?
+That reminds me, although it is not a syntax problem, that if ownership is now clearly defined for user-made classes, it is not for built-in containers. Should arrays own their elements or not? Or both?
 
 Clearly, not both at the same time (how could we make the difference between arr[1] and arr[2]?). All elements must have the same strongness. And in fact, static typing says that a given variable must point to one or the other, it cannot switch from an array of strong to an array of weak.
 So either we decide from the start that containers always own their elements, or that they don't. Or we allow both and therefore need to keep this additional information when doing type analysis. And finally, a declarative syntax that goes accordingly. In fact, the grammar rule above for type already handles this, by the magic of recursivity:
@@ -469,13 +467,13 @@ chunk := { class }
 Easy enough. All we have is definitions of classes. Since everything is an object, all we need is classes. And since there are no globals in sool (only the class names are "global"), nothing else can appear at top level. Which leads to one question: where does the program start?
 
 I haven't decided that yet. You could have a reserved method name "main", that can appear only once in the whole program, declared num:main:[str] to follow the usual "take command line arguments as strings, return an error status".
-Or for more object-orientedness, have instead a special class called Main or Root, that the compiler would instanciate for you, and run init:[str] on. From there the whole tree hierarchy of memory would be populated and stuff would be run from init until all returns, and init() returns, and the main object is freed. That's nicer.
+Or for more object-orientedness, have instead a special class called Main or Root, that the compiler would instanciate for you, and run init:[str] on. From there the whole tree hierarchy of memory would be populated and stuff would be run from init until all returns, and init() returns, and the main object is freed. That's nicer. Let there be world.
 
-A note about "everything is an object and every call is a message sent to an object". It does not always make sense. Sometimes, we need simple global "functions" that do not act on static data, but rather only with their arguments. Say I often need to generate a large amount of random numbers and put them in an array. I don't want to repeat
+A note about "everything is an object and every call is a message sent to an object". It does not always make sense. Sometimes, we need simple global "functions" that do not act on static data, but rather deal only with their arguments. Say I often need to generate a large amount of random numbers and put them in an array. I don't want to repeat
 
 a = []
 for i in 1000 do
-	a.insert(rand())
+    a.insert(rand())
 end
 
 all the time. So naturally I'd make a function out of it. But where to put that function? It does not belong to any particular object, in fact it never even uses "self".
@@ -484,16 +482,8 @@ In C++ you could make a normal global function, or a static member function in a
 
 So imagine you have lots of "selfless" methods. If they have related purposes, you could even put them in the same class. But then to call them, you'd need to instanciate a dummy object of that class (it wouldn't even have members), to send the message to it. That is not pretty.
 
-The Main, or Root class could solve that nicely, by being at the Root of the inheritance tree. Implement your "selfless" methods in Root, and have (implicitely or not) all the other classes inherit from it. Then all these functions become available as calls to self, without having to specify the receiver. Of course there would still be the hidden argument, never used, but that could even be detected and optimized by the compiler. Free "global functions".
+The Main, or Root class could solve that nicely, by being at the root of the inheritance tree. Implement your "selfless" methods in Root, and have (implicitely or not) all the other classes inherit from it. Then all these functions become available as calls to self, without having to specify the receiver. Of course there would still be the hidden argument, never used, but that could even be detected and optimized by the compiler. Free "global functions".
 
 Same goes for "extending" the built-in classes. Since they have no sool-side class name, you can't use them as parent class. But if there are common operations that you need to perform on them, you can have pseudo global functions to do that too.
 
 Beware though. If the Root class is also the root of the inheritence hierarchy, all its members will be inherited too. They won't be global or anything, each object will have its own. Also the init method, meant to be the entry point of the program, if not overloaded, will be executed by smaller objects, hence entering a nice infinite recursion where each small object will in fact try to run its own copy of the whole program... Fractal madness! So it might not be a good idea after all.
-
-
-----------
-
-put 5 in lol
-5 as lol
-
-
