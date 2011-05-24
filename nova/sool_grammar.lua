@@ -22,7 +22,8 @@ The 'name' field can be filled with a human readable description of the rule, us
 
 The Nova thingy will read in this grammar, validate it as LL(1), and allow parsing a list of tokens using it, producing a concrete syntax tree (= "parse tree").
 
-Verifications do not support 
+Verifications of First/Follow conflicts should work even with following rules and sub/rules that can generate the empty string.
+One thing that is not complely clear is when dealing with repetitions that have separators and/or main sequences that generate them.
 
 ]]
 
