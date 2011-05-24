@@ -137,8 +137,8 @@ g.statement = {
         { optional = true, 'else', 'block' },
         'end' },
     { name = 'for loop', 'for', 'list_name', 'in', 'list_exp', 'do', 'block', 'end' },
-    'exp',
-    -- 'assignment'
+    { { choice = true, 'method_call', 'atomic_exp' }, 'exp_tail' },
+    'assignment'
 }
 
 g.list_name = {
@@ -159,20 +159,27 @@ g.constructor = {
     name = 'constructor',
     choice = true,
     { '[', { optional = true, 'list_operand' }, ']' },
-    { '/', { optional = true, 'list_operand' }, '/' },
+    { '/', { optional = true, 'list_operand' }, '\\' },
     { '<', { optional = true, 'list_operand' }, '>' },
-    { 'ClassName', 'call_arguments' },
+    { 'ClassName', { optional = true, 'call_arguments' } },
 }
 
 g.method_call = {
     name = 'method call',
     'Name',
-    'call_arguments'
+    { optional = true, 'call_arguments' }
+}
+
+g.list_method_call = {
+    name = 'list of method calls',
+    repetition = true,
+    separator = ',',
+    min = 1,
+    'method_call'
 }
 
 g.call_arguments = {
     name = 'argument list',
-    optional = true,
     '(',
     { optional = true, 'list_exp' },
     ')'
@@ -187,13 +194,15 @@ g.basic_exp = {
         'constructor',
         'method_call'
     },
-    {
-        name = 'basic expression tail',
-        repetition = true,
-        choice = true,
-        { '.', 'method_call' },
-        { '[', 'exp', ']' }
-    }
+    'exp_tail'
+}
+
+g.exp_tail = {
+    name = 'basic expression tail',
+    repetition = true,
+    choice = true,
+    { '.', 'method_call' },
+    { '[', 'exp', ']' }
 }
 
 g.unary_operation = {
@@ -239,6 +248,12 @@ g.list_exp = {
     'exp'
 }
 
+g.unified_assignment_call = {
+    name = 'unified assignment and method call',
+    'list_method_call',
+    '=',
+    'list_exp'
+}
 
 require 'nova'
 

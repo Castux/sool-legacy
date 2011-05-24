@@ -1,0 +1,170 @@
+sool is going nova
+
+Or rather, sool's parser is going meta. For the interest of science (or more like fun), I am making a generic LL(1) parser. It reads in a grammar, described using Lua tables with the appropriate format, checks whether it is indeed LL(1), and then transforms a list of tokens into a concrete syntax tree, also known as parse tree.
+
+The tables looks like this (g is a "grammar" table in which the rules are put):
+
+g.constructor = {
+    name = 'constructor',
+    choice = true,
+    { '[', { optional = true, 'list_operand' }, ']' },
+    { '/', { optional = true, 'list_operand' }, '/' },
+    { '<', { optional = true, 'list_operand' }, '>' },
+    { 'ClassName', 'call_arguments' },
+}
+
+g.basic_exp = {
+    name = 'basic expression',
+    {
+        choice = true,
+        'atomic_exp',
+        { '(', 'exp', ')' },
+        'constructor',
+        'method_call'
+    },
+    {
+        name = 'basic expression tail',
+        repetition = true,
+        choice = true,
+        { '.', 'method_call' },
+        { '[', 'exp', ']' }
+    }
+}
+
+g.exp = {
+    name = 'expression',
+    repetition = true,
+    separator = 'Binop',
+    min = 1,
+    'operand'
+}
+
+Tables are lists of either terminal strings, named rules (if they appear in the grammar table), or directly subtables. By default they are "sequences", meaning they try to parse their subrules in order. The "choice" flag turns it into a "choice" instead, where only one subrule will be parsed. The "optional" flag is self explanatory, and the "repetition" means that the rule will try to match again after each match. With repetition can come the modifiers "separator" (a rule parsed before every occurence except the first), "min" and "max" to restrict the number of matches.
+
+The "nova" module takes a grammar, resolves strings into either terminals or rules, computes the First sets for every rule, and verify the presence of LL(1) conflicts (except left recursion, which will happily run forever until stack overflow). I haven't implemented the actual parser yet, but it should be trivial. For a terminal, check that the token matches. For a sequence, apply recursively to each subrule, one after the other. For optionals, if the token belongs to the first set, parse it, otherwise don't. For choices, check to which choice's first set the token belongs and apply this one. Repetitions are easy also.
+
+That's the über power of LL(1). It's trivial to implement. Of course, like mentioned before, languages that have a grammar in LL(1) form are quite restricted and simple. Compromise.
+
+Pros of Nova:
+1. One code base, the actual grammar is data. Making changes to the grammar is easier in that form than for hand written code.
+2. Reusable for other projects that need LL(1) parsing. Might be adaptable to LL(k).
+3. Checks for conflicts. Hand written parser can bypass these by having "default" behaviors that in effect make it parse a different language than the one intended.
+4. Reduces the chances of errors. In the hand written parser, I often forgot to "save" the children nodes in a given node, making Lua complain a lot later (in semantic analysis) about indexing nil. There was a lot of repeated mechanisms that I didn't always apply properly.
+5. Less code for the same result. Less is good.
+
+Cons of Nova:
+1. Will be slower. Still linear time, of course, but it is the same difference than between compiled and interpreted. Instead of having raw instructions, you have branching and conditions on data that lead to these same final instructions.
+2. Will be also slower by adding the grammar input and validation overhead. The sool compiler will have to "build" internally its parser at each invocation. I could turn (later) the Nova dynamic module into a "compiler compiler" that would produce a parser in Lua code for a given grammar, but that might be useless work. Current implementation takes 5 miliseconds to read in and validate the grammar. Granted, on a Intel i7. But still. Don't fix it if it ain't broken.
+3. Will make it more difficult to have meaningful error messages. But I'm working on that. In the examples above, you see that you can already name rules and subrules. I plan on adding a way to explain what the subrule means within its parent rule. As in "OK, we're parsing a list of expressions here, but in this particular context, we call them arguments to a method call". That way the parser will be able to generate errors like "could not parse expression as argument to a method call", plus all the raw text fancy highlighting I had coded into the hand written parser.
+4. Grammar description syntax is slightly heavy, but it's still a lot more readable than going through the recursive descent parser. It's described in one small place instead of a whole Lua source file.
+
+It's interesting to see the number of levels of abstraction that occur when compiling a source in sool:
+
+sool source ------------------------------------------------------------------------------------------------
+                                                                                                           |
+nova source in Lua --[ Lua compiler ]--> nova bytecode --[ Lua VM ]--> nova parser -------------|          |
+                                                                                                | => [ sool compiler ]--> LLVM assembly -----[ LLVM ]--> executable
+sool grammar in Lua --[ Lua compiler ]--> grammar bytecode --[ Lua VM ]--> dynamic grammar data-|                                         |
+                                                                                                                                          ---[ LLVM JIT ]--> in memory executable
+Hopefully that won't be too much overhead. I'm hoping the whole compiling process will be almost transparent. We'll see.
+
+Also, thanks to Nova, I know that my grammar is not LL(1). Conflict occurs in the list constructor:
+
+'/' [ list_operand ] '/'
+
+Indeed, an operand can itself be a list constructor, and therefore start with a '/'. So the parser wouldn't know what to do with
+
+list = / /'I am in your list'/, 'breaking your parser' /
+
+Is the second '/' there to close the first one, or to start a new list? Yikes. I should have known that using the same symbol for start and end would bring me trouble. How to solve?
+1. Use different symbols for the list constructor (and the list type declaration, since it is chosen to be the same). Or at least change one of them (but that breaks the nice symmetry)
+2. Introduce an exception saying that '//' is always an empty list constructor (but hey, Nova is pure and cannot break the rules!)
+3. Make the list of operands mandatory. That removes the possibility of an empty list constructor.
+4. Make the constructors use something else than operands. But we had already downgraded expressions to operands because of the '/' and '<' and '>' that could appear as operators. If we want to restrict even more we'll have write new rules, and that sucks.
+
+Nova also gives me two conflicts that I already knew about, but discarded as the previous implementation had a "default" behavior:
+1. optional argument list that can be followed by a statement (both can start with '('):
+object.dothat(haha)		-- is "(haha)" the argument list for the call or an expression in a new statment?
+2. conflict between the binary operators '-' '<' and '/' with statements:
+a + b < c	-- is "< c" a binop and an expression or the beginning of a vector constructor?
+Same with '-' and '/' which start respectively a unary operation and a list constructor
+
+Fascinating! How to solve these? We can do as we did before: ignore the fact that the grammar is not completely LL(1) and let the parser have a default behavior. Always try to parse an optional if it finds its first token. That might result in the compiler not being able to parse a valid text and complaining that it is malformed. Then the user can solve the ambiguities by using the ';' to separate statements. Since it would be only for these two cases, documenting it as an exception would "solve" the problem.
+Or we can fix the grammar to be LL(1). One obvious way is to make the ';' mandatory at the end of statements. But I refuse. Another way is to forbid single expressions as statements, like Lua does. However we still want to be able to do single method calls and message passing. Also, starting a statement with a constructor should be quite rare anyway: what's the point of building an object if it's not within an assignment (or implicitely by passing it as an argument)?
+
+We can try to revise the grammar to differentiate expressions that can be statements, and those that cannot. If possible, without rewriting the whole thing.
+
+An idea: replace 'exp' as a statement by " method_call { exp_tail } ". That forces single method calls to start with a name like:
+
+foo.bar(lol).meh[4]
+
+Isn't that enough? With what else should we start a dangling method call? Constructors, we said no, it's not very useful and it annoys previous expressions. '(' exp ')' breaks previous method calls, and is not so useful either. Why would we send a message to something that has no name? If it doesn't have a name it will probably die rather soon. Like, at the end of the statement. The only thing I see where it can be useful is with strings:
+
+"Teh mega lulz".print
+
+In the spirit of "no global functions, send messages to objects instead", that would be the proper way to do it. The grammar should support it. To avoid having too many cases, we can decide that all atomic expressions can do that. Our statement becomes:
+
+( method_call | atomic_exp ) { exp_tail }
+
+However, that means we cannot do anymore:
+
+a += 4
+list <- element
+outfile << "foobar"
+
+Or stuff like that, where operators are meant as a shortcut for imperative method calls that do not return anything. I wanted to have a "fast" syntax for all container insertions, but maybe it's not a good idea anyway. Self explanatory method names might be better for the standard library, even if they make you type a bit more. I haven't decided anything about the standard libary's API anyway.
+
+A final note. I haven't talked about assignments yet. As left value we want names, member access and indexing. It looks a lot like a method call but in fact it's more complicated, since not every method call is a valid left value:
+
+blah = 1
+foo.bar = 2
+lulz[5] = 2
+yay.lol(4).awesome[4] = 5
+blah(heh) = 7	-- wut??
+
+The left value cannot end with call arguments.
+
+call_arguments := '(' [ list_exp ] ')'
+
+(I made that a rule because it's the same for method call and for object constructor, no need to repeat.)
+
+So we need new rules.
+
+lvalue := 'Name' { '.' method_call | '[' exp ']' } ( '.' 'Name' | '[' exp ']' )
+
+The final parenthesis is to ensure that the lvalue won't end with a call_arguments from the method_call. But there's a problem with that. When we see a dot or opening bracket, we never know if we should parse another occurence of the repetition, or skip to the final parenthesis. Good bye LL(1) again. Let's rewrite:
+
+indexing := '[' exp ']'
+member_access := '.' 'Name'
+
+lvalue := 'Name' { member_access [ call_arguments ( member_access | indexing ) ] | indexing }
+
+Oooh ugly. We write a rule similar to exp_tail, but that forces a method call with arguments to be followed by another round of member access or indexing. Let me plug that into Nova to see what happens. Yep, it's fine! Assuming Nova does validate correctly. Good. Now:
+
+assignment := list_lvalue '=' list_exp
+
+And now add assignment as a statement, aaaaaaaand. First/First conflict with our previous "method call statement". They both start with a Name. In fact they both start with a bunch of exactly the same, since a left value is in fact a valid method call statement. Ouch. What to do... I don't really see myself forcing a keyword in front of assignments like "let a,b[3],c.lol = 5,6,7", or a keyword to introduce lone method calls like "do foo.bar".
+
+Solutions:
+1. Have the funny introduction keyword to separate the two. That would be the weirdest thing.
+2. Parse list_method_calls [ '=' list_exp ], and let the semantic analyzer sort it out. If there is an equal, check that the things on the left do not end in lists of arguments, thus making them valid left values. If there is no equal sign, check that there is only one method call in the list.
+
+When I say let the analyzer do it, that's not totally necessary. It could still be the parser as a second pass once the whole node has been parsed. However, since we now envision things with the automated generic parser, we can't mess manually with the nodes until we have the whole parse tree.
+
+That sounds very unsatisfactory. Here we have the perfect illustration that most if not every general purpose language out there is definitely not LL(1). Or the parser offloads lots of decisions to after the parse tree is done. Or the parser cheats and uses occasionaly more than one token of lookahead. Or maybe it backtracks once in a while.
+
+Me be sad. Option 2 up there is likely to be the one. A unified "method call/assignment" rule. That's confusing.
+
+All is solved, except the list constructor fiasco.
+
+list = //blah//
+
+() if for expressions and argument lists, [] for arrays and indexing, {} for tables, <> for vectors. The only remaining matching ASCII symbols are ` and ´. Not very practical. A pair of random unused characters like ^$ is just not pretty enough. Digraphs: [[ ]] or [( )] are too heavy. /- and -/ would keep the slash that I came to like. /. ./ look ok. /= =/ are easier to type on a Finnish keyboard. But they all look weird for the empty list /==/ /../ /--/.
+And anyway, the type syntax wouldn't need to change since you can't have an empty type. So there would be a discrepancy between the type syntax and the constructor, which sucks.
+
+l = /1,2,3\
+l2 = /\
+
+These are funny. And symmetrical. Why not. /str\, [/num\], /{num,num}\. Oh well. That's really just a detail now, especially with the great power of Nova, there's just one character to change and tadaa.
+
+Nova now reports that the grammar is LL(1). Victory. I just have to actually write the parsing now, but as mentionned before, that should be trivial.
