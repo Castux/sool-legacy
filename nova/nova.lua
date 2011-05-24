@@ -49,59 +49,102 @@ end
 
 function set_print(a)
 	
-	io.write('{')
-	for k,v in pairs(a) do
-		io.write("'",k,"' ")
-	end
-	io.write('}\n')
+	local t = {}
 	
+	for k,v in pairs(a) do
+		local s
+		if type(k) == 'string' then
+			s = '\'' .. k .. '\''
+		elseif type(k) == 'table' then
+			s = k.name or ('[[' .. rule_to_string(k) .. ']]')
+		end
+		table.insert(t,s)
+	end
+	
+	print('{' .. table.concat(t,' ') .. '}')
 end
 
 -------------------------
 -- Grammar preparation --
 -------------------------
 
+function resolve_links(rule,g)
+	
+	for i,sub in ipairs(rule) do
+		
+		if type(sub) == 'string' then
+		
+			-- Named rule
+			if g[sub] then
+				rule[i] = g[sub]
+				
+			-- Terminal
+			else
+				rule[i] = { terminal = true, sub }
+			end
+		
+		elseif type(sub) == 'table' then
+			
+			resolve_links(sub,g)
+		
+		else
+			error('Rule is neither a string or a table: ' .. type(r))
+		end
+		
+	end
+	
+	local sub = rule.separator
+	
+	if sub then
+		if type(sub) == 'string' then
+		
+			-- Named rule
+			if g[sub] then
+				rule.separator = g[sub]
+				
+			-- Terminal
+			else
+				rule.separator = { terminal = true, sub }
+			end
+		
+		elseif type(sub) == 'table' then
+			
+			resolve_links(sub,g)
+		
+		else
+			error('Rule is neither a string or a table: ' .. type(r))
+		end
+	end
+end
+
 function validate_grammar(g)
 	
-	for k,v in pairs(g) do
-		if not validate_rule(r,g) then
-			return false
+	-- Replace named rules by references, and terminal strings by terminal tables
+	
+	for k,rule in pairs(g) do
+		resolve_links(rule,g)
+	end
+	
+	local ret = true
+	
+	for k,rule in pairs(g) do
+		if not validate_rule(rule,g) then
+			ret = false
 		end
 	end
 	
-	return true
+	return ret
 end
 
-function rule_type(r,g)
-	
-	if type(r) == 'string' then
-		if g[r] then
-			return 'named rule', g[r]
-		else
-			return 'terminal'
-		end
-	
-	elseif type(r) == 'table' then
-		return 'rule', r
-	
-	else
-		error('Rule is neither a string or a table: ' .. type(r))
-	end
-end
 
-function first_set(r,g)
+function first_set(r)
 	
 	local first = {}
 	
 	-- Terminal
-	if rule_type(r,g) == 'terminal' then
-		first[r] = true
+	if r.terminal then
+		first[r[1]] = true
 		return first
-	
-	-- Named rule
-	elseif rule_type(r,g) == 'named rule' then
-		return first_set(g[r],g)
-	
 	end
 	
 	-- Table, do the work
@@ -119,7 +162,7 @@ function first_set(r,g)
 	-- Simple: sequence
 	if not r.choice then
 	
-		first = first_set(r[1],g)
+		first = first_set(r[1])
 		
 		-- For each consecutive optional rule we need to add the ones that follow
 		for i = 1,#r-1 do
@@ -128,7 +171,7 @@ function first_set(r,g)
 				break
 			end
 			
-			local follow = first_set(r[i+1],g)
+			local follow = first_set(r[i+1])
 			first = set_union(first,follow)
 		end
 		
@@ -136,11 +179,11 @@ function first_set(r,g)
 	-- Choice: merge sets for all choices
 	else
 		
-		first = first_set(r[1],g)
+		first = first_set(r[1])
 		
 		for i = 2,#r do
 			
-			local follow = first_set(r[i],g)
+			local follow = first_set(r[i])
 			first = set_union(first,follow)
 		end
 		
@@ -152,15 +195,191 @@ function first_set(r,g)
 	return first
 end
 
+function is_epsilon(r)
+	
+	if r.optional then
+		return true
+	end
+	
+	if r.terminal then
+		return false
+	end
+	
+	-- Memo?
+	if r.epsilon then
+		return r.epsilon
+	end
+	
+	local ret
+	
+	-- For choice, if any can generate empty string, we can
+	if r.choice then
+		
+		ret = false
+		
+		for i,v in ipairs(r) do
+			if is_epsilon(v) then
+				ret = true
+				break
+			end
+		end
+		
+	-- For sequence, they must all be able to generate it
+	else
+		
+		local seq = true
+		
+		for i,v in ipairs(r) do
+			if not is_epsilon(v) then
+				seq = false
+				break
+			end
+		end
+		
+		if r.repetition then
+			-- can have zero repetitions
+			if not r.min or r.min == 0 then
+				ret = true
+			
+			-- at least 1 and no separator
+			elseif not r.separator then
+				ret = seq
+			
+			-- at least 1 with separator
+			else
+				ret = seq and is_epsilon(r.separator)
+			end
+		
+		else
+			ret = seq
+		end
+		
+	end
+	
+	-- Memoize
+	r.epsilon = ret
+	
+	return ret
+end
+
+function rule_to_string(r)
+	
+	if r.terminal then
+		return "'" .. r[1] .. "'"
+	end
+	
+	local str
+	local t = {}
+	
+	for i,v in ipairs(r) do
+		
+		if v.name then
+			table.insert(t,v.name)
+		else
+			local sub = rule_to_string(v)
+			if #v > 1 and not r.choice and not v.repetition and not v.optional then
+				sub = '( ' .. sub .. ' )'
+			end
+			table.insert(t,sub)
+		end
+		
+	end
+
+	if not r.choice then
+		str = table.concat(t,' ')
+	else
+		str = table.concat(t,' | ')
+	end
+	
+	if r.repetition then
+		str = '{ ' .. str
+		
+		if r.separator then
+			str = str .. ' sep=' .. rule_to_string(r.separator)
+		end
+		
+		if r.min then
+			str = str .. ' min=' .. r.min
+		end
+		
+		if r.max then
+			str = str .. ' max=' .. r.max
+		end
+		
+		str = str .. ' }'
+	end
+	
+	if r.optional then
+		str = '[ ' .. str .. ' ]'
+	end
+	
+	return str
+end
+
+function get_rightmost_optionals(r)
+	
+	local function rec(r,set)
+		-- Avoid infinite recursion
+		if set[r] ~= nil then
+			return
+		end
+		
+		if r.optional then
+			set[r] = true
+		else
+			set[r] = false						-- prevents recursion and still does not belong to set
+		end
+		
+		if r.terminal then
+			return
+		end
+		
+		if r.separator then						-- in seq { separator seq }, separator can conflict with what follows
+			set[r.separator] = true
+		end
+		
+		-- At any level of recursion, we need the subrules that end the rule and are optional
+		
+		-- Choice
+		if r.choice then
+			for i,v in ipairs(r) do
+				rec(v,set)
+			end
+		
+		-- Sequence
+		else
+			rec(r[#r],set)
+			
+			-- Must add rules from right to left if the final ones are consecutive epsilons
+			local j = #r
+			while is_epsilon(r[j]) and j > 1 do
+				rec(r[j-1],set)
+				j = j-1
+			end
+			
+		end
+	end
+	
+	-- Call it on empty set
+	local set = {}
+	rec(r,set)
+	
+	-- Clean up
+	local res = {}
+	for k,v in pairs(set) do
+		if v then
+			res[k] = true
+		end
+	end
+	
+	return res
+end
+
 function validate_rule(r,g)
 	
 	-- Terminal
-	if rule_type(r,g) == 'terminal' then
+	if r.terminal then
 		return true
-	
-	-- Named rule
-	elseif rule_type(r,g) == 'named rule' then
-		return validate_rule(g[r],g)
 	end
 	
 	-- Table, do the work
@@ -170,31 +389,126 @@ function validate_rule(r,g)
 		return true
 	end
 	
+	local ret = true
+	
 	-- Sequence
 	if not r.choice then
 		
-		-- Need to check that for any optional subrule, its first set doesn't collide with the one of the following subrule
+		-- Need to check that for any optional subrule (or that contains an optional at the end),
+		-- its first set doesn't collide with the one of the following subrule
 		
-		for i,v in ipairs(r) do
-			local typ,rul = rule_type(v,g)
-			if rul and rul.optional and r[i+1] then
-				local inter = set_intersection(first_set(rul),first_set(r[i+1]))
+		for i = 1,#r-1 do
+			
+			local optionals = get_rightmost_optionals(r[i])
+			
+			for opt,_ in pairs(optionals) do
+			
+				local j = i+1
 				
-				if not set_empty(inter) then
-					error('First/Follow conflict with ' .. rul.name .. ' and ' .. r[i+1])
+				while true do
+					local inter = set_intersection(first_set(opt),first_set(r[j]))
+					
+					if not set_empty(inter) then
+						print('First/Follow conflict with ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
+							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						print('Shared tokens:')
+						set_print(inter)
+						ret = false
+					end
+					
+					-- Special check for repetitions with separators (as the rightmost [ sep sequence ] is not a rule per se)
+					if opt.separator and follow[opt.separator] then
+						print('First/Follow conflict with separator in ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
+							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						ret = false
+					end
+					
+					-- Go through all following epsilons
+					if is_epsilon(r[j]) then
+						j = j+1
+						if j > #r then
+							break
+						end
+					else
+						break
+					end
 				end
 			end
 			
 		end
 		
-	
+		-- And if it's a repetition, check also the rightmost optionals with the first and possibly followings (loop around)
+		
+		if r.repetition and ( not r.separator or is_epsilon(r.separator) ) then
+			
+			local optionals = get_rightmost_optionals(r)
+			
+			for opt,_ in pairs(optionals) do
+			
+				local j = 1
+				
+				while true do
+					local inter = set_intersection(first_set(opt),first_set(r[j]))
+					
+					if not set_empty(inter) then
+						print('First/Follow conflict (in repetition) with ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
+							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						print('Shared tokens:')
+						set_print(inter)
+						ret = false
+					end
+					
+					-- Special check for repetitions with separators (as the rightmost [ sep sequence ] is not a rule per se)
+					if opt.separator and follow[opt.separator] then
+						print('First/Follow conflict (in repetition) with separator in ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
+							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						ret = false
+					end
+					
+					if is_epsilon(r[j]) then
+						j = j+1
+						if j > #r then
+							break
+						end
+					else
+						break
+					end
+				end
+			end
+			
+		end
+		
+		
 	-- Choice
 	else
-	
+		
+		-- Need to check that no two choices have elements in common in their first sets
+		
+		for i = 1,#r-1 do
+			for j = i+1,#r do
+				local inter = set_intersection(first_set(r[i]),first_set(r[j]))
+				
+				if not set_empty(inter) then
+					print('First/First conflict with ' .. ( r[i].name or rule_to_string(r[i]) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
+						.. ' in ' .. (r.name or rule_to_string(r) ) )
+					print('Common tokens: ')
+					set_print(inter)
+					ret = false
+				end
+			end
+		end
+		
 	end
 	
 	-- Memoize
 	r.valid = true
 	
-	return true
+	-- Recurse
+	for i,v in ipairs(r) do
+		if not validate_rule(v,g) then
+			ret = false
+		end
+	end
+	
+	return ret
 end

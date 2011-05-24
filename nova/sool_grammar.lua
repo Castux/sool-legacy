@@ -22,6 +22,8 @@ The 'name' field can be filled with a human readable description of the rule, us
 
 The Nova thingy will read in this grammar, validate it as LL(1), and allow parsing a list of tokens using it, producing a concrete syntax tree (= "parse tree").
 
+Verifications do not support 
+
 ]]
 
 g = {}
@@ -95,10 +97,7 @@ g.method_def = {
 g.type = {
     name = 'type declaration',
     choice = true,
-    {
-        choice = true,
-        'num', 'vec', 'sym'
-    },
+    'num', 'vec', 'sym',
     {
         { optional = true, 'own' },
         {
@@ -162,7 +161,7 @@ g.constructor = {
     { '[', { optional = true, 'list_operand' }, ']' },
     { '/', { optional = true, 'list_operand' }, '/' },
     { '<', { optional = true, 'list_operand' }, '>' },
-    { 'ClassName', 'call_arguments' }
+    { 'ClassName', 'call_arguments' },
 }
 
 g.method_call = {
@@ -199,7 +198,7 @@ g.basic_exp = {
 
 g.unary_operation = {
     name = 'unary operation',
-    'Unop',
+    { choice = true, '-', '#', 'not' },
     'operand'
 }
 
@@ -221,9 +220,15 @@ g.list_operand = {
 g.exp = {
     name = 'expression',
     repetition = true,
-    separator = 'Binop',
+    separator = 'binop',
     min = 1,
     'operand'
+}
+
+g.binop = {
+    name = 'binary operator',
+    choice = true,
+    '+', '-', '*', '/', '<', '>', '<=', '>='
 }
 
 g.list_exp = {
@@ -238,3 +243,4 @@ g.list_exp = {
 require 'nova'
 
 print(nova.validate_grammar(g))
+
