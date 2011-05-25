@@ -23,7 +23,7 @@ Here I take the convention that "list" means comma separated with at least one e
 
 ]]
 
-g = {}
+local g = {}
 
 g.chunk = {
     name = 'chunk',
@@ -88,7 +88,7 @@ g.method_def = {
             'Name',
             { optional = true, '=' }
         },
-        'Binop'
+        { 'op', 'binop' }
     },
     '(', { optional = true, 'list_arg_def' }, ')',
     'block',
@@ -106,7 +106,7 @@ g.type = {
             'str',
             'ClassName',
             { '[', 'type', ']' },
-            { '/', 'type', '/' },
+            { '/', 'type', '\\' },
             { '{', 'type', ',', 'type', '}' }
         }
     }
@@ -262,7 +262,7 @@ g.exp = {
 g.binop = {
     name = 'binary operator',
     choice = true,
-    '+', '-', '*', '/', '<', '>', '<=', '>='
+    '+', '-', '*', '/', '<', '>', '<=', '>=', '=='
 }
 
 g.list_exp = {
@@ -277,6 +277,12 @@ g.lvalue = {
     'exp_tail'
 }
 
+g.list_lvalue = {
+    name = 'list of left values',
+    'lvalue',
+    { repetition = true, ',', 'lvalue' }
+}
+
 g.unified_assignment_call = {
     name = 'unified assignment and lone method call',
     'list_lvalue',
@@ -287,7 +293,6 @@ g.unified_assignment_call = {
     }
 }
 
-require 'nova'
+g.nova_entry = g.class_def
 
-print(nova.validate_grammar(g))
-
+return g

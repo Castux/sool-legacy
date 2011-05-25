@@ -97,10 +97,18 @@ end
 
 function validate_grammar(g)
 	
+	-- Don't do it twice
+	
+	if g.valid then
+		return true
+	end
+	
 	-- Replace named rules by references, and terminal strings by terminal tables
 	
 	for k,rule in pairs(g) do
-		resolve_links(rule,g)
+		if k ~= 'nova_entry' then
+			resolve_links(rule,g)
+		end
 	end
 	
 	local ret = true
@@ -110,6 +118,8 @@ function validate_grammar(g)
 			ret = false
 		end
 	end
+	
+	g.valid = true
 	
 	return ret
 end
@@ -214,6 +224,7 @@ function is_epsilon(r)
 			end
 		end
 		
+		ret = seq
 	end
 	
 	-- Memoize
@@ -260,6 +271,12 @@ function rule_to_string(r)
 	end
 	
 	return str
+end
+
+function rule_name(r)
+	
+	return r.name or rule_to_string(r)
+	
 end
 
 function get_rightmost_optionals(r)
@@ -351,8 +368,8 @@ function validate_rule(r,g)
 					local inter = set_intersection(first_set(opt),first_set(r[j]))
 					
 					if not set_empty(inter) then
-						print('First/Follow conflict with ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
-							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						print('First/Follow conflict with ' .. rule_name(opt) .. ' and ' .. rule_name(r[j])
+							.. ' in ' .. rule_name(r) )
 						print('Shared tokens:')
 						set_print(inter)
 						ret = false
@@ -389,8 +406,8 @@ function validate_rule(r,g)
 					local inter = set_intersection(first_set(opt),first_set(r[j]))
 					
 					if not set_empty(inter) then
-						print('First/Follow conflict (in repetition) with ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
-							.. ' in ' .. (r.name or rule_to_string(r) ) )
+						print('First/Follow conflict (in repetition) with ' .. rule_name(opt) .. ' and ' .. rule_name(r[j])
+							.. ' in ' .. rule_name(r) )
 						print('Shared tokens:')
 						set_print(inter)
 						ret = false
@@ -419,8 +436,8 @@ function validate_rule(r,g)
 				local inter = set_intersection(first_set(r[i]),first_set(r[j]))
 				
 				if not set_empty(inter) then
-					print('First/First conflict with ' .. ( r[i].name or rule_to_string(r[i]) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
-						.. ' in ' .. (r.name or rule_to_string(r) ) )
+					print('First/First conflict with ' .. rule_name(r[i]) .. ' and ' .. rule_name(r[j])
+						.. ' in ' .. rule_name(r) )
 					print('Common tokens: ')
 					set_print(inter)
 					ret = false
@@ -441,4 +458,176 @@ function validate_rule(r,g)
 	end
 	
 	return ret
+end
+
+---------------------
+-- Parsing context --
+---------------------
+
+-- Tokens are expected to be tables with a string as first element, value as second, and position as third
+
+function new_context(tokens,grammar)
+	
+	local c = {}
+	
+	c.tokens = tokens
+	c.current = 1		-- the current look ahead. Number of parsed token is "current-1"
+	
+	c.grammar = grammar
+	
+	c.errors = {}
+	
+	-- Init
+	
+	if not grammar.valid then
+		if not validate_grammar(grammar) then
+			os.exit(1)
+		end
+	end
+	
+	-- Methods (use table as upvalue)
+	
+	function c.consume()
+		c.current = c.current + 1
+	end
+	
+	function c.peek()
+		return c.tokens[c.current]
+	end
+
+	function c.expect(tok,node)
+		
+		local head = c.peek()
+		
+		if head[1] == tok then
+			table.insert(node,head)
+			c.consume()
+			return true
+		else
+			c.adderror('error','expected \'' .. tok .. '\', found \'' .. head[1] .. '\' instead', head[3])
+			return false
+		end
+	end
+
+	function c.adderror(typ,mess,pos)
+		
+		local err = {'Parser', typ, mess, pos}
+		
+		table.insert(c.errors,err)
+		
+	end
+	
+	function c.parse()
+		return c.parse_rule(c.grammar.nova_entry)
+	end
+	
+	-- Returns true and the node if success, returns false otherwise
+	function c.parse_rule(r)
+		
+		local nodes = {}
+		nodes.rule = r
+		
+		local node = {}
+		node.rule = r
+		
+		-- Terminal
+		if r.terminal then
+			
+			if not c.expect(r[1],node) then
+				return false,node
+			else
+				return true,node
+			end
+		end
+		
+		local first = first_set(r)
+		
+		while true do
+			
+			node = {}
+			node.rule = r
+			
+			local function retnode()
+				if r.repetition then
+					return nodes
+				else
+					return node
+				end
+			end
+			
+			-- Check that we can apply this rule
+			local head = c.peek()
+			if not first[head[1]] then
+				
+				-- It's ok, return success and the node how it is now (empty for optional, with the already parsed things for repetition)
+				if is_epsilon(r) then
+					return true,retnode()
+				
+				else
+					local expected = ""
+					for k,v in pairs(first) do
+						expected = expected .. "'" .. k .. "' "
+					end
+					expected = expected:sub(1,#expected-1)
+					
+					c.adderror('error','cannot parse ' .. rule_name(r) .. ', expected one of ' .. expected .. ', found \'' .. head[1] .. '\' instead', head[3])
+					
+					if r.name then
+						c.adderror('info','rule is: ' .. rule_to_string(r))
+					end
+					
+					return false,retnode()
+				end
+			
+			end
+			
+			-- Sequence
+			if not r.choice then
+				
+				for i,sub in ipairs(r) do
+					
+					local succ,subnode = c.parse_rule(sub)
+					
+					if succ then
+						table.insert(node,subnode)
+					else
+						c.adderror('info','in rule ' .. rule_name(r))
+						return false,retnode()
+					end
+					
+				end
+				
+			-- Choice
+			else
+				
+				for i,sub in ipairs(r) do
+					
+					local first = first_set(sub)
+					
+					if first[head[1]] then
+						local succ,subnode = c.parse_rule(sub)
+						
+						if not succ then
+							return false,retnode()
+						else
+							node = subnode
+						end
+					end
+				end
+				
+			end
+			
+			-- Should we stop or continue?
+			if not r.repetition then
+				return true,retnode()
+			else
+				table.insert(nodes,node)
+			end
+		end
+		
+		error('Unreachable')
+	end
+	
+	
+	return c
 end

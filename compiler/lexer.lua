@@ -157,7 +157,7 @@ lex = function(file)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|=<>:.,;%(%)%[%]{}#]",index)
+		m = s:match("^[~%+%-%*/%%^|=<>:.,;%(%)%[%]{}#\\]",index)
 		if m then
 			addtok(m)
 			break
@@ -168,10 +168,10 @@ lex = function(file)
 		if m then
 			
 			-- Reserved name?
-			local res = {'class', 'methods', 'end', 'num', 'vec', 'str',
+			local res = {'class', 'meth', 'end', 'num', 'vec', 'str',
 			'return', 'do', 'if', 'then', 'elseif', 'else', 'while',
 			'for', 'in', 'break', 'continue', 'nil', 'false', 'true',
-			'private', 'op', 'and', 'or', 'xor', 'not'}
+			'private', 'op', 'and', 'or', 'xor', 'not', 'own'}
 			
 			local wasres = false
 			for i,v in ipairs(res) do

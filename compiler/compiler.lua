@@ -1,6 +1,6 @@
 require 'lexer'
 require 'parser'
-require 'analyzer'
+--require 'analyzer'
 
 --[[
 File structure
@@ -159,7 +159,7 @@ function parse_file(file)
 	
 	-- Parsing
 	
-	local chunk,err = parse(tokens)
+	local err,chunk = parse(tokens)
 	
 	local errcount = 0
 	
@@ -220,6 +220,8 @@ function compile(list)
 		
 		table.insert(chunks,chunk)
 	end
+	
+	do return end
 	
 	-- Merge lists of classes into single chunk
 	
