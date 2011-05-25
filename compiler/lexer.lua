@@ -278,7 +278,8 @@ lex = function(file)
 			fcol=col,
 			lcol=col,
 			file=file
-		}
+		},
+		token = true
 	}
 	
 	tokens[#tokens+1] = tok

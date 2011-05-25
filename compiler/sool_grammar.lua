@@ -27,8 +27,8 @@ local g = {}
 
 g.chunk = {
     name = 'chunk',
-    repetition = true,
-    'class_def'
+    { repetition = true, 'class_def' },
+    'EOF'
 }
 
 g.class_def = {
@@ -51,10 +51,7 @@ g.class_def = {
 
 g.member_def = {
     name = 'member definition',
-    {
-        optional = true,
-        'private'
-    },
+    { optional = true, 'private' },
     'type',
     { name = 'argument name', 'Name' }
 }
@@ -260,7 +257,7 @@ g.exp = {
 g.binop = {
     name = 'binary operator',
     choice = true,
-    '+', '-', '*', '/', '<', '>', '<=', '>=', '=='
+    '+', '-', '*', '/', '<', '>', '<=', '>=', '==', 'and', 'or'
 }
 
 g.list_exp = {
@@ -289,6 +286,6 @@ g.unified_assignment_call = {
     }
 }
 
-g.nova_entry = g.class_def
+g.nova_entry = g.chunk
 
 return g

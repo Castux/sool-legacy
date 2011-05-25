@@ -62,6 +62,8 @@ function print_error(err)
 		col = 3
 	elseif err[2] == 'info' then
 		col = 4
+	else
+		error('Wrong error type: ' .. err[2])
 	end
 	
 	io.write(C(err[2],col),': ')
