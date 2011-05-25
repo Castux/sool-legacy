@@ -9,7 +9,7 @@ Every rule is a sequence by default. Following modifiers change the behavior:
 
 optional = true: will not fail if the first token does not match. Will fail if the first token matches and a subsequent error occurs. [ sequence ]
 
-repetition = true: will try to parse the sequence as many times as possible. { sequence }. Note that a repetition makes implicitely the rule optional.
+repetition = true: like optional, but tries to parse again after each match. { sequence }.
 
 choice = true: the list of subrules is not interpreted as a sequence but as a choice. One and only one subrule must and will match. ( subrule1 | subrule2 | subrule3 )
 
