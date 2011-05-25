@@ -93,28 +93,6 @@ function resolve_links(rule,g)
 		
 	end
 	
-	local sub = rule.separator
-	
-	if sub then
-		if type(sub) == 'string' then
-		
-			-- Named rule
-			if g[sub] then
-				rule.separator = g[sub]
-				
-			-- Terminal
-			else
-				rule.separator = { terminal = true, sub }
-			end
-		
-		elseif type(sub) == 'table' then
-			
-			resolve_links(sub,g)
-		
-		else
-			error('Rule is neither a string or a table: ' .. type(r))
-		end
-	end
 end
 
 function validate_grammar(g)
@@ -164,10 +142,10 @@ function first_set(r)
 	
 		first = first_set(r[1])
 		
-		-- For each consecutive optional rule we need to add the ones that follow
+		-- For each consecutive espilon rule we need to add the ones that follow
 		for i = 1,#r-1 do
 			
-			if not r[i].optional then
+			if not is_epsilon(r[i]) then
 				break
 			end
 			
@@ -197,7 +175,7 @@ end
 
 function is_epsilon(r)
 	
-	if r.optional then
+	if r.optional or r.repetition then
 		return true
 	end
 	
@@ -236,24 +214,6 @@ function is_epsilon(r)
 			end
 		end
 		
-		if r.repetition then
-			-- can have zero repetitions
-			if not r.min or r.min == 0 then
-				ret = true
-			
-			-- at least 1 and no separator
-			elseif not r.separator then
-				ret = seq
-			
-			-- at least 1 with separator
-			else
-				ret = seq and is_epsilon(r.separator)
-			end
-		
-		else
-			ret = seq
-		end
-		
 	end
 	
 	-- Memoize
@@ -274,7 +234,7 @@ function rule_to_string(r)
 	for i,v in ipairs(r) do
 		
 		if v.name then
-			table.insert(t,v.name)
+			table.insert(t,'"' .. v.name .. '"')
 		else
 			local sub = rule_to_string(v)
 			if #v > 1 and not r.choice and not v.repetition and not v.optional then
@@ -292,21 +252,7 @@ function rule_to_string(r)
 	end
 	
 	if r.repetition then
-		str = '{ ' .. str
-		
-		if r.separator then
-			str = str .. ' sep=' .. rule_to_string(r.separator)
-		end
-		
-		if r.min then
-			str = str .. ' min=' .. r.min
-		end
-		
-		if r.max then
-			str = str .. ' max=' .. r.max
-		end
-		
-		str = str .. ' }'
+		str = '{ ' .. str .. ' }'
 	end
 	
 	if r.optional then
@@ -324,7 +270,7 @@ function get_rightmost_optionals(r)
 			return
 		end
 		
-		if r.optional then
+		if r.optional or r.repetition then
 			set[r] = true
 		else
 			set[r] = false						-- prevents recursion and still does not belong to set
@@ -332,10 +278,6 @@ function get_rightmost_optionals(r)
 		
 		if r.terminal then
 			return
-		end
-		
-		if r.separator then						-- in seq { separator seq }, separator can conflict with what follows
-			set[r.separator] = true
 		end
 		
 		-- At any level of recursion, we need the subrules that end the rule and are optional
@@ -416,13 +358,6 @@ function validate_rule(r,g)
 						ret = false
 					end
 					
-					-- Special check for repetitions with separators (as the rightmost [ sep sequence ] is not a rule per se)
-					if opt.separator and follow[opt.separator] then
-						print('First/Follow conflict with separator in ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
-							.. ' in ' .. (r.name or rule_to_string(r) ) )
-						ret = false
-					end
-					
 					-- Go through all following epsilons
 					if is_epsilon(r[j]) then
 						j = j+1
@@ -439,9 +374,12 @@ function validate_rule(r,g)
 		
 		-- And if it's a repetition, check also the rightmost optionals with the first and possibly followings (loop around)
 		
-		if r.repetition and ( not r.separator or is_epsilon(r.separator) ) then
+		if r.repetition then
 			
 			local optionals = get_rightmost_optionals(r)
+			
+			-- Remove the whole rule, or it would always conflict with its first subrule
+			optionals[r] = nil
 			
 			for opt,_ in pairs(optionals) do
 			
@@ -458,13 +396,6 @@ function validate_rule(r,g)
 						ret = false
 					end
 					
-					-- Special check for repetitions with separators (as the rightmost [ sep sequence ] is not a rule per se)
-					if opt.separator and follow[opt.separator] then
-						print('First/Follow conflict (in repetition) with separator in ' .. ( opt.name or rule_to_string(opt) ) .. ' and ' .. ( r[j].name or rule_to_string(r[j]) ) 
-							.. ' in ' .. (r.name or rule_to_string(r) ) )
-						ret = false
-					end
-					
 					if is_epsilon(r[j]) then
 						j = j+1
 						if j > #r then
@@ -477,7 +408,6 @@ function validate_rule(r,g)
 			end
 			
 		end
-		
 		
 	-- Choice
 	else

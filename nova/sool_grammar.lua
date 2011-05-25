@@ -7,22 +7,19 @@ Each rule table is a list of
 
 Every rule is a sequence by default. Following modifiers change the behavior:
 
-repetition = true: will try to parse the sequence as many times as possible. { sequence }
-separator = terminal/rule: (valid only with repetition) will parse the separator before each occurence other than the first. [ sequence { separator sequence } ]
-min = number: (valid only with repetition) will require at least min occurences of the sequence to succeed (default is 0)
-max = number: (valid only with repetition) will require at most max occurences of the sequence to succeed (default is infinite)
-
 optional = true: will not fail if the first token does not match. Will fail if the first token matches and a subsequent error occurs. [ sequence ]
+
+repetition = true: will try to parse the sequence as many times as possible. { sequence }. Note that a repetition makes implicitely the rule optional.
 
 choice = true: the list of subrules is not interpreted as a sequence but as a choice. One and only one subrule must and will match. ( subrule1 | subrule2 | subrule3 )
 
-The modifiers are combinable. The only useless (but still valid) combination is optional + repetition with min = 0.
+The modifiers are combinable. It is valid (but useless) to add optional to a repetition
 
 The 'name' field can be filled with a human readable description of the rule, used in verbose error messages
 
 The Nova thingy will read in this grammar, validate it as LL(1), and allow parsing a list of tokens using it, producing a concrete syntax tree (= "parse tree").
 
-Verifications do not support 
+Here I take the convention that "list" means comma separated with at least one element
 
 ]]
 
@@ -62,18 +59,29 @@ g.member_def = {
     'Name'
 }
 
+g.list_type = {
+    name = 'list of types',
+    'type',
+    { repetition = true, ',', 'type' }
+}
+
+g.arg_def = {
+    name = 'argument definition',
+    'type',
+    'Name'
+}
+
+g.list_arg_def = {
+    name = 'list of argument definitions',
+    'arg_def',
+    { repetition = true, ',', 'arg_def' }
+}
+
 g.method_def = {
     name = 'method definition',
     'meth',
-    {
-        optional = true,
-        'private'
-    },
-    {
-        repetition = true,
-        separator = ',',
-        'type'
-    },
+    { optional = true, 'private' },
+    { optional = true, 'list_type' },
     {
         choice = true,
         {
@@ -82,14 +90,7 @@ g.method_def = {
         },
         'Binop'
     },
-    '(',
-    {
-        repetition = true,
-        separator = ',',
-        'type',
-        'Name'
-    },
-    ')',
+    '(', { optional = true, 'list_arg_def' }, ')',
     'block',
     'end'
 }
@@ -137,16 +138,13 @@ g.statement = {
         { optional = true, 'else', 'block' },
         'end' },
     { name = 'for loop', 'for', 'list_name', 'in', 'list_exp', 'do', 'block', 'end' },
-    { { choice = true, 'method_call', 'atomic_exp' }, 'exp_tail' },
-    'assignment'
+    'unified_assignment_call'
 }
 
 g.list_name = {
     name = 'list of names',
-    repetition = true,
-    separator = ',',
-    min = 1,
-    'Name'
+    'Name',
+    { repetition = true, ',', 'Name' }
 }
 
 g.atomic_exp = {
@@ -155,13 +153,33 @@ g.atomic_exp = {
     'Number', 'String', 'nil', 'false', 'true', 'Symbol'
 }
 
+g.list_constructor = {
+    name = 'list constructor',
+    '/', { optional = true, 'list_operand' }, '\\'
+}
+
+g.array_constructor = {
+    name = 'array constructor',
+    '[', { optional = true, 'list_operand' }, ']'
+}
+
+g.vector_constructor = {
+    name = 'vector constructor',
+    '<', { optional = true, 'list_operand' }, '>'
+}
+
+g.object_constructor = {
+    name = 'object constructor',
+    'ClassName', { optional = true, 'call_arguments' }
+}
+
 g.constructor = {
     name = 'constructor',
     choice = true,
-    { '[', { optional = true, 'list_operand' }, ']' },
-    { '/', { optional = true, 'list_operand' }, '\\' },
-    { '<', { optional = true, 'list_operand' }, '>' },
-    { 'ClassName', { optional = true, 'call_arguments' } },
+    'list_constructor',
+    'array_constructor',
+    'vector_constructor',
+    'object_constructor'
 }
 
 g.method_call = {
@@ -170,19 +188,12 @@ g.method_call = {
     { optional = true, 'call_arguments' }
 }
 
-g.list_method_call = {
-    name = 'list of method calls',
-    repetition = true,
-    separator = ',',
-    min = 1,
-    'method_call'
-}
-
 g.call_arguments = {
     name = 'argument list',
-    '(',
-    { optional = true, 'list_exp' },
-    ')'
+    choice = true,
+    { '(', { optional = true, 'list_exp' }, ')' },
+    'atomic_exp',
+    'object_constructor'
 }
 
 g.basic_exp = {
@@ -220,18 +231,14 @@ g.operand = {
 
 g.list_operand = {
     name = 'list of operands',
-    repetition = true,
-    separator = ',',
-    min = 1,
-    'operand'
+    'operand',
+    { repetition = true, ',', 'operand' }
 }
 
 g.exp = {
     name = 'expression',
-    repetition = true,
-    separator = 'binop',
-    min = 1,
-    'operand'
+    'operand',
+    { repetition = true, 'binop', 'operand' }
 }
 
 g.binop = {
@@ -242,17 +249,24 @@ g.binop = {
 
 g.list_exp = {
     name = 'list of expressions',
-    repetition = true,
-    separator = ',',
-    min = 1,
-    'exp'
+    'exp',
+    { repetition = true, ',', 'exp' }
+}
+
+g.lvalue = {
+    name = 'left value',
+    'method_call',
+    'exp_tail'
 }
 
 g.unified_assignment_call = {
-    name = 'unified assignment and method call',
-    'list_method_call',
-    '=',
-    'list_exp'
+    name = 'unified assignment and lone method call',
+    'list_lvalue',
+    {
+        optional = true,
+        '=',
+        'list_exp'
+    }
 }
 
 require 'nova'
