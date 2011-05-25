@@ -337,7 +337,7 @@ function validate_rule(r,g)
 	if not r.choice then
 		
 		-- Need to check that for any optional subrule (or that contains an optional at the end),
-		-- its first set doesn't collide with the one of the following subrule
+		-- its first set doesn't collide with the one of the following subrules
 		
 		for i = 1,#r-1 do
 			

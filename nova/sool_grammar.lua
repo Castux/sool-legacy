@@ -168,6 +168,22 @@ g.vector_constructor = {
     '<', { optional = true, 'list_operand' }, '>'
 }
 
+g.table_pair = {
+    name = 'table constructor pair',
+    'operand', '=', 'operand'
+}
+
+g.list_table_pair = {
+    name = 'list of table constructor pairs',
+    'table_pair',
+    { repetition = true, ',', 'table_pair' }
+}
+
+g.table_constructor = {
+    name = 'table constructor',
+    '{', { optional = true, 'list_table_pair' }, '}'
+}
+
 g.object_constructor = {
     name = 'object constructor',
     'ClassName', { optional = true, 'call_arguments' }
@@ -179,6 +195,7 @@ g.constructor = {
     'list_constructor',
     'array_constructor',
     'vector_constructor',
+    'table_constructor',
     'object_constructor'
 }
 
@@ -193,7 +210,8 @@ g.call_arguments = {
     choice = true,
     { '(', { optional = true, 'list_exp' }, ')' },
     'atomic_exp',
-    'object_constructor'
+    'object_constructor',
+    'table_constructor'
 }
 
 g.basic_exp = {
