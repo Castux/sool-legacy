@@ -124,7 +124,7 @@ g.block = {
         optional = true,
         'break',
         'continue',
-        { 'return', { name = 'return values', optional = true, 'list_exp' } }
+        { 'return', { optional = true, 'list_exp' } }
     }
 }
 

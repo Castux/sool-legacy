@@ -534,7 +534,7 @@ function new_context(tokens,grammar)
 		if r.terminal then
 			
 			if not c.expect(r[1],node) then
-				return false,node
+				return false,node,true
 			else
 				return true,node
 			end
@@ -573,10 +573,10 @@ function new_context(tokens,grammar)
 					c.adderror('error','cannot parse ' .. rule_name(r) .. ', expected one of ' .. expected .. ', found \'' .. head[1] .. '\' instead', head[3])
 					
 					if r.name then
-						c.adderror('info','rule is: ' .. rule_to_string(r))
+						c.adderror('info', r.name .. ' := ' .. rule_to_string(r))
 					end
 					
-					return false,retnode()
+					return false,retnode(),true
 				end
 			
 			end
@@ -586,13 +586,19 @@ function new_context(tokens,grammar)
 				
 				for i,sub in ipairs(r) do
 					
-					local succ,subnode = c.parse_rule(sub)
+					local succ,subnode,info = c.parse_rule(sub)
 					
-					if succ then
-						table.insert(node,subnode)
-					else
-						c.adderror('info','in rule ' .. rule_name(r))
-						return false,retnode()
+					table.insert(node,subnode)
+					
+					if not succ then
+						if info then
+							-- Give context
+							c.adderror('info','in ' .. rule_name(r) .. ' started here:', node_start(node))
+							
+							return false,retnode(),not r.name
+						end
+						
+						return false,retnode(),info
 					end
 					
 				end
@@ -605,10 +611,10 @@ function new_context(tokens,grammar)
 					local first = first_set(sub)
 					
 					if first[head[1]] then
-						local succ,subnode = c.parse_rule(sub)
+						local succ,subnode,no_info = c.parse_rule(sub)
 						
 						if not succ then
-							return false,retnode()
+							return false,retnode(),no_info
 						else
 							node = subnode
 						end
@@ -630,4 +636,44 @@ function new_context(tokens,grammar)
 	
 	
 	return c
+end
+
+function node_start(n)
+	
+	if not n then return nil end
+	
+	if n.token then
+		return n[3]
+	else
+		return node_start(n[1])
+	end
+	
+end
+
+function node_end(n)
+	
+	if not n then return nil end
+	
+	if n.token then
+		return n[3]
+	else
+		return node_start(n[#n])
+	end
+	
+end
+
+-- Position range, with two full positions
+function range(from,to)
+	local fline,fcol = from.fline,from.fcol
+	local lline,lcol = to.lline,to.lcol
+	
+	-- from and to should really be in the same file
+	assert(from.file == to.file)
+	local file = from.file
+	
+	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol, file = file}
+end
+
+function node_pos(n)
+	return range(node_start(n),node_end(n))
 end
