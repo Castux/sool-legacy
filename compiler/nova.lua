@@ -565,15 +565,22 @@ function new_context(tokens,grammar)
 				
 				else
 					local expected = ""
+					local count = 0
 					for k,v in pairs(first) do
 						expected = expected .. "'" .. k .. "' "
+						count = count + 1
 					end
 					expected = expected:sub(1,#expected-1)
 					
-					c.adderror('error','cannot parse ' .. rule_name(r) .. ', expected one of ' .. expected .. ', found \'' .. head[1] .. '\' instead', head[3])
+					if count > 1 then
+						expected = 'one of ' .. expected
+					end
 					
+					c.adderror('error','failed to parse ' .. rule_name(r) .. ': expected ' .. expected .. ', found \'' .. head[1] .. '\' instead', head[3])
+					
+					-- Rule reminder if it has a name. Also, if it contains only one subrule, it's probably a "context" name, so put the inside rule instead
 					if r.name then
-						c.adderror('info', r.name .. ' := ' .. rule_to_string(r))
+						c.adderror('info', r.name .. ' := ' .. rule_to_string( #r == 1 and r[1] or r ))
 					end
 					
 					return false,retnode(),true
@@ -591,11 +598,11 @@ function new_context(tokens,grammar)
 					table.insert(node,subnode)
 					
 					if not succ then
-						if info then
+						if info and r.name then
 							-- Give context
 							c.adderror('info','in ' .. rule_name(r) .. ' started here:', node_start(node))
 							
-							return false,retnode(),not r.name
+							return false,retnode()
 						end
 						
 						return false,retnode(),info
@@ -645,7 +652,12 @@ function node_start(n)
 	if n.token then
 		return n[3]
 	else
-		return node_start(n[1])
+		-- Return the first non empty node
+		for i,v in ipairs(n) do
+			if #v > 0 then
+				return node_start(n[i])
+			end
+		end
 	end
 	
 end
@@ -657,7 +669,11 @@ function node_end(n)
 	if n.token then
 		return n[3]
 	else
-		return node_start(n[#n])
+		for i = #n,1,-1 do
+			if #n[i] > 0 then
+				return node_start(n[i])
+			end
+		end
 	end
 	
 end

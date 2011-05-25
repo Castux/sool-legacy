@@ -56,23 +56,21 @@ g.member_def = {
         'private'
     },
     'type',
-    'Name'
+    { name = 'argument name', 'Name' }
 }
 
 g.list_type = {
-    name = 'list of types',
     'type',
     { repetition = true, ',', 'type' }
 }
 
 g.arg_def = {
     name = 'argument definition',
-    'type',
-    'Name'
+    { name = 'argument type', 'type' },
+    { name = 'argument name', 'Name' }
 }
 
 g.list_arg_def = {
-    name = 'list of argument definitions',
     'arg_def',
     { repetition = true, ',', 'arg_def' }
 }
@@ -81,8 +79,9 @@ g.method_def = {
     name = 'method definition',
     'meth',
     { optional = true, 'private' },
-    { optional = true, 'list_type' },
+    { name = 'return types', optional = true, 'list_type' },
     {
+        name = 'method name',
         choice = true,
         {
             'Name',
@@ -100,14 +99,15 @@ g.type = {
     choice = true,
     'num', 'vec', 'sym',
     {
+        name = 'object type',
         { optional = true, 'own' },
         {
             choice = true,
             'str',
             'ClassName',
-            { '[', 'type', ']' },
-            { '/', 'type', '\\' },
-            { '{', 'type', ',', 'type', '}' }
+            { name = 'array type', '[', 'type', ']' },
+            { name = 'list type', '/', { name = 'subtype', 'type' }, '\\' },
+            { name = 'table type', '{', 'type', ',', 'type', '}' }
         }
     }
 }
@@ -120,11 +120,12 @@ g.block = {
         { optional = true, ';' }
     },
     {
+        name = 'final statement',
         choice = true,
         optional = true,
         'break',
         'continue',
-        { 'return', { optional = true, 'list_exp' } }
+        { name = 'return statement', 'return', { name = 'list of return values', optional = true, 'list_exp' } }
     }
 }
 
@@ -132,17 +133,16 @@ g.statement = {
     name = 'statement',
     choice = true,
     { name = 'do block', 'do', 'block', 'end' },
-    { name = 'while loop', 'while', 'exp', { name = 'local name for condition', optional = true, 'as', 'Name' }, 'do', 'block', 'end' },
-    { name = 'if construct', 'if', 'exp', { name = 'local name for condition', optional = true, 'as', 'Name' }, 'then', 'block',
+    { name = 'while loop', 'while', 'exp', { name = 'local name of condition', optional = true, 'as', 'Name' }, 'do', 'block', 'end' },
+    { name = 'if construct', 'if', 'exp', { name = 'local name of condition', optional = true, 'as', 'Name' }, 'then', 'block',
         { repetition = true, 'elseif', 'exp', 'then', 'block' },
         { optional = true, 'else', 'block' },
         'end' },
-    { name = 'for loop', 'for', 'list_name', 'in', 'list_exp', 'do', 'block', 'end' },
+    { name = 'for loop', 'for', { name = 'list of names', 'list_name' }, 'in', { name = 'list of expressions', 'list_exp' }, 'do', 'block', 'end' },
     'unified_assignment_call'
 }
 
 g.list_name = {
-    name = 'list of names',
     'Name',
     { repetition = true, ',', 'Name' }
 }
@@ -174,7 +174,6 @@ g.table_pair = {
 }
 
 g.list_table_pair = {
-    name = 'list of table constructor pairs',
     'table_pair',
     { repetition = true, ',', 'table_pair' }
 }
@@ -206,9 +205,9 @@ g.method_call = {
 }
 
 g.call_arguments = {
-    name = 'argument list',
+    name = 'argument',
     choice = true,
-    { '(', { optional = true, 'list_exp' }, ')' },
+    { name = 'parenthesised argument list', '(', { optional = true, 'list_exp' }, ')' },
     'atomic_exp',
     'object_constructor',
     'table_constructor'
@@ -230,8 +229,8 @@ g.exp_tail = {
     name = 'basic expression tail',
     repetition = true,
     choice = true,
-    { '.', 'method_call' },
-    { '[', 'exp', ']' }
+    { name = 'message passing', '.', 'method_call' },
+    { name = 'indexing', '[', 'exp', ']' }
 }
 
 g.unary_operation = {
@@ -248,7 +247,6 @@ g.operand = {
 }
 
 g.list_operand = {
-    name = 'list of operands',
     'operand',
     { repetition = true, ',', 'operand' }
 }
@@ -256,7 +254,7 @@ g.list_operand = {
 g.exp = {
     name = 'expression',
     'operand',
-    { repetition = true, 'binop', 'operand' }
+    { name = 'binary operation', repetition = true, 'binop', 'operand' }
 }
 
 g.binop = {
@@ -266,7 +264,6 @@ g.binop = {
 }
 
 g.list_exp = {
-    name = 'list of expressions',
     'exp',
     { repetition = true, ',', 'exp' }
 }
@@ -278,7 +275,6 @@ g.lvalue = {
 }
 
 g.list_lvalue = {
-    name = 'list of left values',
     'lvalue',
     { repetition = true, ',', 'lvalue' }
 }
