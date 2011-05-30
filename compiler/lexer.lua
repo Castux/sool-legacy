@@ -116,8 +116,7 @@ lex = function(file)
 		end
 		
 		-- Digraphs
-		local digr = {'<=','>=','==','~=','<<','>>','<%-','<~','~~',
-			'+=','%-=','*=','/=','%%=','^=','|=','xor!'}
+		local digr = {'<=','>=','==','~='}
 		local wasdigr = false
 		
 		for i,v in ipairs(digr) do
@@ -196,13 +195,6 @@ lex = function(file)
 			break
 		end
 		
-		-- Symbol
-		m = s:match("^@[_a-zA-Z0-9]+",index)
-		if m then
-			addtok(m,'Symbol')
-			break
-		end
-		
 		-- String
 		if s:sub(index,index) == "'" or s:sub(index,index) == '"' then
 			m = s:match("^''",index) or s:match('^""',index) or
@@ -210,7 +202,7 @@ lex = function(file)
 			if m then
 				-- form token
 				local tok = {
-					'String',
+					m:sub(1,1) == '"' and 'String' or 'Symbol',
 					m,
 					{
 						fline=line,
@@ -247,7 +239,7 @@ lex = function(file)
 				local err = {
 					"Lexer",
 					"error",
-					"unfinished string starting at",
+					"unfinished string/symbol starting at",
 					{
 						fline = line,
 						lline = line,
