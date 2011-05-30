@@ -53,7 +53,7 @@ g.member_def = {
     name = 'member definition',
     { optional = true, 'private' },
     'type',
-    { name = 'argument name', 'Name' }
+    { name = 'member name', 'Name' }
 }
 
 g.list_type = {
