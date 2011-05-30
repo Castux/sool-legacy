@@ -1,0 +1,272 @@
+I can haz purr-s treeh
+
+Nova works fairly well. The parsing, as foreseen, was quasi trivial to implement. Each rule produces a node, that is a list of subnodes, and a reference to the rule that produced it. An optional/repetition rule may produce an empty node. A terminal simply is a table with the token as unique element. To avoid the already too deep recursion, a choice rule resolves directly into the subrule it chose (no need for a list of one subrule).
+
+The parser should be correct. It's hard to get it wrong. The grammar validation may be correct. It's a bit harder but now it should handle most hairy cases. It first builds the set of possible initial tokens for every rule. For rules that have initial subrules that may produce an empty string (I call them "epsilon rules"), it carefully checks for the following subrules, until we find a non epsilon one. For the following rule:
+
+rule := [ 'a' ] { 'b' } c
+
+it correctly finds 'a' 'b' and c.
+
+Then it checks for First/First conflicts in choice-type rules. Easy. Then checks for First/Follow conflicts in sequences: if a subrule is optional/repetition, check it against every subrule that might follow (that is all the consecutive following epsilon rules, and the first non epsilon one):
+
+rule := [ 'a' ] [ sub1 ] { sub2 } sub3
+
+Here we must check if 'a' is the first sets of sub1, sub2 and sub3. The part where it gets funny is that it's not sufficient. For each subrule, you need to retrieve all its "rightmost sub optionals", as I call them in the source. Example:
+
+rule := [ 'a' [ 'b' ] ] subrule
+rule := [ 'a' [ 'b' ] [ 'c' ] ] subrule
+
+Here you need to check that neither 'a' 'b' or 'c' are in subrule's first set. And to get the "rightmost sub optionals", call it recursively on all the consecutive (from the end) epsilon subrules. So finally, for each subrule, check it and its rightmost sub optionals against every consecutive epsilon rule and the first non epsilon one. Wow.
+
+Then there's the repetition problem:
+
+rule := { 'a' [ subrule ] }
+
+If 'a' is also in subrule's first set, you won't know if you need to parse [ subrule ], or the next iteration of the whole rule. It is exactly like the sequence, but it "loops around". In fact now I realise that Nova does not check it for choices:
+
+rule : { 'a' | 'b' [ 'a' ] }
+
+will not produce an error. And the parser will always use the "default behavior" of parsing an optional if it finds it. I'll add that later.
+
+Also, I removed the additional parameters of the repetition (min, max, separator). It made the validation far too complex. Now you need to write it yourself in the grammar, but the validation is far more accurate (there might still be errors), and the parsing far more simple. The drawback is that the produced parse tree is very deep and full of stuff:
+
+class Root
+    
+    meth /vec\ lol([str] blah, num haha)
+        v.dothis(i)
+    end
+
+    Root r
+
+end
+
+produces:
+
+chunk: {
+| { "class definition" }: {
+| | { "class definition" }: {
+| | | class definition: {
+| | | | 'class': class
+| | | | 'ClassName': Root
+| | | | parent class: <empty>
+| | | | { "member definition" | "method definition" }: {
+| | | | | method definition: {
+| | | | | | 'meth': meth
+| | | | | | [ 'private' ]: <empty>
+| | | | | | return types: {
+| | | | | | | "type declaration" { ',' "type declaration" }: {
+| | | | | | | | object type: {
+| | | | | | | | | [ 'own' ]: <empty>
+| | | | | | | | | list type: {
+| | | | | | | | | | '/': /
+| | | | | | | | | | subtype: {
+| | | | | | | | | | | 'vec': vec
+| | | | | | | | | | }
+| | | | | | | | | | '\': \
+| | | | | | | | | }
+| | | | | | | | }
+| | | | | | | | { ',' "type declaration" }: <empty>
+| | | | | | | }
+| | | | | | }
+| | | | | | 'Name' [ '=' ]: {
+| | | | | | | 'Name': lol
+| | | | | | | [ '=' ]: <empty>
+| | | | | | }
+| | | | | | '(': (
+| | | | | | [ ( "argument definition" { ',' "argument definition" } ) ]: {
+| | | | | | | "argument definition" { ',' "argument definition" }: {
+| | | | | | | | argument definition: {
+| | | | | | | | | argument type: {
+| | | | | | | | | | object type: {
+| | | | | | | | | | | [ 'own' ]: <empty>
+| | | | | | | | | | | array type: {
+| | | | | | | | | | | | '[': [
+| | | | | | | | | | | | object type: {
+| | | | | | | | | | | | | [ 'own' ]: <empty>
+| | | | | | | | | | | | | 'str': str
+| | | | | | | | | | | | }
+| | | | | | | | | | | | ']': ]
+| | | | | | | | | | | }
+| | | | | | | | | | }
+| | | | | | | | | }
+| | | | | | | | | argument name: {
+| | | | | | | | | | 'Name': blah
+| | | | | | | | | }
+| | | | | | | | }
+| | | | | | | | { ',' "argument definition" }: {
+| | | | | | | | | { ',' "argument definition" }: {
+| | | | | | | | | | ',': ,
+| | | | | | | | | | argument definition: {
+| | | | | | | | | | | argument type: {
+| | | | | | | | | | | | 'num': num
+| | | | | | | | | | | }
+| | | | | | | | | | | argument name: {
+| | | | | | | | | | | | 'Name': haha
+| | | | | | | | | | | }
+| | | | | | | | | | }
+| | | | | | | | | }
+| | | | | | | | }
+| | | | | | | }
+| | | | | | }
+| | | | | | ')': )
+| | | | | | block: {
+| | | | | | | { "statement" [ ';' ] }: {
+| | | | | | | | { "statement" [ ';' ] }: {
+| | | | | | | | | unified assignment and lone method call: {
+| | | | | | | | | | "left value" { ',' "left value" }: {
+| | | | | | | | | | | left value: {
+| | | | | | | | | | | | method call: {
+| | | | | | | | | | | | | 'Name': v
+| | | | | | | | | | | | | [ "argument" ]: <empty>
+| | | | | | | | | | | | }
+| | | | | | | | | | | | basic expression tail: {
+| | | | | | | | | | | | | message passing: {
+| | | | | | | | | | | | | | '.': .
+| | | | | | | | | | | | | | method call: {
+| | | | | | | | | | | | | | | 'Name': dothis
+| | | | | | | | | | | | | | | [ "argument" ]: {
+| | | | | | | | | | | | | | | | parenthesised argument list: {
+| | | | | | | | | | | | | | | | | '(': (
+| | | | | | | | | | | | | | | | | [ ( "expression" { ',' "expression" } ) ]: {
+| | | | | | | | | | | | | | | | | | "expression" { ',' "expression" }: {
+| | | | | | | | | | | | | | | | | | | expression: {
+| | | | | | | | | | | | | | | | | | | | basic expression: {
+| | | | | | | | | | | | | | | | | | | | | method call: {
+| | | | | | | | | | | | | | | | | | | | | | 'Name': i
+| | | | | | | | | | | | | | | | | | | | | | [ "argument" ]: <empty>
+| | | | | | | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | | | | | | | basic expression tail: <empty>
+| | | | | | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | | | | | | binary operation: <empty>
+| | | | | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | | | | | { ',' "expression" }: <empty>
+| | | | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | | | ')': )
+| | | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | | }
+| | | | | | | | | | | | | | }
+| | | | | | | | | | | | | }
+| | | | | | | | | | | | }
+| | | | | | | | | | | }
+| | | | | | | | | | | { ',' "left value" }: <empty>
+| | | | | | | | | | }
+| | | | | | | | | | [ '=' ( "expression" { ',' "expression" } ) ]: <empty>
+| | | | | | | | | }
+| | | | | | | | | [ ';' ]: <empty>
+| | | | | | | | }
+| | | | | | | }
+| | | | | | | final statement: <empty>
+| | | | | | }
+| | | | | | 'end': end
+| | | | | }
+| | | | | member definition: {
+| | | | | | [ 'private' ]: <empty>
+| | | | | | object type: {
+| | | | | | | [ 'own' ]: <empty>
+| | | | | | | 'ClassName': Root
+| | | | | | }
+| | | | | | argument name: {
+| | | | | | | 'Name': r
+| | | | | | }
+| | | | | }
+| | | | }
+| | | | 'end': end
+| | | }
+| | }
+| }
+| 'EOF': EOF
+}
+
+Each node corresponds to a rule. If the rule has a name, the name is printed, otherwise the whole rule is formated. Every optional appears, but it can be <empty> (that way the analyzer will always see the sub rules at the same place). And repetitions add another level (note that the both the whole repetition and each occurence is printed with the same rule). Anyway, that's a lot of fun.
+
+Now the difficult part is providing nice error messages to the user. At the moment, two kinds of errors can occur.
+1. When parsing a rule, if the lookahead token is not in the rule's first set.
+
+for in list do
+
+will produce the following message:
+
+Parser error: example.sool:5: failed to parse list of names: expected 'Name', found 'in' instead
+        for in list do
+            ^^         
+Parser info: list of names := 'Name' { ',' 'Name' }
+Parser info: example.sool:5: in for loop started here:
+        for in list do
+        ^^^            
+Compiler info: parser reported 1 error
+
+That is, the list of possible tokens it expected, a reminder of the rule that it's trying to apply, and some context. The whole first set is given:
+
+for a,b,c in + do
+
+produces:
+
+Parser error: example.sool:5: failed to parse list of expressions: expected one of 'Number' 'String' '#' 'Symbol' 'not' 'false' 'true' '{' 'Name' '(' '[' 'ClassName' '-' '<' '/' 'nil', found '+' instead
+        for a,b,c in + do
+                     ^    
+Parser info: list of expressions := "expression" { ',' "expression" }
+Parser info: example.sool:5: in for loop started here:
+        for a,b,c in + do
+        ^^^               
+Compiler info: parser reported 1 error
+
+
+2. When matching a terminal, a slightly different message is given: there can be only one token, and there is no rule reminder:
+
+for a,b,c  list do
+
+produces:
+
+Parser error: example.sool:5: expected 'in', found 'Name' instead
+        for a,b,c  list do
+                   ^^^^    
+Parser info: example.sool:5: in for loop started here:
+        for a,b,c  list do
+        ^^^                
+Compiler info: parser reported 1 error
+
+In the grammar, you can add a "name" field to a rule. The idea is:
+
+1. make rule printing nicer when the actual rule fails. It says "failed to parse list of expressions" instead of "failed to parse "expression" { ',' "expression" }". If the rule has a name, the rule "content" is still reminded, but the first line is more clear. This is why the name should be "in context". The user does not care only about *what* should be parsed, but also *why*. The return types in a method definition, for instance, are concretely a "list of types". But the user wants to read "return types". So the rule is nameless:
+
+g.list_type = {
+    'type',
+    { repetition = true, ',', 'type' }
+}
+
+and its reference from the method definition encloses it into a named one:
+
+g.method_def = {
+    name = 'method definition',
+    'meth',
+    { optional = true, 'private' },
+    { name = 'return types', optional = true, 'list_type' },
+    etc...
+
+2. When an error occurs, it goes back up the call stack until it finds a rule with a name, to give context.
+
+By cleverly giving rules the proper names (and when needed, making "dummy" rules only to give contextual information), we end up having something relatively clear, and more important, not hard coded.
+
+The last user-friendly feature I want to add is reminding the last optionals that failed to parse before the current error. For instance, suppose I forget to put a type before a member name:
+
+class Root
+    foobar
+end
+
+generates at the moment:
+
+Parser error: example.sool:2: expected 'end', found 'Name' instead
+    foobar
+    ^^^^^^ 
+Parser info: example.sool:1: in class definition started here:
+class Root
+^^^^^      
+Compiler info: parser reported 1 error
+
+Indeed, it tried (and failed) to parse members and methods, but since these are optional (in a repetition), it didn't complain. The next token it wants is 'end'. But it would be nicer to provide the user with a reminder that before 'end', there are a few optional rules that would have worked too.
+
+[Discontinuity]
+
+Done! The parser now remembers every optional/repetition rule that it didn't apply, in order, and outputs the list when an error occurs. In the previous example, it would say: "expected 'end', method definition or member definition, found 'Name' instead". That's more user friendly. The list is simply emptied each time a token is consumed. That way we only have the last consecutive failed optionals.
