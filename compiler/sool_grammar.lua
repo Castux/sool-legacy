@@ -36,7 +36,7 @@ g.class_def = {
     'class',
     'ClassName',
     {
-        name = 'parent class',
+        name = 'parent class declaration',
         optional = true,
         ':', 'ClassName'
     },

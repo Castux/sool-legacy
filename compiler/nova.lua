@@ -502,6 +502,7 @@ function new_context(tokens,grammar)
 	c.grammar = grammar
 	
 	c.errors = {}
+	c.last_opt = {}		-- the last optional rules that didn't match. Clean it every time a token is consumed. That gives nicer error messages.
 	
 	-- Init
 	
@@ -515,12 +516,32 @@ function new_context(tokens,grammar)
 	
 	function c.consume()
 		c.current = c.current + 1
+		
+		-- Hey, success, forget the last optionals
+		c.last_opt = {}
 	end
 	
 	function c.peek()
 		return c.tokens[c.current]
 	end
-
+	
+	function c.format_opt()
+		
+		local str = ""
+		
+		for i,opt in ipairs(c.last_opt) do
+			if i == #c.last_opt then
+				str = str .. ' or '
+			else
+				str = str .. ', '
+			end
+			
+			str = str .. rule_name(opt)
+		end
+		
+		return str
+	end
+	
 	function c.expect(tok,node)
 		
 		local head = c.peek()
@@ -530,7 +551,10 @@ function new_context(tokens,grammar)
 			c.consume()
 			return true
 		else
-			c.adderror('error','expected \'' .. tok .. '\', found \'' .. head[1] .. '\' instead', head[3])
+			
+			local str = '\'' .. tok .. '\'' .. c.format_opt()
+			
+			c.adderror('error','expected ' .. str .. ', found \'' .. head[1] .. '\' instead', head[3])
 			return false
 		end
 	end
@@ -587,6 +611,18 @@ function new_context(tokens,grammar)
 				
 				-- It's ok, return success and the node how it is now (empty for optional, with the already parsed things for repetition)
 				if is_epsilon(r) then
+					
+					-- Remember me
+					if r.choice then
+						for i,sub in ipairs(r) do
+							table.insert(c.last_opt,sub)
+						end
+					elseif not r.name and r[1] then
+						table.insert(c.last_opt,r[1])
+					else
+						table.insert(c.last_opt,r)
+					end
+					
 					return true,retnode()
 				
 				else
