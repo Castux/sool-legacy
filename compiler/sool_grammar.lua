@@ -93,7 +93,7 @@ g.method_def = {
 
 g.type = {
     name = 'type declaration',
-    { optional = true, 'own' },
+    { optional = true, '~' },
     {
         name = 'type',
         choice = true,
