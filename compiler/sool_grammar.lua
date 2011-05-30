@@ -93,19 +93,18 @@ g.method_def = {
 
 g.type = {
     name = 'type declaration',
-    choice = true,
-    'num', 'vec', 'sym',
+    { optional = true, 'own' },
     {
-        name = 'object type',
-        { optional = true, 'own' },
-        {
-            choice = true,
-            'str',
-            'ClassName',
-            { name = 'array type', '[', 'type', ']' },
-            { name = 'list type', '/', { name = 'subtype', 'type' }, '\\' },
-            { name = 'table type', '{', 'type', ',', 'type', '}' }
-        }
+        name = 'type',
+        choice = true,
+        'num',
+        'vec',
+        'sym',
+        'str',
+        'ClassName',
+        { name = 'array type', '[', 'type', ']' },
+        { name = 'list type', '/', { name = 'subtype', 'type' }, '\\' },
+        { name = 'table type', '{', 'type', ',', 'type', '}' }
     }
 }
 
