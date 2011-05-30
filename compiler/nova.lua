@@ -114,8 +114,10 @@ function validate_grammar(g)
 	local ret = true
 	
 	for k,rule in pairs(g) do
-		if not validate_rule(rule,g) then
-			ret = false
+		if k ~= 'nova_entry' then
+			if not validate_rule(rule,g) then
+				ret = false
+			end
 		end
 	end
 	
@@ -279,6 +281,8 @@ function rule_name(r)
 	
 end
 
+-- Get all optionals that can end the rule, at any level
+
 function get_rightmost_optionals(r)
 	
 	local function rec(r,set)
@@ -334,6 +338,47 @@ function get_rightmost_optionals(r)
 	return res
 end
 
+-- Get all the optionals from the left (start at 'start'), and the first non optional
+
+function get_left_consecutive_optionals(r,start)
+	
+	local function do_it(r,start,set)
+		
+		if r.terminal then
+			return
+		end
+		
+		for i = start,#r do
+			local v = r[i]
+			
+			if v.optional or v.repetition then
+				set[v] = true
+			end
+			
+			if not is_epsilon(v) then
+				set[v] = true
+				break
+			end
+		end
+		
+	end
+	
+	local set = {}
+	
+	-- For choices, we need to do it for each subrule
+	if r.choice then
+		for i,v in ipairs(r) do
+			do_it(v,start,set)
+		end
+	
+	-- For sequences, we apply it directly
+	else
+		do_it(r,start,set)
+	end
+	
+	return set
+end
+
 function validate_rule(r,g)
 	
 	-- Terminal
@@ -353,74 +398,27 @@ function validate_rule(r,g)
 	-- Sequence
 	if not r.choice then
 		
-		-- Need to check that for any optional subrule (or that contains an optional at the end),
-		-- its first set doesn't collide with the one of the following subrules
+		-- Need to check that for any optional subrule (or that contains an optional at the end)
+		-- that its first set doesn't collide with the one of the following subrules
 		
 		for i = 1,#r-1 do
 			
-			local optionals = get_rightmost_optionals(r[i])
+			local lefts = get_rightmost_optionals(r[i])
+			local rights = get_left_consecutive_optionals(r,i+1)
 			
-			for opt,_ in pairs(optionals) do
-			
-				local j = i+1
+			for left,_ in pairs(lefts) do
+				for right,_ in pairs(rights) do
 				
-				while true do
-					local inter = set_intersection(first_set(opt),first_set(r[j]))
+					local inter = set_intersection(first_set(left),first_set(right))
 					
 					if not set_empty(inter) then
-						print('First/Follow conflict with ' .. rule_name(opt) .. ' and ' .. rule_name(r[j])
+						print('First/Follow conflict with ' .. rule_name(left) .. ' and ' .. rule_name(right)
 							.. ' in ' .. rule_name(r) )
 						print('Shared tokens:')
 						set_print(inter)
 						ret = false
 					end
 					
-					-- Go through all following epsilons
-					if is_epsilon(r[j]) then
-						j = j+1
-						if j > #r then
-							break
-						end
-					else
-						break
-					end
-				end
-			end
-			
-		end
-		
-		-- And if it's a repetition, check also the rightmost optionals with the first and possibly followings (loop around)
-		
-		if r.repetition then
-			
-			local optionals = get_rightmost_optionals(r)
-			
-			-- Remove the whole rule, or it would always conflict with its first subrule
-			optionals[r] = nil
-			
-			for opt,_ in pairs(optionals) do
-			
-				local j = 1
-				
-				while true do
-					local inter = set_intersection(first_set(opt),first_set(r[j]))
-					
-					if not set_empty(inter) then
-						print('First/Follow conflict (in repetition) with ' .. rule_name(opt) .. ' and ' .. rule_name(r[j])
-							.. ' in ' .. rule_name(r) )
-						print('Shared tokens:')
-						set_print(inter)
-						ret = false
-					end
-					
-					if is_epsilon(r[j]) then
-						j = j+1
-						if j > #r then
-							break
-						end
-					else
-						break
-					end
 				end
 			end
 			
@@ -439,6 +437,34 @@ function validate_rule(r,g)
 					print('First/First conflict with ' .. rule_name(r[i]) .. ' and ' .. rule_name(r[j])
 						.. ' in ' .. rule_name(r) )
 					print('Common tokens: ')
+					set_print(inter)
+					ret = false
+				end
+			end
+		end
+		
+	end
+	
+	-- And if it's a repetition, check also the rightmost optionals with the first and possibly followings (loop around)
+		
+	if r.repetition then
+		
+		local lefts = get_rightmost_optionals(r)
+		
+		-- Remove the whole rule, or it would always conflict with its first subrule
+		lefts[r] = nil
+		
+		local rights = get_left_consecutive_optionals(r,1)
+		
+		for left,_ in pairs(lefts) do
+			for right,_ in pairs(rights) do
+				
+				local inter = set_intersection(first_set(left),first_set(right))
+				
+				if not set_empty(inter) then
+					print('First/Follow conflict (in repetition) with ' .. rule_name(left) .. ' and ' .. rule_name(right)
+						.. ' in ' .. rule_name(r) )
+					print('Shared tokens:')
 					set_print(inter)
 					ret = false
 				end
