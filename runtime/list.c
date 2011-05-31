@@ -4,7 +4,7 @@ struct sool_list_node
 {
 	struct sool_list_node *next;
 	struct sool_list_node *prev;
-	char data[];
+	char *data;
 };
 
 struct sool_list

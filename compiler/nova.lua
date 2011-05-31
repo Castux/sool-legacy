@@ -571,7 +571,7 @@ function new_context(tokens,grammar)
 		return c.parse_rule(c.grammar.nova_entry)
 	end
 	
-	-- Returns true and the node if success, returns false otherwise
+	-- Returns: success (bool), node, context requested (bool)
 	function c.parse_rule(r)
 		
 		local nodes = {}
@@ -680,10 +680,10 @@ function new_context(tokens,grammar)
 					local first = first_set(sub)
 					
 					if first[head[1]] then
-						local succ,subnode,no_info = c.parse_rule(sub)
+						local succ,subnode,info = c.parse_rule(sub)
 						
 						if not succ then
-							return false,retnode(),no_info
+							return false,retnode(),info
 						else
 							node = subnode
 						end

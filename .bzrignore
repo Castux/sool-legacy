@@ -1,3 +1,4 @@
 *.sool
 test.lua
 mark2/.sconsign.dblite
+.sconsign.dblite
