@@ -4,6 +4,8 @@
 #include "array.h"
 #include "error.h"
 
+#define rawindex(a,i) a->data[i-1]
+
 sool_array *sool_array_new(sool_destructor destructor)
 {
 	sool_array *a = malloc(sizeof(sool_array));
@@ -41,8 +43,14 @@ void *sool_array_get(sool_array *a, uint32 index)
 	if( index > a->logical_count )
 		return NULL;
 	
-	return a->data[index-1];
+	return rawindex(a,index);
 }
+
+uint32 sool_array_size(sool_array *a)
+{
+	return a->logical_count;
+}
+
 
 void sool_array_set(sool_array *a, uint32 index, void *elem)
 {
@@ -53,13 +61,13 @@ void sool_array_set(sool_array *a, uint32 index, void *elem)
 	{
 		if( index > a->allocated_count )
 			sool_array_reserve(a,index);
-		else
-			a->logical_count = index;
+	
+		a->logical_count = index;
 	}
 
 	/* Index is in 1..logical_count */
 	
-	cell = &a->data[index-1];
+	cell = &rawindex(a,index);
 	
 	/* Release previous element if we own it */
 	if( a->destructor != NULL )
@@ -92,8 +100,8 @@ void sool_array_insert(sool_array *a, uint32 index, void *elem)
 	if( a->logical_count == a->allocated_count )
 		sool_array_reserve(a,a->allocated_count*2);
 	
-	for( i = a->logical_count-1 ; i > index-1 ; i-- )
-		a->data[i+1] = a->data[i];
+	for( i = a->logical_count ; i >= index ; i-- )
+		rawindex(a,i+1) = rawindex(a,i);
 	
 	a->data[index-1] = elem;
 	a->logical_count++;
@@ -109,9 +117,10 @@ void sool_array_remove(sool_array *a, uint32 index)
 	if( a->destructor != NULL )
 		a->destructor( a->data[index-1] );
 	
-	for( i = index-1; i < a->logical_count-1 ; i++ )
-		a->data[i] = a->data[i+1];
+	for( i = index; i <= a->logical_count-1 ; i++ )
+		rawindex(a,i) = rawindex(a,i+1);
 	
+	rawindex(a,a->logical_count) = NULL;
 	a->logical_count--;
 }
 
