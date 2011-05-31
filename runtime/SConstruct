@@ -3,5 +3,4 @@ sources = Glob('*.c')
 env = Environment()
 
 env.Append(CCFLAGS = '-Wall -ansi -pedantic -Werror')
-
-env.Library( 'soolrt', sources )
+env.Program( 'soolrt', sources )

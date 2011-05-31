@@ -1,7 +1,7 @@
 #ifndef ARRAY_H
 #define ARRAY_H
 
-#include "types.h"
+#include "defines.h"
 
 typedef struct
 {
