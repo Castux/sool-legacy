@@ -166,7 +166,7 @@ g.vector_constructor = {
 
 g.table_pair = {
     name = 'table constructor pair',
-    'operand', '=', 'operand'
+    'operand', ':', 'operand'
 }
 
 g.list_table_pair = {
