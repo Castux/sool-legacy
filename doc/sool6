@@ -1,0 +1,39 @@
+What next?
+
+Now that we have a concrete syntax tree, we need to analyze it to build the compiler's internal representation of the program. As a whole. We need to pass from tree-organised text to a convoluted and non trivial network of objects.
+
+In high level there will be classes, types, methods, selectors. At lower level, some abstract representation of the code itself (which thanks to our design, should be reduced to method calls, assignments and control structures).
+
+Now the point is not to have a one for one correspondance with the parse tree. That would be rather useless. For some elements, it will be rather close (as a parsed chunk is a list of classes, the top level semantic element is also just a list of class objects). For others, quite far. A type declaration "[{num,vec}]", instead of being a tree that includes tokens, will be a object with a member "subtype" that points to another type object, which will have "key type" and "value type", themselves references to type objects, for instance.
+
+And type objects, instead of being dead lumps of data, are dynamic entities who can, for instance, say whether they answer to a certain selector, or if they have a similarly named method. Or if they are compatible with another type for assignment (and which method to call for coercion).
+
+Likewise, while building a "class" object, we will inherit from the parent (take references to all parent members and methods), validate name collisions, index methods by their selectors, and why not, build a proto virtual table. When analyzing a binary operation, we'll convert it to a "method call" object. When building blocks of code, we'll give them a list of locals.
+
+We abstract the syntax to keep only the semantic. Remove the form, keep the meaning. Of course, for fancy error message making, we'll keep lots of references to the parse tree. Since the user only sees his own code, you have to show him whence originated the fancy internal stuff you're talking about.
+
+In my previous implementation, concrete syntax tree and abstract representation were happily mixed together. The "analyzer" simply traversed the former, validating it, adding some high level information to it, thus transforming it into the latter. It did save memory for sure, but also made the whole thing very confusing. Very spaghetti. It replaced on the fly type nodes with type objects, used lists also as hashes for multiple indexing, etc. Of course it's only my fault if I wrote crappy code, but that's very easy to do in Lua, where everything is allowed.
+I ended up with a somewhat complete analyzer, but it was very difficult to add anything else to it. It broke very easily. Hopefully my next try will be more robust and clear.
+
+Unified treatment of built-in classes and user-provided ones: the former are hard written as Lua data/code, while the latter are dynamically built from the user's source. Internized types and selectors. Stuff like that. It's all pretty in my head. The only thing left to do is to actually implement it. Without shooting myself on the foot every three lines of code.
+
+The next next step
+
+I've started, for fun, to write parts of the runtime. The list and array types for instance. However, they do rely quite heavily on the core central first most important runtime awesome feature: memory management. And as that is not fixed yet, that can't go very far.
+I'm also thinking about how much can I (should I) write in C as "runtime library", and how much will end up being LLVM assembly. For instance, allocating an object. You need to know its size to pass to malloc, but not much more. That could be a direct LLVM instruction. But then if you start to think that we'll also need a tombstone, and that tombstones will have reference counting, and that we'll probably want to keep tombstones together in memory (for caching efficiency or something), it gets a bit hairier. And after that you need to initialize its members, and call suballocators, and deal with variables' ownership, etc. Likewize  message passing will be simple direct calls only when we know the type of the reciever. For dynamic typing, there is a whole hash table mechanism to implement. Doing all that in LLVM assembly might be a pain.
+
+When you think about it, the whole Lua runtime is in C. You can write any single Lua instruction as C code using the API. But then again, Lua is meant to be an interpreted language. Every object is a dynamic entity residing in a Lua context. But then again *again*, Objective-C's runtime is C too. All fancy object management is resolved by the compiler as calls to libobjc. Granted, some of these are notoriously slow, but it still works.
+
+Keep it simple, stupid. If I can do most of it in C, I'd rather do that. The LLVM assembly will be kept to a minimum (operations on numbers and vectors, for instance). All the hard stuff will be calls to the sool runtime library. I'll make it work first, I'll optimize later.
+
+Plus, I can also compile the runtime to LLVM bytecode, which allows for fancy link-time optimisation, and JIT execution. Very simple API calls to the runtime might get inlined and optimised. Or something.
+
+Anywyay, that's gonna be lots of fun.
+
+Version numbering
+
+I thought of a fun codenaming for versions. As I mentioned earlier, the first ever release will be "sool zero". It will be experimental (not as in "super buggy" but as in "every feature is an experiment"). After testing sool zero in a few real life situations, I will more or less settle on the features I like and find most useful, possibly removing some, and fixing others. If necessary, there will be big redesigns (hence the necessary "experimental" version). The version number will be classic: <major>.<minor>.<revision>.
+Major version means a change in the language and/or the standard library. Core concepts. Minor is an improvement that does not modify the language itself. And revision is meant for bugfixes.
+As for codenames, "sool" could be the pun on "Sol", and starting from the center (point "zero") go up through the solar system. Version 1 will be "Mercury". Then Venus, Earth, etc. I can even use the funky astrology symbols: ☿♀♁♂♃♄♅♆♇. Of course, that starts failing after version 9 (Pluto), but hey, we're definitely not there yet. If it becomes so awesome that a version 10 has to be done, we can think of a new naming scheme then.
+
+Anyway, carts before horses, etc.
