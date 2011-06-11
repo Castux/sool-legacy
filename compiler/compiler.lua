@@ -1,6 +1,6 @@
 require 'lexer'
 require 'parser'
---require 'analyzer'
+require 'Context'
 
 --[[
 File structure
@@ -223,16 +223,13 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
-	do return end
+	-- Gather all class nodes into one list
 	
-	-- Merge lists of classes into single chunk
+	local class_nodes = {}
 	
-	local chunk = chunks[1]
-	
-	for i = 2,#chunks do
-		for _,class in ipairs(chunks[i].classes) do
-			table.insert(chunk.classes,class)
-			class.parent = chunk
+	for i,chunk in ipairs(chunks) do
+		for j,class_node in ipairs(chunk[1]) do
+			table.insert(class_nodes,class_node[1])
 		end
 	end
 	
@@ -240,7 +237,9 @@ function compile(list)
 	
 	-- Launch analysis
 	
-	local errors = validate(chunk)
+	local context = Context()
+	
+	local errors = context:validate(class_nodes)
 	
 	local errcount,warncount = 0,0
 	for i,err in ipairs(errors) do
@@ -257,7 +256,7 @@ function compile(list)
 		mess = 'analyzer reported ' .. errcount .. ' error' .. (errcount ~= 1 and 's' or '') ..
 		' and ' .. warncount .. ' warning' .. (warncount ~= 1 and 's' or '')
 	else
-		mess = 'chunk passed validation, for a total of ' .. #chunk.classes .. ' classes'
+		mess = 'chunk passed validation, for a total of ' .. #context.classes .. ' classes'
 	end
 	
 	print_error {'Compiler','info',mess}
