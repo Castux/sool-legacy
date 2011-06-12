@@ -41,8 +41,7 @@ function Context:validate(class_nodes)
 		
 		assert(node.rule.name == 'class definition')
 		
-		local c = Class()
-		c.node = node
+		local c = Class(self,node)
 		c.name = node[2][1][2]
 		
 		-- Check name collision
@@ -101,6 +100,12 @@ function Context:validate(class_nodes)
 			
 		end
 		
+	end
+	
+	-- 3. Build classes' interfaces
+	
+	for i,c in ipairs(self.classes) do
+		c:validate_interface()
 	end
 	
 	return self.errors
