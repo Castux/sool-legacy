@@ -102,9 +102,9 @@ g.type = {
 		'sym',
 		'str',
 		'ClassName',
-		{ name = 'array type', '[', 'type', ']' },
+		{ name = 'array type', '[', { name = 'subtype', 'type' }, ']' },
 		{ name = 'list type', '/', { name = 'subtype', 'type' }, '\\' },
-		{ name = 'table type', '{', 'type', ',', 'type', '}' }
+		{ name = 'table type', '{', { name = 'key subtype', 'type' }, ',', { name = 'value subtype', 'type' }, '}' }
 	}
 }
 

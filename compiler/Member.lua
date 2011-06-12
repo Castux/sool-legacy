@@ -1,5 +1,7 @@
 require 'class'
 
+require 'Type'
+
 Member = class()
 
 function Member:init(context,node)
@@ -7,13 +9,12 @@ function Member:init(context,node)
 	-- Attributes
 	
 	self.private = false
-	self.weak = false
 	self.type = nil
 	self.name = ''
 	
 	-- Original class
 	
-	self.class = nil
+	self.klass = nil
 	
 	-- Context
 	
@@ -27,6 +28,8 @@ function Member:validate()
 	
 	local n = self.node
 	
+	assert(n.rule.name == 'member definition')
+	
 	-- Privacity
 	
 	if #n[1] > 0 then
@@ -34,6 +37,9 @@ function Member:validate()
 	end
 	
 	-- Type
+	
+	self.type = Type()
+	self.type:validate(self.context,n[2])
 	
 	-- Name
 	

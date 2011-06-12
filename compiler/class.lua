@@ -71,7 +71,7 @@ function Class:validate_interface()
 		if n.rule.name == 'member definition' then
 			
 			local mem = Member(self.context,n)
-			mem.class = self
+			mem.klass = self
 			mem:validate()
 			
 			-- Check name collision
@@ -80,10 +80,10 @@ function Class:validate_interface()
 			if other then
 				self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
 				
-				if other.class == self then
+				if other.klass == self then
 					self.context:addinfo('here:',other.node[3][1][1][3])
 				else
-					self.context:addinfo('in parent class ' .. other.class.name .. ':', other.node[3][1][1][3])
+					self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
 				end
 			else
 				-- Add to members table
@@ -98,7 +98,11 @@ function Class:validate_interface()
 		end
 	end
 	
+	-- 4. TODO: Add all methods
+	
 	-- Memo
 	
 	self.valid_interface = true
 end
+
+dofile 'builtin.lua'

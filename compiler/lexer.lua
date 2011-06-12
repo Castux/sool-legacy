@@ -170,7 +170,7 @@ lex = function(file)
 			local res = {'class', 'meth', 'end', 'num', 'vec', 'str',
 			'return', 'do', 'if', 'then', 'elseif', 'else', 'while',
 			'for', 'in', 'break', 'continue', 'nil', 'false', 'true',
-			'private', 'op', 'and', 'or', 'xor', 'not', 'as'}
+			'private', 'op', 'and', 'or', 'xor', 'not', 'as', 'sym'}
 			
 			local wasres = false
 			for i,v in ipairs(res) do
