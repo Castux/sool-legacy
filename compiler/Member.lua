@@ -39,10 +39,13 @@ function Member:validate()
 	-- Type
 	
 	self.type = Type()
-	self.type:validate(self.context,n[2])
+	if not self.type:validate(self.context,n[2]) then
+		return false
+	end
 	
 	-- Name
 	
 	self.name = n[3][1][1][2]
 	
+	return true	
 end

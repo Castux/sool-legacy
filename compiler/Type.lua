@@ -1,5 +1,7 @@
 require 'class'
 
+require 'BuiltInClass'
+
 -- A type is meant to qualify variables: it combines the class of the 
 -- pointed objects, and the ownership.
 
@@ -78,17 +80,55 @@ function Type:validate(context,node)
 	elseif node[2].rule.name == 'array type' then
 		
 		local subtype = Type()
-		subtype:validate(context,node[2][2][1])
+		if not subtype:validate(context,node[2][2][1]) then
+			return false
+		end
 		
-		
+		single.klass = Array(subtype)
 		
 	elseif node[2].rule.name == 'list type' then
+
+		local subtype = Type()
+		if not subtype:validate(context,node[2][2][1]) then
+			return false
+		end
+		
+		single.klass = List(subtype)
+
 	elseif node[2].rule.name == 'table type' then
+
+		local ktype = Type()
+		if not ktype:validate(context,node[2][2][1]) then
+			return false
+		end
+
+		local vtype = Type()
+		if not vtype:validate(context,node[2][4][1]) then
+			return false
+		end
+		
+		single.klass = Table(ktype,vtype)
 	
+	else
+		error('Invalid type declaration node: ' .. t)
 	end
 	
+	-- Validity of ownership
 	
+	if single.weak and (
+		single.klass == Number or
+		single.klass == Vector or
+		single.klass == Symbol ) then
+		
+		context:adderror('cannot set ownership information with always-copied type ' .. single.klass.name,node[1][1][1][3])
+		return false
+	end
 	
+	-- Build Type wrapper for SingleType
+	
+	table.insert(self.types,single)
+	
+	return true
 end
 
 function Type:validate_list(context,node)

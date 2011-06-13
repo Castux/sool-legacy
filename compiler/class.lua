@@ -17,10 +17,6 @@ function Class:init(context,node)
 	self.methods = {}	-- List of method objects, including inherited ones
 	self.selectors = {}	-- Table of methods indexed by selectors
 	
-	-- Attributes
-	
-	self.builtin = false
-	
 	-- Reference to context
 	
 	self.context = context
@@ -72,29 +68,30 @@ function Class:validate_interface()
 			
 			local mem = Member(self.context,n)
 			mem.klass = self
-			mem:validate()
 			
-			-- Check name collision
-			
-			local other = self.members[mem.name]
-			if other then
-				self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
+			if mem:validate() then
 				
-				if other.klass == self then
-					self.context:addinfo('here:',other.node[3][1][1][3])
+				-- Check name collision
+				
+				local other = self.members[mem.name]
+				if other then
+					self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
+					
+					if other.klass == self then
+						self.context:addinfo('here:',other.node[3][1][1][3])
+					else
+						self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
+					end
 				else
-					self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
+					-- Add to members table
+					
+					table.insert(self.members,mem)
+					self.members[mem.name] = mem
+					
+					-- TODO: Add automatic setter and getter methods
+					
 				end
-			else
-				-- Add to members table
-				
-				table.insert(self.members,mem)
-				self.members[mem.name] = mem
-				
-				-- TODO: Add automatic setter and getter methods
-				
 			end
-			
 		end
 	end
 	
@@ -104,5 +101,3 @@ function Class:validate_interface()
 	
 	self.valid_interface = true
 end
-
-dofile 'builtin.lua'
