@@ -56,7 +56,13 @@ function Class:validate_interface()
 			self.members[mem.name] = mem
 		end
 		
-		-- TODO: Methods
+		-- Methods
+
+		for i,meth in ipairs(self.parent.methods) do
+			table.insert(self.methods,meth)
+			self.methods[meth.sel] = meth
+		end
+
 		
 	end
 	
@@ -77,6 +83,18 @@ function Class:validate_interface()
 	end
 	
 	-- 4. TODO: Add all methods
+	
+	-- DEBUG
+	
+	print(self.name)
+	for i,v in ipairs(self.members) do
+		print('',v.type:signature(),v.name)
+	end
+
+	for i,v in ipairs(self.methods) do
+		print('',v.sig)
+	end
+	
 	
 	-- Memo
 	
