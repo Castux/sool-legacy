@@ -8,7 +8,7 @@ require 'BuiltInClass'
 -- It can have a single value (for members, arguments, locals)
 -- or multiple values (for method argument lists, return values, and multiple assignments)
 
-SingleType = class()
+local SingleType = class()
 
 function SingleType:init()
 	
@@ -18,9 +18,42 @@ function SingleType:init()
 	return self
 end
 
+function SingleType:signature()
+	return (self.weak and '~' or '') .. self.klass.name
+end
+
+-- Global shortcut builders, take in a class object and make a type
+
+Weak = function(c)
+	
+	assert( c:isa(Class) or c:isa(BuiltInClass) )
+	
+	assert( c ~= Number and c ~= Vector and c ~= Symbol )
+	
+	local single = SingleType()
+	
+	single.weak = true
+	single.klass = c
+	
+	return Type(single)
+end
+
+Strong = function(c)
+	
+	assert( c:isa(Class) or c:isa(BuiltInClass) )
+	
+	local single = SingleType()
+	
+	single.weak = false
+	single.klass = c
+	
+	return Type(single)
+end
+
+
 Type = class()
 
-function Type:init()
+function Type:init(...)
 	
 	-- Content
 	
@@ -30,6 +63,25 @@ function Type:init()
 	
 	self.node = nil
 	self.context = nil
+	
+	-- Multiple input
+	
+	local args = {...}
+	
+	for i,v in ipairs(args) do
+	
+		if v:isa(SingleType) then
+			table.insert(self.types,v)
+		elseif v:isa(Type) then
+			for j,w in ipairs(v.types) do
+				table.insert(self.types,w)
+			end
+		else
+			error('Type was given a non type')
+		end
+	
+	end	
+	
 	
 	return self
 end
@@ -131,8 +183,18 @@ function Type:validate(context,node)
 	return true
 end
 
-function Type:validate_list(context,node)
+function Type:validate_list(context,nodes)
 	
 	
+end
+
+function Type:signature()
 	
+	local t = {}
+	
+	for i,v in ipairs(self.types) do
+		t[i] = v:signature()
+	end
+	
+	return table.concat(t,',')
 end

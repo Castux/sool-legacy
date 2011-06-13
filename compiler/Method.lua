@@ -1,5 +1,7 @@
 require 'class'
 
+require 'Selector'
+
 Method = class()
 
 function Method:init(name,rtype,atype,builtin)
@@ -41,5 +43,5 @@ function Method:update_selector()
 end
 
 function Method:update_signature()
-	self.sig = self.rtype.sig .. ':' .. self.sel.sig
+	self.sig = self.rtype:signature() .. ':' .. self.sel.sig
 end

@@ -1,5 +1,6 @@
 require 'class'
-require 'types'
+
+require 'Type'
 
 local intern = {}
 
@@ -19,7 +20,7 @@ function Selector:init(name,atype)
 	
 	self.atype = atype
 	
-	self.asig = self.atype.sig
+	self.asig = self.atype:signature()
 	
 	self.sig = self.name .. ':' .. self.asig
 	

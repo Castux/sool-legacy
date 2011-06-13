@@ -1,6 +1,7 @@
 require 'class'
 
 require 'Member'
+require 'Method'
 
 Class = class()
 
@@ -70,27 +71,7 @@ function Class:validate_interface()
 			mem.klass = self
 			
 			if mem:validate() then
-				
-				-- Check name collision
-				
-				local other = self.members[mem.name]
-				if other then
-					self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
-					
-					if other.klass == self then
-						self.context:addinfo('here:',other.node[3][1][1][3])
-					else
-						self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
-					end
-				else
-					-- Add to members table
-					
-					table.insert(self.members,mem)
-					self.members[mem.name] = mem
-					
-					-- TODO: Add automatic setter and getter methods
-					
-				end
+				self:add_member(mem)
 			end
 		end
 	end
@@ -100,4 +81,53 @@ function Class:validate_interface()
 	-- Memo
 	
 	self.valid_interface = true
+end
+
+function Class:add_member(mem)
+	
+	-- Check name collision
+	
+	local other = self.members[mem.name]
+	if other then
+		self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
+		
+		if other.klass == self then
+			self.context:addinfo('here:',other.node[3][1][1][3])
+		else
+			self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
+		end
+	else
+		-- Add to members table
+		
+		table.insert(self.members,mem)
+		self.members[mem.name] = mem
+		
+		-- Add automatic setter methods
+		
+		local void = Type()
+		
+		local setter = Method(mem.name .. '=',void,mem.type)
+		setter.builtin = true
+		setter.private = mem.private
+		
+		self:add_method(setter)
+		
+		-- And getter method
+		
+		local getter = Method(mem.name,mem.type,void)
+		setter.builtin = true
+		setter.private = mem.private
+		
+		self:add_method(getter)
+	end
+
+end
+
+function Class:add_method(meth)
+	
+	-- TODO: selector collision
+	
+	table.insert(self.methods,meth)
+	self.selectors[meth.sel] = meth
+	
 end

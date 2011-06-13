@@ -8,7 +8,7 @@ BuiltInClass = class()
 
 function BuiltInClass:init(name)
 	
-	-- Internally used name (there is no sool-side interface)
+	-- Internally used name (there is no sool-side interface), for type signatures
 	
 	self.name = name
 	
