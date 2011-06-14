@@ -133,8 +133,8 @@ function Class:add_member(mem)
 		-- And getter method
 		
 		local getter = Method(mem.name,mem.type,void)
-		setter.builtin = true
-		setter.private = mem.private
+		getter.builtin = true
+		getter.private = mem.private
 		
 		self:add_method(getter)
 	end
@@ -143,7 +143,45 @@ end
 
 function Class:add_method(meth)
 	
-	-- TODO: selector collision
+	-- Selector collision: complain or overload
+	
+	local other = self.selectors[meth.sel]
+	
+	if other then
+		
+		-- If it was in the same class, complain
+		
+		if other.klass == self then
+			self.context:adderror('method with selector ' .. meth.sel.sig .. ' was already defined in this class', node_pos(meth.node))
+			self.context:addinfo('here:', node_pos(other.node))
+			return
+		
+		-- If it was in a parent class, overload by putting it at the same place
+		
+		else
+			for i,v in ipairs(self.methods) do
+				if v == other then
+				
+					-- Check that the whole signature is the same (return type too)
+					
+					if other.sig ~= meth.sig then
+						self.context:adderror('return type mismatch in method ' .. meth.sig, node_pos(meth.node))
+						self.context:addinfo('that overloads ' .. other.sig, node_pos(other.node))
+						return
+					end
+					
+					-- And replace
+					
+					self.methods[i] = meth
+					self.selectors[meth.sel] = meth
+					return
+				end				
+			end
+		end
+	
+	end
+	
+	meth.klass = self
 	
 	table.insert(self.methods,meth)
 	self.selectors[meth.sel] = meth

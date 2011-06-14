@@ -4,7 +4,7 @@ require 'Selector'
 
 Method = class()
 
-function Method:init(name,rtype,atype,builtin)
+function Method:init(name,rtype,atype)
 	
 	-- The interface is made of three things:
 	
@@ -22,10 +22,14 @@ function Method:init(name,rtype,atype,builtin)
 		self:update_signature()
 	end
 	
+	-- Remember the class in which it was defined
+	
+	self.klass = klass
+	
 	-- Attributes
 	
 	self.private = false
-	self.builtin = builtin or false
+	self.builtin = false
 	
 	-- Content
 	
