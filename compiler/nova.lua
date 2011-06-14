@@ -707,6 +707,10 @@ function new_context(tokens,grammar)
 	return c
 end
 
+---------------
+-- Utilities --
+---------------
+
 function node_start(n)
 	
 	if not n then return nil end
@@ -733,7 +737,7 @@ function node_end(n)
 	else
 		for i = #n,1,-1 do
 			if #n[i] > 0 then
-				return node_start(n[i])
+				return node_end(n[i])
 			end
 		end
 	end
@@ -754,4 +758,18 @@ end
 
 function node_pos(n)
 	return range(node_start(n),node_end(n))
+end
+
+-- Return useful nodes in lists such as " subtype { ',' subtype } "
+
+function flatten_list(l)
+	local nodes = {}
+	
+	table.insert(nodes,l[1])
+	
+	for i,v in ipairs(l[2]) do
+		table.insert(nodes,v[2])
+	end
+	
+	return nodes
 end

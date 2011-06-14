@@ -16,7 +16,7 @@ function Class:init(context,node)
 						-- (also indexed by member names)
 	
 	self.methods = {}	-- List of method objects, including inherited ones
-	self.selectors = {}	-- Table of methods indexed by selectors
+						-- (also indexed by selectors)
 	
 	-- Reference to context
 	
@@ -74,7 +74,6 @@ function Class:validate_interface()
 		if n.rule.name == 'member definition' then
 			
 			local mem = Member(self.context,n)
-			mem.klass = self
 			
 			if mem:validate() then
 				self:add_member(mem)
@@ -82,7 +81,18 @@ function Class:validate_interface()
 		end
 	end
 	
-	-- 4. TODO: Add all methods
+	-- 4. Add all methods
+
+	for i,n in ipairs(mem_met_node) do
+		if n.rule.name == 'method definition' then
+			
+			local meth = Method()
+			
+			if meth:validate_interface(self.context,n) then
+				self:add_method(meth)
+			end
+		end
+	end
 	
 	-- DEBUG
 	
@@ -102,6 +112,8 @@ function Class:validate_interface()
 end
 
 function Class:add_member(mem)
+	
+	mem.klass = self
 	
 	-- Check name collision
 	
@@ -127,6 +139,7 @@ function Class:add_member(mem)
 		local setter = Method(mem.name .. '=',void,mem.type)
 		setter.builtin = true
 		setter.private = mem.private
+		setter.setter = true
 		
 		self:add_method(setter)
 		
@@ -143,18 +156,26 @@ end
 
 function Class:add_method(meth)
 	
+	-- Basic forbidden method/member name collision
+	
+	if self.members[meth.name] then
+		self.context:adderror('method definition shadows member of the same name', nova.node_pos(meth.node))
+		self.context:addinfo('defined here:', nova.node_pos(self.members[meth.name].node))
+		return false
+	end
+		
 	-- Selector collision: complain or overload
 	
-	local other = self.selectors[meth.sel]
+	local other = self.methods[meth.sel]
 	
 	if other then
 		
 		-- If it was in the same class, complain
 		
 		if other.klass == self then
-			self.context:adderror('method with selector ' .. meth.sel.sig .. ' was already defined in this class', node_pos(meth.node))
-			self.context:addinfo('here:', node_pos(other.node))
-			return
+			self.context:adderror('method with selector ' .. meth.sel.sig .. ' was already defined in this class', nova.node_pos(meth.node))
+			self.context:addinfo('here:', nova.node_pos(other.node))
+			return false
 		
 		-- If it was in a parent class, overload by putting it at the same place
 		
@@ -165,25 +186,27 @@ function Class:add_method(meth)
 					-- Check that the whole signature is the same (return type too)
 					
 					if other.sig ~= meth.sig then
-						self.context:adderror('return type mismatch in method ' .. meth.sig, node_pos(meth.node))
-						self.context:addinfo('that overloads ' .. other.sig, node_pos(other.node))
-						return
+						self.context:adderror('return type mismatch in method ' .. meth.sig, nova.node_pos(meth.node))
+						self.context:addinfo('that overrides ' .. other.sig, nova.node_pos(other.node))
+						return false
 					end
 					
 					-- And replace
 					
 					self.methods[i] = meth
 					self.selectors[meth.sel] = meth
-					return
+					return false
 				end				
 			end
 		end
 	
 	end
 	
+	print('adding ', meth.sig, other)
+	
 	meth.klass = self
 	
 	table.insert(self.methods,meth)
-	self.selectors[meth.sel] = meth
+	self.methods[meth.sel] = meth
 	
 end

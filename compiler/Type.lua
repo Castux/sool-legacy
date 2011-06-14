@@ -123,6 +123,7 @@ function Type:validate(context,node)
 		
 		if not class then
 			context:adderror('unknown class ' .. cname, node[2][1][3])
+			return false
 		else
 			single.klass = class
 		end
