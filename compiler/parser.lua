@@ -22,8 +22,8 @@ function print_tree(t,lev)
 	
 	if not t then return end
 	
-	if t.token then
-		io.write(indent,"'",t[1],"': ",t[2],'\n')
+	if t.isa and t:isa(Token) then
+		io.write(indent,"'",t.kind,"': ",t.value,'\n')
 	
 	else
 		

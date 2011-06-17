@@ -1,13 +1,6 @@
+require 'Token'
+
 --[[
-
-Token structure:
-================
-
-1 = type (Name, ClassName, Symbol, Number, String, or complete string for others)
-2 = value (string of original text)
-3 = position in file
-token = true
-
 Position structure:
 ===================
 
@@ -72,7 +65,7 @@ lex = function(file)
 	
 	local function addtok(val,typ)
 		local typ = typ or val
-		local tok = {
+		local tok = Token(
 			typ,
 			val,
 			{
@@ -81,9 +74,8 @@ lex = function(file)
 				fcol=col,
 				lcol=(col + #val - 1),
 				file = file
-			},
-			token = true
-		}
+			}
+		)
 		
 		tokens[#tokens+1] = tok
 		
@@ -201,16 +193,15 @@ lex = function(file)
 			s:match("^'.-[^\\]'",index) or s:match('^".-[^\\]"',index)
 			if m then
 				-- form token
-				local tok = {
+				local tok = Token(
 					m:sub(1,1) == '"' and 'String' or 'Symbol',
 					m,
 					{
 						fline=line,
 						fcol=col,
 						file=file
-					},
-					token = true
-				}
+					}
+				)
 				
 				-- count newlines
 				local _,nl = m:gsub('\n',{})
@@ -261,7 +252,7 @@ lex = function(file)
 	end
 	
 	-- add end mark
-	local tok = {
+	local tok = Token(
 		'EOF',
 		'EOF',
 		{
@@ -270,9 +261,8 @@ lex = function(file)
 			fcol=col,
 			lcol=col,
 			file=file
-		},
-		token = true
-	}
+		}
+	)
 	
 	tokens[#tokens+1] = tok
 	

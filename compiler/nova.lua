@@ -546,7 +546,7 @@ function new_context(tokens,grammar)
 		
 		local head = c.peek()
 		
-		if head[1] == tok then
+		if head.kind == tok then
 			table.insert(node,head)
 			c.consume()
 			return true
@@ -554,7 +554,7 @@ function new_context(tokens,grammar)
 			
 			local str = '\'' .. tok .. '\'' .. c.format_opt()
 			
-			c.adderror('error','expected ' .. str .. ', found \'' .. head[1] .. '\' instead', head[3])
+			c.adderror('error','expected ' .. str .. ', found \'' .. head.value .. '\' instead', head.pos)
 			return false
 		end
 	end
@@ -607,7 +607,7 @@ function new_context(tokens,grammar)
 			
 			-- Check that we can apply this rule
 			local head = c.peek()
-			if not first[head[1]] then
+			if not first[head.kind] then
 				
 				-- It's ok, return success and the node how it is now (empty for optional, with the already parsed things for repetition)
 				if is_epsilon(r) then
@@ -638,7 +638,7 @@ function new_context(tokens,grammar)
 						expected = 'one of ' .. expected
 					end
 					
-					c.adderror('error','failed to parse ' .. rule_name(r) .. ': expected ' .. expected .. ', found \'' .. head[1] .. '\' instead', head[3])
+					c.adderror('error','failed to parse ' .. rule_name(r) .. ': expected ' .. expected .. ', found \'' .. head.value .. '\' instead', head.pos)
 					
 					-- Rule reminder if it has a name. Also, if it contains only one subrule, it's probably a "context" name, so put the inside rule instead
 					if r.name then
@@ -679,7 +679,7 @@ function new_context(tokens,grammar)
 					
 					local first = first_set(sub)
 					
-					if first[head[1]] then
+					if first[head.kind] then
 						local succ,subnode,info = c.parse_rule(sub)
 						
 						if not succ then
@@ -732,8 +732,8 @@ function node_end(n)
 	
 	if not n then return nil end
 	
-	if n.token then
-		return n[3]
+	if n:isa(Token) then
+		return n.pos
 	else
 		for i = #n,1,-1 do
 			if #n[i] > 0 then
