@@ -62,64 +62,245 @@ function set_print(a)
 	print('{' .. table.concat(t,' ') .. '}')
 end
 
--------------------------
--- Grammar preparation --
--------------------------
+-----------
+-- Rules --
+-----------
 
-function resolve_links(rule,g)
+Rule = class()
+
+function Rule:init()
 	
-	for i,sub in ipairs(rule) do
-		
-		if type(sub) == 'string' then
-		
-			-- Named rule
-			if g[sub] then
-				rule[i] = g[sub]
-				
-			-- Terminal
-			else
-				rule[i] = { terminal = true, sub }
-			end
-		
-		elseif type(sub) == 'table' then
-			
-			resolve_links(sub,g)
-		
-		else
-			error('Rule is neither a string or a table: ' .. type(r))
-		end
-		
-	end
+	self.name = nil		-- a string used for context
 	
+	return self
 end
 
-function validate_grammar(g)
+function Rule:resolve_link(l,g)
+	
+	if type(l) == 'string' then
+		
+		if g.rules[l] then
+			return g.rules[l]
+		else
+			error('Rule:resolve_link() - unknown rule \'' .. l .. '\'')
+		end
+	
+	elseif l.isa and l:isa(Rule) then
+		l:resolve_links(g)
+		return l
+	else
+		error('Rule:resolve_link() expects strings or Rule objects')
+	end
+end
+
+--------------
+-- Sequence --
+--------------
+
+Sequence = class(Rule)
+
+function Sequence:init(t)
+	
+	if type(t) ~= 'table' or #t <= 1 then
+		error('Sequence:init() requires a table with at least two rules in it')
+	end
+	
+	-- Get name
+	
+	self.name = t.name
+	t.name = nil
+	
+	-- Use rule table directly
+	self.rules = t
+	
+	return self
+end
+
+function Sequence:resolve_links(g)
+	
+	for i,rule in ipairs(self.rules) do
+		self:resolve_link(rule,g)
+	end
+end
+
+------------
+-- Choice --
+------------
+
+Choice = class(Rule)
+
+function Choice:init(t)
+	
+	if type(t) ~= 'table' or #t <= 1 then
+		error('Choice:init() requires a table with at least two rules in it')
+	end
+	
+	-- Get name
+	
+	self.name = t.name
+	t.name = nil
+	
+	-- Use rule table directly
+	self.rules = t
+	
+	return self
+end
+
+function Choice:resolve_links(g)
+	
+	for i,rule in ipairs(self.rules) do
+		self:resolve_link(rule,g)
+	end
+end
+
+--------------
+-- Terminal --
+--------------
+
+Terminal = class(Rule)
+
+function Terminal:init(arg)
+	
+	if type(arg) == 'table' then
+		
+		if #t ~= 1 or type(t[1]) ~= 'string' then
+			error('Terminal:init() requires a table with exactly one string in it')
+		end
+		
+		self.name = t.name
+		self.token = t[1]
+	
+	else
+		
+		if type(arg) ~= 'string' then
+			error('Terminal:init() requires a single string argument')
+		end
+		
+		self.token = arg
+	end
+	
+	return self
+end
+
+function Terminal:resolve_links(g)
+	return
+end
+
+----------------
+-- Repetition --
+----------------
+
+Repetition = class(Rule)
+
+function Repetition:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('Repetition:init() requires a table with exactly one rule in it')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self
+end
+
+function Repetition:resolve_links(g)
+	self:resolve_link(self.rule,g)
+end
+
+--------------
+-- Optional --
+--------------
+
+Optional = class(Rule)
+
+function Optional:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('Optional:init() requires a table with exactly one rule in it')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self
+end
+
+function Optional:resolve_links(g)
+	self:resolve_link(self.rule,g)
+end
+
+---------------
+-- NamedRule --
+---------------
+
+NamedRule = class(Rule)
+
+function NamedRule:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('NamedRule:init() requires a table with exactly one rule in it')
+	end
+	
+	if not t.name then
+		error('NamedRule:init() requires a table with a non nil \'name\' field')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self	
+end
+
+function NamedRule:resolve_links(g)
+	self:resolve_link(self.rule,g)
+end
+
+-------------
+-- Grammar --
+-------------
+
+Grammar = class()
+
+function Grammar:init(g,entry)
+	
+	self.rules = g
+	
+	self:validate()
+	
+	self.entry = entry
+	
+	
+	return self
+end
+
+function Grammar:validate()
 	
 	-- Don't do it twice
 	
-	if g.valid then
+	if self.valid then
 		return true
 	end
 	
-	-- Replace named rules by references, and terminal strings by terminal tables
+	-- Replace named rules by references
 	
-	for k,rule in pairs(g) do
-		if k ~= 'nova_entry' then
-			resolve_links(rule,g)
-		end
+	for k,rule in pairs(self.rules) do
+		rule:resolve_links(self)
 	end
 	
 	local ret = true
 	
-	for k,rule in pairs(g) do
-		if k ~= 'nova_entry' then
-			if not validate_rule(rule,g) then
-				ret = false
-			end
+	--[[
+	for k,rule in pairs(self.rules) do
+		if not self:validate_rule(rule) then
+			ret = false
 		end
 	end
-	
-	g.valid = true
+	]]
+	self.valid = true
 	
 	return ret
 end
@@ -759,11 +940,11 @@ end
 
 -- Public global functions
 
-local g = require 'sool_grammar'
+dofile 'sool_grammar.lua'
 
 function parse(tokens)
 	
-	local context = ParsingContext(tokens,g)
+	local context = ParsingContext(tokens,SoolGrammar)
 	
 	local success,node = context:parse()
 	

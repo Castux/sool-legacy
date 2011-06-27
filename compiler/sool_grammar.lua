@@ -23,14 +23,32 @@ Here I take the convention that "list" means comma separated with at least one e
 
 ]]
 
+local S = Sequence		-- table of rules and 'name'
+local C = Choice		-- table of rules and 'name'
+local T = Terminal		-- string or table with one string and 'name'
+
+local R = Repetition	-- table with one rule and 'name'
+local O = Optional		-- table with one rule and 'name'
+
+local N = NamedRule		-- table with one rule and 'name'	this is used only to wrap a rule for context. There is no wrapper node (inside node is returned).
+
 local g = {}
 
+--[[
 g.chunk = {
 	name = 'chunk',
 	{ repetition = true, 'class_def' },
 	'EOF'
 }
+]]
 
+g.chunk = S {
+	name = 'chunk',
+	R { 'class_def' },
+	T 'EOF'
+}
+
+--[[
 g.class_def = {
 	name = 'class definition',
 	'class',
@@ -48,7 +66,21 @@ g.class_def = {
 	},
 	'end'
 }
+]]
 
+g.class_def = S {
+	name = 'class definition',
+	T 'class',
+	T 'ClassName',
+	O {
+		name = 'parent class declaration',
+		{ T ':', T 'ClassName' }
+	},
+	R { C { T 'member_def', T 'method_def' } },
+	T 'end'
+}
+
+--[[
 g.member_def = {
 	name = 'member definition',
 	{ optional = true, 'private' },
@@ -284,7 +316,6 @@ g.unified_assignment_call = {
 		'list_exp'
 	}
 }
+]]
 
-g.nova_entry = g.chunk
-
-return g
+SoolGrammar = Grammar(g,'chunk')
