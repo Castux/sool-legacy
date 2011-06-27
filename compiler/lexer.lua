@@ -1,15 +1,50 @@
-require 'Token'
+require 'class'
+
+-----------
+-- Token --
+-----------
+
+Token = class()
+
+function Token:init(kind,value,pos)
+	
+	self.kind = kind or ''		-- Name, ClassName, Symbol, Number, String, or complete keyword
+	self.value = value or ''	-- String of original text
+	self.pos = pos or nil		-- Reference to position
+	
+	return self
+end
+
+function Token:position()
+	return self.pos
+end
+
+--------------
+-- Position --
+--------------
+
+Position = class()
+
+function Position:init(fline,fcol,lline,lcol,file)
+	
+	self.fline = fline
+	self.fcol = fcol
+	self.lline = lline
+	self.lcol = lcol
+	self.file = file
+	
+	return self
+end
+
+function Position:range(to)
+	
+	-- destination should really be in the same file
+	assert(self.file == to.file)
+	
+	return Position(self.fline,self.fcol,to.lline,to.lcol,self.file)
+end
 
 --[[
-Position structure:
-===================
-
-fline,fcol = beginning of token
-lline,lcol = end of token
-file = file structure
-
-Only strings can be multiline, but this structure is the same as in
-nodes in the parse tree.
 
 Error structure:
 ================
@@ -47,18 +82,12 @@ lex = function(file)
 			"Lexer",
 			"error",
 			"unexpected symbol '" .. s:sub(index,index) .. "'",
-			{
-				fline = line,
-				lline = line,
-				fcol = col,
-				lcol = col,
-				file = file
-			}
+			Position(line,col,line,col,file)
 		}
 		local info = {
 			"Lexer",
 			"info",
-			"valid symbols at token beginning are: [_a-zA-Z0-9@'\"] and operators [ ~+-*/%^|#=<>:.,;()[]{} ]"
+			"valid symbols at token beginning are: [_a-zA-Z0-9@'\"] and operators [ ~+-*/%^|#=<>:.,;()[]{} ] - BULLSHIT FIXME"
 		}
 		return nil,{err,info}
 	end
@@ -68,13 +97,7 @@ lex = function(file)
 		local tok = Token(
 			typ,
 			val,
-			{
-				fline=line,
-				lline=line,
-				fcol=col,
-				lcol=(col + #val - 1),
-				file = file
-			}
+			Position(line,col,line,col + #val - 1,file)
 		)
 		
 		tokens[#tokens+1] = tok
@@ -192,16 +215,8 @@ lex = function(file)
 			m = s:match("^''",index) or s:match('^""',index) or
 			s:match("^'.-[^\\]'",index) or s:match('^".-[^\\]"',index)
 			if m then
-				-- form token
-				local tok = Token(
-					m:sub(1,1) == '"' and 'String' or 'Symbol',
-					m,
-					{
-						fline=line,
-						fcol=col,
-						file=file
-					}
-				)
+				
+				local fline,fcol = line,col
 				
 				-- count newlines
 				local _,nl = m:gsub('\n',{})
@@ -220,10 +235,13 @@ lex = function(file)
 				-- update global index
 				index = index + #m
 				
-				-- update token
-				tok[3].lline = line
-				tok[3].lcol = col - 1
-				
+				-- form token
+				local tok = Token(
+					m:sub(1,1) == '"' and 'String' or 'Symbol',
+					m,
+					Position(fline,fcol,line,col,file)
+				)
+
 				tokens[#tokens+1] = tok
 			
 			else
@@ -231,13 +249,7 @@ lex = function(file)
 					"Lexer",
 					"error",
 					"unfinished string/symbol starting at",
-					{
-						fline = line,
-						lline = line,
-						fcol = col,
-						lcol = col,
-						file = file
-					}
+					Position(line,col,line,col,file)
 				}
 				
 				return nil,{err}
@@ -255,13 +267,7 @@ lex = function(file)
 	local tok = Token(
 		'EOF',
 		'EOF',
-		{
-			fline=line,
-			lline=line,
-			fcol=col,
-			lcol=col,
-			file=file
-		}
+		Position(line,col,line,col,file)
 	)
 	
 	tokens[#tokens+1] = tok

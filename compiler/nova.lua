@@ -744,20 +744,8 @@ function node_end(n)
 	
 end
 
--- Position range, with two full positions
-function range(from,to)
-	local fline,fcol = from.fline,from.fcol
-	local lline,lcol = to.lline,to.lcol
-	
-	-- from and to should really be in the same file
-	assert(from.file == to.file)
-	local file = from.file
-	
-	return {fline = fline, lline = lline, fcol = fcol, lcol = lcol, file = file}
-end
-
 function node_pos(n)
-	return range(node_start(n),node_end(n))
+	return node_start(n):range(node_end(n))
 end
 
 -- Return useful nodes in lists such as " subtype { ',' subtype } "
