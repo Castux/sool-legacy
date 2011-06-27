@@ -74,9 +74,9 @@ g.class_def = S {
 	T 'ClassName',
 	O {
 		name = 'parent class declaration',
-		{ T ':', T 'ClassName' }
+		S { T ':', T 'ClassName' }
 	},
-	R { C { T 'member_def', T 'method_def' } },
+	R { C { 'member_def', 'method_def' } },
 	T 'end'
 }
 

@@ -93,218 +93,17 @@ function Rule:resolve_link(l,g)
 	end
 end
 
---------------
--- Sequence --
---------------
-
-Sequence = class(Rule)
-
-function Sequence:init(t)
-	
-	if type(t) ~= 'table' or #t <= 1 then
-		error('Sequence:init() requires a table with at least two rules in it')
-	end
-	
-	-- Get name
-	
-	self.name = t.name
-	t.name = nil
-	
-	-- Use rule table directly
-	self.rules = t
-	
-	return self
+function Rule:to_string()
+	error('Override this')
 end
 
-function Sequence:resolve_links(g)
-	
-	for i,rule in ipairs(self.rules) do
-		self:resolve_link(rule,g)
-	end
+function Rule:get_name()
+	return self.name or self:to_string()
 end
 
-------------
--- Choice --
-------------
-
-Choice = class(Rule)
-
-function Choice:init(t)
-	
-	if type(t) ~= 'table' or #t <= 1 then
-		error('Choice:init() requires a table with at least two rules in it')
-	end
-	
-	-- Get name
-	
-	self.name = t.name
-	t.name = nil
-	
-	-- Use rule table directly
-	self.rules = t
-	
-	return self
+function Rule:is_epsilon()
+	error('Override this')
 end
-
-function Choice:resolve_links(g)
-	
-	for i,rule in ipairs(self.rules) do
-		self:resolve_link(rule,g)
-	end
-end
-
---------------
--- Terminal --
---------------
-
-Terminal = class(Rule)
-
-function Terminal:init(arg)
-	
-	if type(arg) == 'table' then
-		
-		if #t ~= 1 or type(t[1]) ~= 'string' then
-			error('Terminal:init() requires a table with exactly one string in it')
-		end
-		
-		self.name = t.name
-		self.token = t[1]
-	
-	else
-		
-		if type(arg) ~= 'string' then
-			error('Terminal:init() requires a single string argument')
-		end
-		
-		self.token = arg
-	end
-	
-	return self
-end
-
-function Terminal:resolve_links(g)
-	return
-end
-
-----------------
--- Repetition --
-----------------
-
-Repetition = class(Rule)
-
-function Repetition:init(t)
-
-	if type(t) ~= 'table' or #t ~= 1 then
-		error('Repetition:init() requires a table with exactly one rule in it')
-	end
-	
-	self.name = t.name
-	
-	self.rule = t[1]
-	
-	return self
-end
-
-function Repetition:resolve_links(g)
-	self:resolve_link(self.rule,g)
-end
-
---------------
--- Optional --
---------------
-
-Optional = class(Rule)
-
-function Optional:init(t)
-
-	if type(t) ~= 'table' or #t ~= 1 then
-		error('Optional:init() requires a table with exactly one rule in it')
-	end
-	
-	self.name = t.name
-	
-	self.rule = t[1]
-	
-	return self
-end
-
-function Optional:resolve_links(g)
-	self:resolve_link(self.rule,g)
-end
-
----------------
--- NamedRule --
----------------
-
-NamedRule = class(Rule)
-
-function NamedRule:init(t)
-
-	if type(t) ~= 'table' or #t ~= 1 then
-		error('NamedRule:init() requires a table with exactly one rule in it')
-	end
-	
-	if not t.name then
-		error('NamedRule:init() requires a table with a non nil \'name\' field')
-	end
-	
-	self.name = t.name
-	
-	self.rule = t[1]
-	
-	return self	
-end
-
-function NamedRule:resolve_links(g)
-	self:resolve_link(self.rule,g)
-end
-
--------------
--- Grammar --
--------------
-
-Grammar = class()
-
-function Grammar:init(g,entry)
-	
-	self.rules = g
-	
-	self:validate()
-	
-	self.entry = entry
-	
-	
-	return self
-end
-
-function Grammar:validate()
-	
-	-- Don't do it twice
-	
-	if self.valid then
-		return true
-	end
-	
-	-- Replace named rules by references
-	
-	for k,rule in pairs(self.rules) do
-		rule:resolve_links(self)
-	end
-	
-	local ret = true
-	
-	--[[
-	for k,rule in pairs(self.rules) do
-		if not self:validate_rule(rule) then
-			ret = false
-		end
-	end
-	]]
-	self.valid = true
-	
-	return ret
-end
-
 
 function first_set(r)
 	
@@ -362,96 +161,6 @@ function first_set(r)
 	r.first_set = first
 	
 	return first
-end
-
-function is_epsilon(r)
-	
-	if r.optional or r.repetition then
-		return true
-	end
-	
-	if r.terminal then
-		return false
-	end
-	
-	-- Memo?
-	if r.epsilon then
-		return r.epsilon
-	end
-	
-	local ret
-	
-	-- For choice, if any can generate empty string, we can
-	if r.choice then
-		
-		ret = false
-		
-		for i,v in ipairs(r) do
-			if is_epsilon(v) then
-				ret = true
-				break
-			end
-		end
-		
-	-- For sequence, they must all be able to generate it
-	else
-		
-		local seq = true
-		
-		for i,v in ipairs(r) do
-			if not is_epsilon(v) then
-				seq = false
-				break
-			end
-		end
-		
-		ret = seq
-	end
-	
-	-- Memoize
-	r.epsilon = ret
-	
-	return ret
-end
-
-function rule_to_string(r)
-	
-	if r.terminal then
-		return "'" .. r[1] .. "'"
-	end
-	
-	local str
-	local t = {}
-	
-	for i,v in ipairs(r) do
-		
-		if v.name then
-			table.insert(t,'"' .. v.name .. '"')
-		else
-			local sub = rule_to_string(v)
-			if #v > 1 and not r.choice and not v.repetition and not v.optional then
-				sub = '( ' .. sub .. ' )'
-			end
-			table.insert(t,sub)
-		end
-		
-	end
-
-	if not r.choice then
-		str = table.concat(t,' ')
-	else
-		str = table.concat(t,' | ')
-	end
-	
-	if r.repetition then
-		str = '{ ' .. str .. ' }'
-	end
-	
-	if r.optional then
-		str = '[ ' .. str .. ' ]'
-	end
-	
-	return str
 end
 
 function rule_name(r)
@@ -665,6 +374,311 @@ function validate_rule(r,g)
 	return ret
 end
 
+--------------
+-- Sequence --
+--------------
+
+Sequence = class(Rule)
+
+function Sequence:init(t)
+	
+	if type(t) ~= 'table' or #t <= 1 then
+		error('Sequence:init() requires a table with at least two rules in it')
+	end
+	
+	-- Get name
+	
+	self.name = t.name
+	t.name = nil
+	
+	-- Use rule table directly
+	self.rules = t
+	
+	return self
+end
+
+function Sequence:resolve_links(g)
+	
+	for i,rule in ipairs(self.rules) do
+		self.rules[i] = self:resolve_link(rule,g)
+	end
+end
+
+function Sequence:to_string()
+	
+	local t = {}
+	for i,v in ipairs(self.rules) do
+		local str = v:get_name()
+		
+		if (v:isa(Choice) or v:isa(Sequence)) and not v.name then
+			str = '( ' .. str .. ' )'
+		end
+		
+		table.insert(t,str)
+	end
+	
+	return table.concat(t,' ')
+end
+
+function Sequence:is_epsilon()
+	
+	if self.epsilon then
+		return true
+	end
+	
+	for i,v in ipairs(self.rules) do
+		if not v:is_epsilon() then
+			return false
+		end
+	end
+	
+	self.epsilon = true
+	
+	return true
+end
+
+------------
+-- Choice --
+------------
+
+Choice = class(Rule)
+
+function Choice:init(t)
+	
+	if type(t) ~= 'table' or #t <= 1 then
+		error('Choice:init() requires a table with at least two rules in it')
+	end
+	
+	-- Get name
+	
+	self.name = t.name
+	t.name = nil
+	
+	-- Use rule table directly
+	self.rules = t
+	
+	return self
+end
+
+function Choice:resolve_links(g)
+	
+	for i,rule in ipairs(self.rules) do
+		self.rules[i] = self:resolve_link(rule,g)
+	end
+end
+
+function Choice:to_string()
+	
+	local t = {}
+	for i,v in ipairs(self.rules) do
+		local str = v:get_name()
+		
+		if (v:isa(Choice) or v:isa(Sequence)) and not v.name then
+			str = '( ' .. str .. ' )'
+		end
+		
+		table.insert(t,str)
+	end
+	
+	return table.concat(t,' | ')
+end
+
+function Choice:is_epsilon()
+	
+	if self.epsilon then
+		return true
+	end
+	
+	for i,v in ipairs(self.rules) do
+		if v:is_epsilon() then
+			self.epsilon = true
+			return true
+		end
+	end
+	
+	return false
+end
+
+--------------
+-- Terminal --
+--------------
+
+Terminal = class(Rule)
+
+function Terminal:init(arg)
+	
+	if type(arg) == 'table' then
+		
+		if #t ~= 1 or type(t[1]) ~= 'string' then
+			error('Terminal:init() requires a table with exactly one string in it')
+		end
+		
+		self.name = t.name
+		self.token = t[1]
+	
+	else
+		
+		if type(arg) ~= 'string' then
+			error('Terminal:init() requires a single string argument')
+		end
+		
+		self.token = arg
+	end
+	
+	return self
+end
+
+function Terminal:resolve_links(g)
+	return
+end
+
+function Terminal:to_string()
+	return '\'' .. self.token .. '\''
+end
+
+function Terminal:is_epsilon()
+	return false
+end
+
+----------------
+-- Repetition --
+----------------
+
+Repetition = class(Rule)
+
+function Repetition:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('Repetition:init() requires a table with exactly one rule in it')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self
+end
+
+function Repetition:resolve_links(g)
+	self.rule = self:resolve_link(self.rule,g)
+end
+
+function Repetition:to_string()
+	return '{ ' .. self.rule:get_name() .. ' }'
+end
+
+function Repetition:is_epsilon()
+	return true
+end
+
+--------------
+-- Optional --
+--------------
+
+Optional = class(Rule)
+
+function Optional:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('Optional:init() requires a table with exactly one rule in it')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self
+end
+
+function Optional:resolve_links(g)
+	self.rule = self:resolve_link(self.rule,g)
+end
+
+function Optional:to_string()
+	return '[ ' .. self.rule:get_name() .. ' ]'
+end
+
+function Optional:is_epsilon()
+	return true
+end
+
+---------------
+-- NamedRule --
+---------------
+
+NamedRule = class(Rule)
+
+function NamedRule:init(t)
+
+	if type(t) ~= 'table' or #t ~= 1 then
+		error('NamedRule:init() requires a table with exactly one rule in it')
+	end
+	
+	if not t.name then
+		error('NamedRule:init() requires a table with a non nil \'name\' field')
+	end
+	
+	self.name = t.name
+	
+	self.rule = t[1]
+	
+	return self	
+end
+
+function NamedRule:resolve_links(g)
+	self.rule = self:resolve_link(self.rule,g)
+end
+
+function NamedRule:to_string()
+	return self.rule:get_name()
+end
+
+function NamedRule:is_epsilon()
+	return self.rule:is_epsilon()
+end
+
+-------------
+-- Grammar --
+-------------
+
+Grammar = class()
+
+function Grammar:init(g,entry)
+	
+	self.rules = g
+	
+	self:validate()
+	
+	self.entry = entry
+	
+	
+	return self
+end
+
+function Grammar:validate()
+	
+	-- Don't do it twice
+	
+	if self.valid then
+		return true
+	end
+	
+	-- Replace named rules by references
+	
+	for k,rule in pairs(self.rules) do
+		rule:resolve_links(self)
+	end
+	
+	for k,rule in pairs(self.rules) do
+		print(rule:to_string())
+	end
+	
+	self.valid = true
+	
+	return true
+end
+
+
 ---------------------
 -- Parsing context --
 ---------------------
@@ -680,10 +694,8 @@ function ParsingContext:init(tokens,grammar)
 	
 	-- Grammar
 	
-	if not grammar.valid then
-		if not validate_grammar(grammar) then
-			os.exit(1)
-		end
+	if not grammar:validate() then
+		os.exit(1)
 	end
 	
 	self.grammar = grammar	
