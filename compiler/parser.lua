@@ -54,12 +54,21 @@ function set_print(a)
 		if type(k) == 'string' then
 			s = '\'' .. k .. '\''
 		elseif type(k) == 'table' then
-			s = k.name or ('[[' .. rule_to_string(k) .. ']]')
+			s = k.name or k:to_string()
 		end
 		table.insert(t,s)
 	end
 	
-	print('{' .. table.concat(t,' ') .. '}')
+	print('{' .. table.concat(t,' :: ') .. '}')
+end
+
+function set_clean(set)
+	
+	for k,v in pairs(set) do
+		if not v then
+			set[k] = nil
+		end
+	end
 end
 
 -----------
@@ -98,132 +107,31 @@ function Rule:to_string()
 end
 
 function Rule:get_name()
-	return self.name or self:to_string()
+	return self.name and self.name:gsub(' ','_') or self:to_string()
 end
 
 function Rule:is_epsilon()
 	error('Override this')
 end
 
-function first_set(r)
-	
-	local first = {}
-	
-	-- Terminal
-	if r.terminal then
-		first[r[1]] = true
-		return first
-	end
-	
-	-- Table, do the work
-	
-	-- Use memoized if any
-	if r.first_set then
-		return r.first_set
-	end
-	
-	-- Empty sequence
-	if #r == 0 then
-		return {}
-	end
-	
-	-- Simple: sequence
-	if not r.choice then
-	
-		first = first_set(r[1])
-		
-		-- For each consecutive espilon rule we need to add the ones that follow
-		for i = 1,#r-1 do
-			
-			if not is_epsilon(r[i]) then
-				break
-			end
-			
-			local follow = first_set(r[i+1])
-			first = set_union(first,follow)
-		end
-		
-		
-	-- Choice: merge sets for all choices
-	else
-		
-		first = first_set(r[1])
-		
-		for i = 2,#r do
-			
-			local follow = first_set(r[i])
-			first = set_union(first,follow)
-		end
-		
-	end
-	
-	-- Memoize
-	r.first_set = first
-	
-	return first
+function Rule:get_first_set()
+	error('Override this')
 end
 
-function rule_name(r)
-	
-	return r.name or rule_to_string(r)
-	
+-- Get all optionals that can end the rule, at any level, and add them to the given set
+
+function Rule:add_rightmost_optionals(set)
+	error('Override this')
 end
 
--- Get all optionals that can end the rule, at any level
-
-function get_rightmost_optionals(r)
+function Rule:get_rightmost_optionals()
 	
-	local function rec(r,set)
-		-- Avoid infinite recursion
-		if set[r] ~= nil then
-			return
-		end
-		
-		if r.optional or r.repetition then
-			set[r] = true
-		else
-			set[r] = false						-- prevents recursion and still does not belong to set
-		end
-		
-		if r.terminal then
-			return
-		end
-		
-		-- At any level of recursion, we need the subrules that end the rule and are optional
-		
-		-- Choice
-		if r.choice then
-			for i,v in ipairs(r) do
-				rec(v,set)
-			end
-		
-		-- Sequence
-		else
-			rec(r[#r],set)
-			
-			-- Must add rules from right to left if the final ones are consecutive epsilons
-			local j = #r
-			while is_epsilon(r[j]) and j > 1 do
-				rec(r[j-1],set)
-				j = j-1
-			end
-			
-		end
-	end
-	
-	-- Call it on empty set
 	local set = {}
-	rec(r,set)
+	self:add_rightmost_optionals(set)
 	
-	-- Clean up
-	local res = {}
-	for k,v in pairs(set) do
-		if v then
-			res[k] = true
-		end
-	end
+	set_clean(set)
 	
-	return res
+	return set
 end
 
 -- Get all the optionals from the left (start at 'start'), and the first non optional
@@ -437,6 +345,50 @@ function Sequence:is_epsilon()
 	return true
 end
 
+function Sequence:get_first_set()
+	
+	if self.first_set then
+		return self.first_set
+	end
+	
+	local first = self.rules[1]:get_first_set()
+	
+	-- For each consecutive espilon rule we need to add the ones that follow
+	for i = 1,#self.rules-1 do
+		
+		if not self.rules[i]:is_epsilon() then
+			break
+		end
+		
+		local follow = self.rules[i+1]:get_first_set()
+		first = set_union(first,follow)
+	end
+	
+	self.first_set = first
+	return first
+end
+
+function Sequence:add_rightmost_optionals(set)
+	
+	-- Avoid infinite recursion
+	if set[self] ~= nil then
+		return
+	end
+	
+	set[self] = false		-- prevents recursion and still does not belong to set
+	
+	-- Call on last rule
+	self.rules[#self.rules]:add_rightmost_optionals(set)
+	
+	-- Must add rules from right to left if the final ones are consecutive epsilons
+	local j = #self.rules
+	while self.rules[j]:is_epsilon() and j > 1 do
+		self.rules[j-1]:add_rightmost_optionals(set)
+		j = j-1
+	end
+	
+end
+
 ------------
 -- Choice --
 ------------
@@ -499,6 +451,43 @@ function Choice:is_epsilon()
 	return false
 end
 
+function Choice:get_first_set()
+	
+	if self.first_set then
+		return self.first_set
+	end
+	
+	-- Merge sets for all choices
+	
+	local first = self.rules[1]:get_first_set()
+	
+	for i = 2,#self.rules do
+		
+		local follow = self.rules[i]:get_first_set()
+		first = set_union(first,follow)
+	end
+	
+	self.first_set = first
+	
+	return first
+end
+
+function Choice:add_rightmost_optionals(set)
+	
+	-- Avoid infinite recursion
+	if set[self] ~= nil then
+		return
+	end
+	
+	set[self] = false		-- prevents recursion and still does not belong to set
+	
+	-- Merge results from all subrules
+	for i,v in ipairs(self.rules) do
+		v:add_rightmost_optionals(set)
+	end
+	
+end
+
 --------------
 -- Terminal --
 --------------
@@ -540,6 +529,14 @@ function Terminal:is_epsilon()
 	return false
 end
 
+function Terminal:get_first_set()
+	return { [self.token] = true }
+end
+
+function Terminal:add_rightmost_optionals(set)
+	return
+end
+
 ----------------
 -- Repetition --
 ----------------
@@ -569,6 +566,24 @@ end
 
 function Repetition:is_epsilon()
 	return true
+end
+
+function Repetition:get_first_set()
+	return self.rule:get_first_set()
+end
+
+function Repetition:add_rightmost_optionals(set)
+	
+	-- Avoid infinite recursion
+	if set[self] ~= nil then
+		return
+	end
+	
+	-- Add self
+	set[self] = true
+	
+	-- Call on child
+	self.rule:add_rightmost_optionals(set)
 end
 
 --------------
@@ -602,6 +617,24 @@ function Optional:is_epsilon()
 	return true
 end
 
+function Optional:get_first_set()
+	return self.rule:get_first_set()
+end
+
+function Optional:add_rightmost_optionals(set)
+	
+	-- Avoid infinite recursion
+	if set[self] ~= nil then
+		return
+	end
+	
+	-- Add self
+	set[self] = true
+	
+	-- Call on child
+	self.rule:add_rightmost_optionals(set)
+end
+
 ---------------
 -- NamedRule --
 ---------------
@@ -622,7 +655,7 @@ function NamedRule:init(t)
 	
 	self.rule = t[1]
 	
-	return self	
+	return self
 end
 
 function NamedRule:resolve_links(g)
@@ -637,6 +670,13 @@ function NamedRule:is_epsilon()
 	return self.rule:is_epsilon()
 end
 
+function NamedRule:get_first_set()
+	return self.rule:get_first_set()
+end
+
+function NamedRule:add_add_rightmost_optionals(set)
+	self.rule:add_rightmost_optionals(set)
+end
 -------------
 -- Grammar --
 -------------
@@ -669,12 +709,13 @@ function Grammar:validate()
 		rule:resolve_links(self)
 	end
 	
-	for k,rule in pairs(self.rules) do
-		print(rule.name or '<anon>', '::=', rule:to_string())
-	end
-	
 	self.valid = true
-	
+	for k,rule in pairs(self.rules) do
+		print(rule.name or '<anon>', '::=', rule:to_string() )
+		
+		set_print(rule:get_rightmost_optionals())
+	end
+		
 	return true
 end
 
