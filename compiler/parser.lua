@@ -473,7 +473,7 @@ function Choice:to_string()
 	for i,v in ipairs(self.rules) do
 		local str = v:get_name()
 		
-		if (v:isa(Choice) or v:isa(Sequence)) and not v.name then
+		if v:isa(Choice) and not v.name then
 			str = '( ' .. str .. ' )'
 		end
 		
@@ -509,12 +509,12 @@ function Terminal:init(arg)
 	
 	if type(arg) == 'table' then
 		
-		if #t ~= 1 or type(t[1]) ~= 'string' then
+		if #arg ~= 1 or type(arg[1]) ~= 'string' then
 			error('Terminal:init() requires a table with exactly one string in it')
 		end
 		
-		self.name = t.name
-		self.token = t[1]
+		self.name = arg.name
+		self.token = arg[1]
 	
 	else
 		
@@ -670,7 +670,7 @@ function Grammar:validate()
 	end
 	
 	for k,rule in pairs(self.rules) do
-		print(rule:to_string())
+		print(rule.name or '<anon>', '::=', rule:to_string())
 	end
 	
 	self.valid = true

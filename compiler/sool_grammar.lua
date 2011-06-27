@@ -34,39 +34,11 @@ local N = NamedRule		-- table with one rule and 'name'	this is used only to wrap
 
 local g = {}
 
---[[
-g.chunk = {
-	name = 'chunk',
-	{ repetition = true, 'class_def' },
-	'EOF'
-}
-]]
-
 g.chunk = S {
 	name = 'chunk',
 	R { 'class_def' },
 	T 'EOF'
 }
-
---[[
-g.class_def = {
-	name = 'class definition',
-	'class',
-	'ClassName',
-	{
-		name = 'parent class declaration',
-		optional = true,
-		':', 'ClassName'
-	},
-	{
-		repetition = true,
-		choice = true,
-		'member_def',
-		'method_def'
-	},
-	'end'
-}
-]]
 
 g.class_def = S {
 	name = 'class definition',
@@ -80,145 +52,131 @@ g.class_def = S {
 	T 'end'
 }
 
---[[
-g.member_def = {
+g.member_def = S {
 	name = 'member definition',
-	{ optional = true, 'private' },
-	'type',
-	{ name = 'member name', 'Name' }
+	O { T 'private' },
+	T 'type',
+	T { name = 'member name', 'Name' }
 }
 
-g.list_type = {
+g.list_type = S {
 	'type',
-	{ repetition = true, ',', 'type' }
+	R { S { T ',', 'type' } }
 }
 
-g.arg_def = {
+g.arg_def = S {
 	name = 'argument definition',
-	{ name = 'argument type', 'type' },
-	{ name = 'argument name', 'Name' }
+	N { name = 'argument type', 'type' },
+	T { name = 'argument name', 'Name' }
 }
 
-g.list_arg_def = {
+g.list_arg_def = S {
 	'arg_def',
-	{ repetition = true, ',', 'arg_def' }
+	R { S { T ',', 'arg_def' } }
 }
 
-g.method_def = {
+g.method_def = S {
 	name = 'method definition',
-	'meth',
-	{ optional = true, 'private' },
-	{ name = 'return types', optional = true, 'list_type' },
-	{
+	T 'meth',
+	O { T 'private' },
+	O { name = 'return types', 'list_type' },
+	C {
 		name = 'method name',
-		choice = true,
-		{
-			'Name',
-			{ optional = true, '=' }
-		},
-		{ 'op', 'binop' }
+		S { T 'Name', O { T '=' } },
+		S { T 'op', 'binop' }
 	},
-	'(', { optional = true, 'list_arg_def' }, ')',
+	T '(', O { 'list_arg_def' }, T ')',
 	'block',
-	'end'
+	T 'end'
 }
 
-g.type = {
+g.type = S {
 	name = 'type declaration',
-	{ optional = true, '~' },
-	{
+	O { T '~' },
+	C {
 		name = 'type',
-		choice = true,
-		'num',
-		'vec',
-		'sym',
-		'str',
-		'ClassName',
-		{ name = 'array type', '[', { name = 'subtype', 'type' }, ']' },
-		{ name = 'list type', '/', { name = 'subtype', 'type' }, '\\' },
-		{ name = 'table type', '{', { name = 'key subtype', 'type' }, ',', { name = 'value subtype', 'type' }, '}' }
+		T 'num',
+		T 'vec',
+		T 'sym',
+		T 'str',
+		T 'ClassName',
+		S { name = 'array type', T '[', N { name = 'subtype', 'type' }, T ']' },
+		S { name = 'list type', T '/', N { name = 'subtype', 'type' }, T '\\' },
+		S { name = 'table type', T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}' }
 	}
 }
 
-g.block = {
+g.block = S {
 	name = 'block',
-	{
-		repetition = true,
-		'statement',
-		{ optional = true, ';' }
-	},
-	{
+	R { S {	'statement', O { T ';' } } },
+	O { C {
 		name = 'final statement',
-		choice = true,
-		optional = true,
-		'break',
-		'continue',
-		{ name = 'return statement', 'return', { name = 'list of return values', optional = true, 'list_exp' } }
-	}
+		T 'break',
+		T 'continue',
+		S { name = 'return statement', T 'return', O { name = 'list of return values', 'list_exp' } }
+	} }
 }
 
-g.statement = {
+g.statement = C {
 	name = 'statement',
-	choice = true,
-	{ name = 'do block', 'do', 'block', 'end' },
-	{ name = 'while loop', 'while', 'exp', { name = 'local name of condition', optional = true, 'as', 'Name' }, 'do', 'block', 'end' },
-	{ name = 'if construct', 'if', 'exp', { name = 'local name of condition', optional = true, 'as', 'Name' }, 'then', 'block',
-		{ repetition = true, 'elseif', 'exp', 'then', 'block' },
-		{ optional = true, 'else', 'block' },
-		'end' },
-	{ name = 'for loop', 'for', { name = 'list of names', 'list_name' }, 'in', { name = 'list of expressions', 'list_exp' }, 'do', 'block', 'end' },
+	S { name = 'do block', T 'do', 'block', T 'end' },
+	S { name = 'while loop', T 'while', 'exp', O { S { name = 'local name of condition', T 'as', T 'Name' } }, T 'do', 'block', T 'end' },
+	S { name = 'if construct', T 'if', 'exp', O { S { name = 'local name of condition', T 'as', T 'Name' } }, T 'then', 'block',
+		R { S { T 'elseif', 'exp', T 'then', 'block' } },
+		O { S { T 'else', 'block' } },
+		T 'end'
+	},
+	S { name = 'for loop', T 'for', N { name = 'list of names', 'list_name' }, T 'in', N { name = 'list of expressions', 'list_exp' }, T 'do', 'block', T 'end' },
 	'unified_assignment_call'
 }
 
-g.list_name = {
-	'Name',
-	{ repetition = true, ',', 'Name' }
+g.list_name = S {
+	T 'Name',
+	R { S { T ',', T 'Name' } }
 }
 
-g.atomic_exp = {
+g.atomic_exp = C {
 	name = 'atomic expression',
-	choice = true,
-	'Number', 'String', 'nil', 'false', 'true', 'Symbol'
+	T 'Number', T 'String', T 'nil', T 'false', T 'true', T 'Symbol'
 }
 
-g.list_constructor = {
+g.list_constructor = S {
 	name = 'list constructor',
-	'/', { optional = true, 'list_operand' }, '\\'
+	T '/', O { 'list_operand' }, T '\\'
 }
 
-g.array_constructor = {
+g.array_constructor = S {
 	name = 'array constructor',
-	'[', { optional = true, 'list_operand' }, ']'
+	T '[', O { 'list_operand' }, T ']'
 }
 
-g.vector_constructor = {
+g.vector_constructor = S {
 	name = 'vector constructor',
-	'<', { optional = true, 'list_operand' }, '>'
+	T '<', O { 'list_operand' }, T '>'
 }
 
-g.table_pair = {
+g.table_pair = S {
 	name = 'table constructor pair',
-	'operand', ':', 'operand'
+	'operand', T ':', 'operand'
 }
 
-g.list_table_pair = {
+g.list_table_pair = S {
 	'table_pair',
-	{ repetition = true, ',', 'table_pair' }
+	R { S { T ',', 'table_pair' } }
 }
 
-g.table_constructor = {
+g.table_constructor = S {
 	name = 'table constructor',
-	'{', { optional = true, 'list_table_pair' }, '}'
+	T '{', O { 'list_table_pair' }, T '}'
 }
 
-g.object_constructor = {
+g.object_constructor = S {
 	name = 'object constructor',
-	'ClassName', { optional = true, 'call_arguments' }
+	T 'ClassName', O { 'call_arguments' }
 }
 
-g.constructor = {
+g.constructor = C {
 	name = 'constructor',
-	choice = true,
 	'list_constructor',
 	'array_constructor',
 	'vector_constructor',
@@ -226,96 +184,85 @@ g.constructor = {
 	'object_constructor'
 }
 
-g.method_call = {
+g.method_call = S {
 	name = 'method call',
-	'Name',
-	{ optional = true, 'call_arguments' }
+	T 'Name',
+	O { 'call_arguments' }
 }
 
-g.call_arguments = {
+g.call_arguments = C {
 	name = 'argument',
-	choice = true,
-	{ name = 'parenthesised argument list', '(', { optional = true, 'list_exp' }, ')' },
+	S { name = 'parenthesised argument list', T '(', O { 'list_exp' }, T ')' },
 	'atomic_exp',
 	'object_constructor',
 	'table_constructor'
 }
 
-g.basic_exp = {
+g.basic_exp = S {
 	name = 'basic expression',
-	{
-		choice = true,
+	C {
 		'atomic_exp',
-		{ '(', 'exp', ')' },
+		S { T '(', 'exp', T ')' },
 		'constructor',
 		'method_call'
 	},
 	'exp_tail'
 }
 
-g.exp_tail = {
+g.exp_tail = R { C {
 	name = 'basic expression tail',
-	repetition = true,
-	choice = true,
-	{ name = 'message passing', '.', 'method_call' },
-	{ name = 'indexing', '[', 'exp', ']' }
-}
+	S { name = 'message passing', T '.', 'method_call' },
+	S { name = 'indexing', T '[', 'exp', T ']' }
+} }
 
-g.unary_operation = {
+g.unary_operation = S {
 	name = 'unary operation',
-	{ choice = true, '-', '#', 'not' },
+	C { T '-', T '#', T 'not' },
 	'operand'
 }
 
-g.operand = {
+g.operand = C {
 	name = 'operand',
-	choice = true,
 	'basic_exp',
 	'unary_operation'
 }
 
-g.list_operand = {
+g.list_operand = S {
 	'operand',
-	{ repetition = true, ',', 'operand' }
+	R { S { T ',', 'operand' } }
 }
 
-g.exp = {
+g.exp = S {
 	name = 'expression',
 	'operand',
-	{ name = 'binary operation', repetition = true, 'binop', 'operand' }
+	R { S { name = 'binary operation', 'binop', 'operand' } }
 }
 
-g.binop = {
+g.binop = C {
 	name = 'binary operator',
-	choice = true,
-	'+', '-', '*', '/', '%', '<', '>', '<=', '>=', '==', 'and', 'or', 'xor', '&', '|', '^'
+	T '+', T '-', T '*', T '/', T '%', T '<', T '>', T '<=', T '>=', T '==', T 'and', T 'or', T 'xor', T '&', T '|', T '^'
 }
 
-g.list_exp = {
+g.list_exp = S {
 	'exp',
-	{ repetition = true, ',', 'exp' }
+	R { S { T ',', 'exp' } }
 }
 
-g.lvalue = {
+g.lvalue = S {
 	name = 'left value',
 	'method_call',
 	'exp_tail'
 }
 
-g.list_lvalue = {
+g.list_lvalue = S {
 	'lvalue',
-	{ repetition = true, ',', 'lvalue' }
+	R { S { T ',', 'lvalue' } }
 }
 
-g.unified_assignment_call = {
+g.unified_assignment_call = S {
 	name = 'unified assignment and lone method call',
 	'list_lvalue',
-	{
-		optional = true,
-		'=',
-		'list_exp'
-	}
+	O { S { T '=', 'list_exp' } }
 }
-]]
 
 SoolGrammar = Grammar(g,'chunk')
