@@ -108,7 +108,7 @@ g.type = S {
 
 g.block = S {
 	name = 'block',
-	R { S {	'statement', O { T ';' } } },
+	R { S { 'statement', O { T ';' } } },
 	O { C {
 		name = 'final statement',
 		T 'break',

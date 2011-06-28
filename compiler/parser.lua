@@ -71,9 +71,9 @@ function set_clean(set)
 	end
 end
 
------------
--- Rules --
------------
+----------
+-- Rule --
+----------
 
 Rule = class()
 
@@ -82,24 +82,6 @@ function Rule:init()
 	self.name = nil		-- a string used for context
 	
 	return self
-end
-
-function Rule:resolve_link(l,g)
-	
-	if type(l) == 'string' then
-		
-		if g.rules[l] then
-			return g.rules[l]
-		else
-			error('Rule:resolve_link() - unknown rule \'' .. l .. '\'')
-		end
-	
-	elseif l.isa and l:isa(Rule) then
-		l:resolve_links(g)
-		return l
-	else
-		error('Rule:resolve_link() expects strings or Rule objects')
-	end
 end
 
 function Rule:to_string()
@@ -134,152 +116,14 @@ function Rule:get_rightmost_optionals()
 	return set
 end
 
--- Get all the optionals from the left (start at 'start'), and the first non optional
+-- Get all the optionals from the left (start at 'start' in sequences), and the first non optional
 
-function get_left_consecutive_optionals(r,start)
-	
-	local function do_it(r,start,set)
-		
-		if r.terminal then
-			return
-		end
-		
-		for i = start,#r do
-			local v = r[i]
-			
-			if v.optional or v.repetition then
-				set[v] = true
-			end
-			
-			if not is_epsilon(v) then
-				set[v] = true
-				break
-			end
-		end
-		
-	end
-	
-	local set = {}
-	
-	-- For choices, we need to do it for each subrule
-	if r.choice then
-		for i,v in ipairs(r) do
-			do_it(v,start,set)
-		end
-	
-	-- For sequences, we apply it directly
-	else
-		do_it(r,start,set)
-	end
-	
-	return set
+function Rule:get_first_rules(start)
+	error('Override this')
 end
 
-function validate_rule(r,g)
-	
-	-- Terminal
-	if r.terminal then
-		return true
-	end
-	
-	-- Table, do the work
-	
-	-- Use memoized if any
-	if r.valid then
-		return true
-	end
-	
-	local ret = true
-	
-	-- Sequence
-	if not r.choice then
-		
-		-- Need to check that for any optional subrule (or that contains an optional at the end)
-		-- that its first set doesn't collide with the one of the following subrules
-		
-		for i = 1,#r-1 do
-			
-			local lefts = get_rightmost_optionals(r[i])
-			local rights = get_left_consecutive_optionals(r,i+1)
-			
-			for left,_ in pairs(lefts) do
-				for right,_ in pairs(rights) do
-				
-					local inter = set_intersection(first_set(left),first_set(right))
-					
-					if not set_empty(inter) then
-						print('First/Follow conflict with ' .. rule_name(left) .. ' and ' .. rule_name(right)
-							.. ' in ' .. rule_name(r) )
-						print('Shared tokens:')
-						set_print(inter)
-						ret = false
-					end
-					
-				end
-			end
-			
-		end
-		
-	-- Choice
-	else
-		
-		-- Need to check that no two choices have elements in common in their first sets
-		
-		for i = 1,#r-1 do
-			for j = i+1,#r do
-				local inter = set_intersection(first_set(r[i]),first_set(r[j]))
-				
-				if not set_empty(inter) then
-					print('First/First conflict with ' .. rule_name(r[i]) .. ' and ' .. rule_name(r[j])
-						.. ' in ' .. rule_name(r) )
-					print('Common tokens: ')
-					set_print(inter)
-					ret = false
-				end
-			end
-		end
-		
-	end
-	
-	-- And if it's a repetition, check also the rightmost optionals with the first and possibly followings (loop around)
-		
-	if r.repetition then
-		
-		local lefts = get_rightmost_optionals(r)
-		
-		-- Remove the whole rule, or it would always conflict with its first subrule
-		lefts[r] = nil
-		
-		local rights = get_left_consecutive_optionals(r,1)
-		
-		for left,_ in pairs(lefts) do
-			for right,_ in pairs(rights) do
-				
-				local inter = set_intersection(first_set(left),first_set(right))
-				
-				if not set_empty(inter) then
-					print('First/Follow conflict (in repetition) with ' .. rule_name(left) .. ' and ' .. rule_name(right)
-						.. ' in ' .. rule_name(r) )
-					print('Shared tokens:')
-					set_print(inter)
-					ret = false
-				end
-			end
-		end
-		
-	end
-	
-	-- Memoize
-	r.valid = true
-	
-	-- Recurse
-	for i,v in ipairs(r) do
-		if not validate_rule(v,g) then
-			ret = false
-		end
-	end
-	
-	return ret
+function Rule:validate()
+	error('Override this')
 end
 
 --------------
@@ -308,7 +152,21 @@ end
 function Sequence:resolve_links(g)
 	
 	for i,rule in ipairs(self.rules) do
-		self.rules[i] = self:resolve_link(rule,g)
+		
+		if type(rule) == 'string' then
+			
+			if g.rules[rule] then
+				self.rules[i] = g.rules[rule]
+			else
+				error('Rule:resolve_link() - unknown rule \'' .. rule .. '\'')
+			end
+		
+		elseif rule.isa and rule:isa(Rule) then
+			rule:resolve_links(g)
+		else
+			error('Rule:resolve_link() expects strings or Rule objects')
+		end
+		
 	end
 end
 
@@ -389,6 +247,77 @@ function Sequence:add_rightmost_optionals(set)
 	
 end
 
+function Sequence:get_first_rules(start)
+	
+	local set = {}
+	
+	for i = start,#self.rules do
+		local v = self.rules[i]
+		
+		if v:isa(Optional) or v:isa(Repetition) then
+			set[v] = true
+		end
+		
+		if not v:is_epsilon() then
+			set[v] = true
+			break
+		end
+	end
+	
+	return set
+end
+
+function Sequence:validate()
+	
+	-- Use memoized if any
+	if self.valid ~= nil then
+		return self.valid
+	end
+	
+	local valid = true
+	
+	-- Need to check that for any optional subrule (or that contains an optional at the end)
+	-- that its first set doesn't collide with one of the following subrules
+	
+	for i = 1,#self.rules-1 do
+		
+		local lefts = self.rules[i]:get_rightmost_optionals()
+		local rights = self:get_first_rules(i+1)
+		
+		for left,_ in pairs(lefts) do
+			for right,_ in pairs(rights) do
+			
+				local inter = set_intersection(left:get_first_set(),right:get_first_set())
+				
+				if not set_empty(inter) then
+					print('First/Follow conflict with ' .. left:get_name() .. ' and ' .. right:get_name()
+						.. ' in ' .. self:get_name() )
+					print('Shared tokens:')
+					set_print(inter)
+					valid = false
+				end
+				
+			end
+		end
+		
+	end
+	
+	-- Memoize
+	self.valid = valid
+	
+	-- Recurse
+	
+	local ret = true
+	
+	for i,v in ipairs(self.rules) do
+		if not v:validate() then
+			ret = false
+		end
+	end
+	
+	return self.valid and ret
+end
+
 ------------
 -- Choice --
 ------------
@@ -415,7 +344,21 @@ end
 function Choice:resolve_links(g)
 	
 	for i,rule in ipairs(self.rules) do
-		self.rules[i] = self:resolve_link(rule,g)
+		
+		if type(rule) == 'string' then
+			
+			if g.rules[rule] then
+				self.rules[i] = g.rules[rule]
+			else
+				error('Rule:resolve_link() - unknown rule \'' .. rule .. '\'')
+			end
+		
+		elseif rule.isa and rule:isa(Rule) then
+			rule:resolve_links(g)
+		else
+			error('Rule:resolve_link() expects strings or Rule objects')
+		end
+		
 	end
 end
 
@@ -488,6 +431,61 @@ function Choice:add_rightmost_optionals(set)
 	
 end
 
+function Choice:get_first_rules(start)
+	
+	assert(start == 1)	-- Only sequences need to check themselves from the middle
+	
+	local set = {}
+	
+	for i,choice in ipairs(self.rules) do
+		local opts = choice:get_first_rules(start)
+		set = set_union(set,opts)
+	end
+	
+	return set
+end
+
+function Choice:validate()
+	
+	if self.valid ~= nil then
+		return self.valid
+	end
+	
+	-- Need to check that no two choices have elements in common in their first sets
+	
+	local valid = true
+	
+	for i = 1,#self.rules-1 do
+		for j = i+1,#self.rules do
+			local inter = set_intersection(self.rules[i]:get_first_set(),self.rules[j]:get_first_set())
+			
+			if not set_empty(inter) then
+				print('First/First conflict with ' .. self.rules[i]:get_name() .. ' and ' .. self.rules[j]:get_name()
+					.. ' in ' .. self:get_name() )
+				print('Common tokens: ')
+				set_print(inter)
+				valid = false
+			end
+		end
+	end
+	
+	-- Memoize
+	
+	self.valid = valid
+	
+	-- Recurse
+	
+	local ret = true
+	
+	for i,v in ipairs(self.rules) do
+		if not v:validate() then
+			ret = false
+		end
+	end
+	
+	return self.valid and ret
+end
+
 --------------
 -- Terminal --
 --------------
@@ -537,6 +535,13 @@ function Terminal:add_rightmost_optionals(set)
 	return
 end
 
+function Terminal:get_first_rules(start)
+	return { [self] = true }
+end
+
+function Terminal:validate()
+	return true
+end
 ----------------
 -- Repetition --
 ----------------
@@ -557,7 +562,21 @@ function Repetition:init(t)
 end
 
 function Repetition:resolve_links(g)
-	self.rule = self:resolve_link(self.rule,g)
+	
+	if type(self.rule) == 'string' then
+		
+		if g.rules[self.rule] then
+			self.rule = g.rules[self.rule]
+		else
+			error('Rule:resolve_link() - unknown rule \'' .. self.rule .. '\'')
+		end
+	
+	elseif self.rule.isa and self.rule:isa(Rule) then
+		self.rule:resolve_links(g)
+	else
+		error('Rule:resolve_link() expects strings or Rule objects')
+	end
+	
 end
 
 function Repetition:to_string()
@@ -586,6 +605,55 @@ function Repetition:add_rightmost_optionals(set)
 	self.rule:add_rightmost_optionals(set)
 end
 
+function Repetition:get_first_rules(start)
+	
+	assert(start == 1)
+	
+	return {[self] = true}
+end
+
+function Repetition:validate()
+	
+	-- Use memo
+	
+	if self.valid ~= nil then
+		return self.valid
+	end
+	
+	-- In the subrule, check the rightmost optionals with the first and possibly followings (loop around)
+	
+	local valid = true
+	
+	local lefts = self.rule:get_rightmost_optionals()
+	
+	-- Remove the whole rule, or it would always conflict with its first subrule
+	lefts[self.rule] = nil
+	
+	local rights = self.rule:get_first_rules(1)
+	
+	for left,_ in pairs(lefts) do
+		for right,_ in pairs(rights) do
+			
+			local inter = set_intersection(left:get_first_set(),right:get_first_set())
+			
+			if not set_empty(inter) then
+				print('First/Follow conflict (in repetition) with ' .. left:get_name() .. ' and ' .. right:get_name()
+					.. ' in ' .. self:get_name() )
+				print('Shared tokens:')
+				set_print(inter)
+				valid = false
+			end
+		end
+	end
+	
+	-- Memoize
+	
+	self.valid = valid
+	
+	-- Recurse
+	return self.valid and self.rule:validate()
+end
+
 --------------
 -- Optional --
 --------------
@@ -606,7 +674,20 @@ function Optional:init(t)
 end
 
 function Optional:resolve_links(g)
-	self.rule = self:resolve_link(self.rule,g)
+	
+	if type(self.rule) == 'string' then
+		
+		if g.rules[self.rule] then
+			self.rule = g.rules[self.rule]
+		else
+			error('Rule:resolve_link() - unknown rule \'' .. self.rule .. '\'')
+		end
+	
+	elseif self.rule.isa and self.rule:isa(Rule) then
+		self.rule:resolve_links(g)
+	else
+		error('Rule:resolve_link() expects strings or Rule objects')
+	end
 end
 
 function Optional:to_string()
@@ -635,6 +716,17 @@ function Optional:add_rightmost_optionals(set)
 	self.rule:add_rightmost_optionals(set)
 end
 
+function Optional:get_first_rules(start)
+	
+	assert(start == 1)
+	
+	return {[self] = true}
+end
+
+function Optional:validate()
+	return self.rule:validate()
+end
+
 ---------------
 -- NamedRule --
 ---------------
@@ -659,7 +751,20 @@ function NamedRule:init(t)
 end
 
 function NamedRule:resolve_links(g)
-	self.rule = self:resolve_link(self.rule,g)
+	
+	if type(self.rule) == 'string' then
+		
+		if g.rules[self.rule] then
+			self.rule = g.rules[self.rule]
+		else
+			error('Rule:resolve_link() - unknown rule \'' .. self.rule .. '\'')
+		end
+	
+	elseif self.rule.isa and self.rule:isa(Rule) then
+		self.rule:resolve_links(g)
+	else
+		error('Rule:resolve_link() expects strings or Rule objects')
+	end
 end
 
 function NamedRule:to_string()
@@ -674,9 +779,18 @@ function NamedRule:get_first_set()
 	return self.rule:get_first_set()
 end
 
-function NamedRule:add_add_rightmost_optionals(set)
+function NamedRule:add_rightmost_optionals(set)
 	self.rule:add_rightmost_optionals(set)
 end
+
+function NamedRule:get_first_rules(start)
+	return self.rule:get_first_rules(start)
+end
+
+function NamedRule:validate()
+	return self.rule:validate()
+end
+
 -------------
 -- Grammar --
 -------------
@@ -691,16 +805,15 @@ function Grammar:init(g,entry)
 	
 	self.entry = entry
 	
-	
 	return self
 end
 
 function Grammar:validate()
 	
-	-- Don't do it twice
+	-- Use memo
 	
-	if self.valid then
-		return true
+	if self.valid ~= nil then
+		return self.valid
 	end
 	
 	-- Replace named rules by references
@@ -710,13 +823,19 @@ function Grammar:validate()
 	end
 	
 	self.valid = true
+	
 	for k,rule in pairs(self.rules) do
-		print(rule.name or '<anon>', '::=', rule:to_string() )
-		
-		set_print(rule:get_rightmost_optionals())
+		if not rule:validate() then
+			self.valid = false
+		end
 	end
-		
-	return true
+	
+	if not self.valid then
+		print('Grammar is not valid')
+		os.exit(1)
+	end
+	
+	return self.valid
 end
 
 
@@ -733,13 +852,7 @@ function ParsingContext:init(tokens,grammar)
 	self.tokens = tokens
 	self.current = 1		-- the current look ahead. Number of parsed token is "current-1"
 	
-	-- Grammar
-	
-	if not grammar:validate() then
-		os.exit(1)
-	end
-	
-	self.grammar = grammar	
+	self.grammar = grammar
 	
 	-- Error handling
 	
@@ -999,10 +1112,10 @@ function parse(tokens)
 	
 	local context = ParsingContext(tokens,SoolGrammar)
 	
-	local success,node = context:parse()
+	--local success,node = context:parse()
 	
-	print_tree(node)
-	print''
+	--print_tree(node)
+	--print''
 	
 	return context.errors,node
 end
