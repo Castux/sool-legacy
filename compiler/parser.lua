@@ -651,7 +651,7 @@ function Repetition:validate()
 	self.valid = valid
 	
 	-- Recurse
-	return self.valid and self.rule:validate()
+	return self.rule:validate() and self.valid
 end
 
 --------------
