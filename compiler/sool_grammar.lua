@@ -1,28 +1,3 @@
---[[
-
-Each rule table is a list of
-- terminal string
-- non terminal string (the name will be expected in the grammar table)
-- rule table
-
-Every rule is a sequence by default. Following modifiers change the behavior:
-
-optional = true: will not fail if the first token does not match. Will fail if the first token matches and a subsequent error occurs. [ sequence ]
-
-repetition = true: like optional, but tries to parse again after each match. { sequence }.
-
-choice = true: the list of subrules is not interpreted as a sequence but as a choice. One and only one subrule must and will match. ( subrule1 | subrule2 | subrule3 )
-
-The modifiers are combinable. It is valid (but useless) to add optional to a repetition
-
-The 'name' field can be filled with a human readable description of the rule, used in verbose error messages
-
-The Nova thingy will read in this grammar, validate it as LL(1), and allow parsing a list of tokens using it, producing a concrete syntax tree (= "parse tree").
-
-Here I take the convention that "list" means comma separated with at least one element
-
-]]
-
 local S = Sequence		-- table of rules and 'name'
 local C = Choice		-- table of rules and 'name'
 local T = Terminal		-- string or table with one string and 'name'
@@ -265,4 +240,4 @@ g.unified_assignment_call = S {
 	O { S { T '=', 'list_exp' } }
 }
 
-SoolGrammar = Grammar(g,'chunk')
+return Grammar(g,'chunk')

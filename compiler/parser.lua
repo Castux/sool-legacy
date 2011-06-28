@@ -1,75 +1,83 @@
-----------------------
--- Set computations --
-----------------------
+require 'class'
+require 'set'
 
-function set_copy(a)
-	
-	local res = {}
-	for k,v in pairs(a) do
-		res[k] = v
-	end
-	
-	return res
-end
+--[[
 
-function set_intersection(a,b)
-	
-	local res = {}
-	
-	for k,v in pairs(a) do
-		if b[k] then
-			res[k] = v
-		end
-	end
-	
-	return res
-end
+This is Nova, a recursive-descent parser for LL(1) grammars.
 
-function set_union(a,b)
-	
-	local res = set_copy(a)
-	
-	for k,v in pairs(b) do
-		res[k] = v
-	end
-	
-	return res
-end
+Building a grammar is done using the following Rule objects
 
-function set_empty(a)
-	
-	for k,v in pairs(a) do
-		return false
-	end
-	
-	return true
-end
+Rule			Argument to init()								Notes and EBNF equivalent
+----			------------------								------------------------
+Sequence		list of rules and 'name'						Matches each of its subrules in order: a b c
+Choice			list of rules and 'name'						Matches exactly one of its subrules: a | b | c
+Terminal		string or list with one string and 'name'		Matches a token: 'token'
 
-function set_print(a)
-	
-	local t = {}
-	
-	for k,v in pairs(a) do
-		local s
-		if type(k) == 'string' then
-			s = '\'' .. k .. '\''
-		elseif type(k) == 'table' then
-			s = k.name or k:to_string()
-		end
-		table.insert(t,s)
-	end
-	
-	print('{' .. table.concat(t,' :: ') .. '}')
-end
+Optional		list with one rule and 'name'					Matches its subrule 0..1 times: [ rule ]
+																Produces a nil node in case of 0
+Repetition		list with one rule and 'name'					Matches its subrule 0..inf times: { rule }
 
-function set_clean(set)
+NamedRule		list with one rule and 'name'					Matches its subrule. This is used only to wrap a rule for context.
+																There is no wrapper node (inside node is produced).
+
+Each "rule" in the given lists can be either a Rule object directly:
+
+	'a' ( 'b' | 'c' ) -> Sequence { Terminal 'a', Choice { Terminal 'b', Terminal 'c' } }
+
+or a reference string to be resolved later (allowing circular reference).
+
+	{ 'a' subrule } -> Repetition { Sequence { Terminal 'a', 'subrule' } }
+
+The tables of rules given to the init() calls can have a human readable 'name' field, meant for diagnostics.
+
+	Sequence { name = 'one a followed by many bees', Terminal { name = 'some terminal, 'a' }, Repetition { Terminal 'b' } }
+
+The first level rules are put in a table and indexed by reference strings (that must match the ones used in the rules), passed to
+Grammar:init() along with a string indicating the entry rule.
 	
-	for k,v in pairs(set) do
-		if not v then
-			set[k] = nil
-		end
-	end
-end
+	rule_1 := 'A' { rule_2 } 'D'
+	rule_2 := 'B' [ 'C' ] rule_1
+	
+	becomes
+	
+	g = {
+		rule_1 = Sequence { name = 'the first rule', Terminal 'A', Repetition { 'rule_2' }, Terminal 'D' },
+		rule_2 = Sequence { Terminal 'B', Optional { Terminal 'C' }, 'rule_1' }
+	}
+
+	grammar_object = Grammar(g,'rule_1')
+
+When building the Grammar object, the grammar is checked for LL(1) validity. Conflicts are reported and execution stops immediately.
+
+1. First/First conflict: in a Choice rule, two choices can start with the same token, making it impossible to choose between the two
+2. First/Follow conflict: in a Sequence rule, a rightmost optional subrule starts with the same token as one that directly follows,
+making it impossible to choose between applying the optional, or start the following rule.
+3. First/Follow in repetition: a rightmost optional of the subrule starts with the same token as the whole rule, thus making it impossible
+to choose between applying the optional, or starting a new occurence of the repetition. This is simply a wrapped-around application of point 2,
+since a Repetition is equivalent to an infinite sequence of optionals of the subrule:
+
+	{ rule } <=> [ rule [ rule [ rule [ rule [ rule ...
+
+By "rightmost optional subrule" we mean a rule at any level of deepness that can end the considered rule, and by "directly follows" we mean that it
+can appear right after (there can be optionals in between, or rules that can match an empty input). Thus Nova is capable of finding the
+conflict with 'b' 'c' 'd' and 'e' in this example (assuming a correct implementation...):
+
+	( 'a' [ 'b' { 'c' } [ 'e' ] ] ) [ 'b' ] ( 'c' | { 'd' } ) [ 'e' ] 'd'
+
+Notes:
+1. Left recursion is not tested and leads to stack overflow during parsing
+2. When printing rules, the 'name' field is used when present. Otherwise, a pretty printing of the rule content is done.
+Cyclic rule references without 'name' fields in any of the rules results in an infinite recursion.
+
+Possible shortcuts to use in grammar files:
+local S = Sequence
+local C = Choice
+local T = Terminal
+local R = Repetition
+local O = Optional
+local N = NamedRule
+
+]]
 
 ----------
 -- Rule --
@@ -803,7 +811,11 @@ function Grammar:init(g,entry)
 	
 	self:validate()
 	
-	self.entry = entry
+	self.entry = self.rules[entry]
+	if not self.entry then
+		print('Unknown entry rule \'' .. entry .. '\', grammar is invalid')
+		os.exit(1)
+	end
 	
 	return self
 end
@@ -1106,7 +1118,7 @@ end
 
 -- Public global functions
 
-dofile 'sool_grammar.lua'
+SoolGrammar = dofile 'sool_grammar.lua'
 
 function parse(tokens)
 	
