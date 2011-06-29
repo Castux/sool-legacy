@@ -1109,7 +1109,7 @@ function Node:init(rule)
 end
 
 -- Returns a position object that encompasses subnodes from first to last
--- If first or last happen to be nil, get the closest ones
+-- If first or last happen to be empty, get the closest ones
 
 -- Defaults to the entire subtree
 
@@ -1173,7 +1173,6 @@ function Node:to_string(indent)
 	
 	return s
 end
-
 
 -- Return useful nodes in lists such as " subtype { ',' subtype } "
 
