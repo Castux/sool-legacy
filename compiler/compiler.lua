@@ -228,8 +228,8 @@ function compile(list)
 	local class_nodes = {}
 	
 	for i,chunk in ipairs(chunks) do
-		for j,class_node in ipairs(chunk[1]) do
-			table.insert(class_nodes,class_node[1])
+		for j,class_node in ipairs(chunk.nodes[1].nodes) do
+			table.insert(class_nodes,class_node)
 		end
 	end
 	

@@ -41,6 +41,11 @@ function Method:init(name,rtype,atype)
 	self.context = nil
 	self.node = nil
 	
+	self.priv_node = nil
+	self.ret_node = nil
+	self.name_node = nil
+	self.arg_node = nil
+	
 	return self
 end
 
@@ -61,16 +66,20 @@ function Method:validate_interface(context,node)
 	
 	-- Privacity
 	
-	if #node[2] > 0 then
+	self.priv_node = node.nodes[2]
+	
+	if not self.priv_node:isa(EmptyNode) then
 		self.private = true
 	end
 	
 	-- Return type
 	
+	self.ret_node = node.nodes[3]
+	
 	local rtypes = {}
 	
-	if #node[3] > 0 then
-		local nodes = nova.flatten_list(node[3][1])
+	if not self.ret_node:isa(EmptyNode) then
+		local nodes = self.ret_node:flatten_list()
 		
 		for i,v in ipairs(nodes) do
 			local t = Type()
@@ -86,34 +95,35 @@ function Method:validate_interface(context,node)
 	
 	-- Name
 	
-	local nnode = node[4]
+	self.name_node = node.nodes[4]
 	
-	if nnode[1][1][1] == 'Name' then
+	if self.name_node.nodes[1].kind == 'Name' then
 		
-		self.name = nnode[1][1][2]
-		if #nnode[2] > 0 then
+		self.name = self.name_node.nodes[1].value
+		if not self.name_node.nodes[2]:isa(EmptyNode) then
 			self.name = self.name .. '='
 			self.setter = true
 		end
 		
-	elseif nnode[1][1][1] == 'op' then
+	else
 		
-		self.name = nnode[2][1][1]
+		self.name = self.name_node.nodes[2].value
 		
 		-- TODO: allow only some binops
 	end
 	
 	-- Arguments (only types for now)
 	
+	self.arg_node = node.nodes[6]
 	local atypes = {}
 	
-	if #node[6] > 0 then
+	if not self.arg_node:isa(EmptyNode) then
 		
-		local nodes = nova.flatten_list(node[6][1])
+		local nodes = self.arg_node:flatten_list()
 		for i,v in ipairs(nodes) do
 			
 			local t = Type()
-			if not t:validate(self.context,v[1][1]) then
+			if not t:validate(self.context,v.nodes[1]) then
 				return false
 			else
 				table.insert(atypes,t)
@@ -135,12 +145,12 @@ function Method:validate_interface(context,node)
 		local bad = false
 		
 		if #self.rtype.types ~= 0 then
-			self.context:adderror('setter methods must not return any values', nova.node_pos(node[3]))
+			self.context:adderror('setter methods must not return any values', self.ret_node:position())
 			bad = true
 		end
 		
 		if #self.atype.types ~= 1 then
-			self.context:adderror('setter methods must take exactly one argument', nova.node_pos(node[6]))
+			self.context:adderror('setter methods must take exactly one argument', self.node:position(5,7))
 			bad = true
 		end
 		

@@ -42,12 +42,11 @@ function Context:validate(class_nodes)
 		assert(node.rule.name == 'class definition')
 		
 		local c = Class(self,node)
-		c.name = node[2][1][2]
 		
 		-- Check name collision
 		if self.classes[c.name] then
-			self:adderror('class ' .. c.name .. ' was already defined', node[2][1][3])
-			self:addinfo('here:', self.classes[c.name].node[2][1][3])
+			self:adderror('class ' .. c.name .. ' was already defined', c.name_node.pos)
+			self:addinfo('here:', self.classes[c.name].name_node.pos)
 		else
 			table.insert(self.classes, c)
 			self.classes[c.name] = c
@@ -58,17 +57,13 @@ function Context:validate(class_nodes)
 	
 	for i,c in ipairs(self.classes) do
 		
-		local pnode = c.node[3]
-		
-		assert(pnode.rule.name == 'parent class declaration')
-		
-		if #pnode > 0 then
-			local pname = pnode[2][1][2]
+		if c.parent_node then
+			local pname = c.parent_node.value
 			
 			-- Check existence of parent class
 			local pclass = self.classes[pname]
 			if not pclass then
-				self:adderror('unknown class ' .. pname, pnode[2][1][3])
+				self:adderror('unknown class ' .. pname, c.parent_node.pos)
 			else
 				
 				-- Check infinite recursion
@@ -80,7 +75,7 @@ function Context:validate(class_nodes)
 					table.insert(names, curr.name)
 					
 					if curr == c then
-						self:adderror('circular inheritence with parent ' .. pname, pnode[2][1][3])
+						self:adderror('circular inheritence with parent ' .. pname, c.parent_node.pos)
 						self:addinfo(table.concat(names,':'))
 						infinite = true
 						break

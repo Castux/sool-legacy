@@ -21,6 +21,8 @@ function Member:init(context,node)
 	self.context = context
 	self.node = node
 	
+	self.name_node = nil
+	
 	return self
 end
 
@@ -32,20 +34,21 @@ function Member:validate()
 	
 	-- Privacity
 	
-	if #n[1] > 0 then
+	if not n.nodes[1]:isa(EmptyNode) then
 		self.private = true
 	end
 	
 	-- Type
 	
 	self.type = Type()
-	if not self.type:validate(self.context,n[2]) then
+	if not self.type:validate(self.context,n.nodes[2]) then
 		return false
 	end
 	
 	-- Name
 	
-	self.name = n[3][1][1][2]
+	self.name_node = n.nodes[3]
+	self.name = n.nodes[3].value
 	
-	return true	
+	return true
 end
