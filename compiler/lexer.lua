@@ -15,10 +15,6 @@ function Token:init(kind,value,pos)
 	return self
 end
 
-function Token:position()
-	return self.pos
-end
-
 --------------
 -- Position --
 --------------

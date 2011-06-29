@@ -68,6 +68,9 @@ Notes:
 1. Left recursion is not tested and leads to stack overflow during parsing
 2. When printing rules, the 'name' field is used when present. Otherwise, a pretty printing of the rule content is done.
 Cyclic rule references without 'name' fields in any of the rules results in an infinite recursion.
+3. Because of the current implementation, if the LL(1) validation is in fact broken, the following happens:
+	a. in a Choice, the first subrule in the list whose first set contains the current token is parsed
+	b. an Optional or Repetition is always parsed if its first set contains the current token
 
 Possible shortcuts to use in grammar files:
 local S = Sequence
@@ -850,6 +853,80 @@ function Grammar:validate()
 	return self.valid
 end
 
+function Grammar:parse(tokens)
+	
+	local c = ParsingContext(tokens)
+	
+	local success,node = self.entry:parse(c)
+end
+
+----------
+-- Node --
+----------
+
+-- There are actually only 2 types of nodes: sequences and terminals.
+-- Indeed, to avoid a too deep parse tree, Choice, NamedRule and Optional
+-- return directly the underlying node, and the result of a Repetition is a
+-- list of nodes, which looks like a sequence.
+
+-- We do use a bit a duck-typing here, no need for a bigger class with just
+-- .rule in it...
+
+Node = class()
+
+function Node:init(rule)
+	
+	-- Reference to the rule that produced it
+	self.rule = rule
+	
+	-- Subnodes
+	self.nodes = {}
+	
+	return self
+end
+
+-- Returns a position object that encompasses subnodes from first to last
+-- If first or last happen to be nil, get the closest ones
+
+-- Defaults to the entire subtree
+
+function Node:position(first,last)
+	
+	if #self.nodes == 0 then
+		error('Empty node, that should nooooot happen')
+	end
+	
+	local first = first or 1
+	local last = last or #self.nodes
+	
+	while not self.nodes[first] do
+		first = first + 1
+	end
+	
+	while not self.nodes[last] do
+		last = last - 1
+	end
+	
+	return self.nodes[first]:position():range(self.nodes[last]:position())
+end
+
+------------------
+-- TerminalNode --
+------------------
+
+TerminalNode = class()
+
+function TerminalNode:init(rule,token)
+	
+	self.rule = rule
+	self.token = token
+	
+	return self
+end
+
+function TerminalNode:position()
+	return self.token.pos
+end
 
 ---------------------
 -- Parsing context --
@@ -857,14 +934,12 @@ end
 
 ParsingContext = class()
 
-function ParsingContext:init(tokens,grammar)
+function ParsingContext:init(tokens)
 	
 	-- Tokens
 	
 	self.tokens = tokens
 	self.current = 1		-- the current look ahead. Number of parsed token is "current-1"
-	
-	self.grammar = grammar
 	
 	-- Error handling
 	
@@ -923,10 +998,6 @@ function ParsingContext:adderror(typ,mess,pos)
 
 	local err = {'Parser', typ, mess, pos}
 	table.insert(self.errors,err)
-end
-	
-function ParsingContext:parse()
-	return self:parse_rule(self.grammar.nova_entry)
 end
 
 -- Returns: success (bool), node, context requested (bool)

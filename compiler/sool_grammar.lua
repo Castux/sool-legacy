@@ -1,11 +1,11 @@
-local S = Sequence		-- table of rules and 'name'
-local C = Choice		-- table of rules and 'name'
-local T = Terminal		-- string or table with one string and 'name'
+local S = Sequence
+local C = Choice
+local T = Terminal
 
-local R = Repetition	-- table with one rule and 'name'
-local O = Optional		-- table with one rule and 'name'
+local R = Repetition
+local O = Optional
 
-local N = NamedRule		-- table with one rule and 'name'	this is used only to wrap a rule for context. There is no wrapper node (inside node is returned).
+local N = NamedRule
 
 local g = {}
 
