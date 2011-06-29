@@ -1060,6 +1060,8 @@ end
 function Grammar:parse(context)
 	
 	local success,node = self.entry:parse(context)
+	
+	return success,node
 end
 
 ----------
@@ -1133,6 +1135,24 @@ function Node:first()
 	return self.nodes[first]:first()
 end
 
+function Node:to_string(indent)
+	
+	local indent = indent or 0
+	local s
+	
+	local indent_s = string.rep("| ",indent)
+	
+	s = indent_s .. self.rule:get_name() .. ': {\n'
+	
+	for i,v in ipairs(self.nodes) do
+		s = s .. v:to_string(indent + 1)
+	end
+	
+	s = s .. indent_s .. '}\n'
+	
+	return s
+end
+
 ------------------
 -- TerminalNode --
 ------------------
@@ -1153,6 +1173,18 @@ end
 
 function TerminalNode:first()
 	return self.token.pos
+end
+
+function TerminalNode:to_string(indent)
+	
+	local indent = indent or 0
+	local s
+	
+	local indent_s = string.rep("| ",indent)
+	
+	s = indent_s .. self.token.kind .. ': ' .. self.token.value .. '\n'
+	
+	return s
 end
 
 ---------------
@@ -1177,6 +1209,18 @@ end
 
 function EmptyNode:first()
 	error('Should never be called')
+end
+
+function EmptyNode:to_string(indent)
+	
+	local indent = indent or 0
+	local s
+	
+	local indent_s = string.rep("| ",indent)
+	
+	s = indent_s .. self.rule:get_name() .. ': ' .. '<empty>\n'
+	
+	return s
 end
 
 ---------------------
@@ -1238,42 +1282,6 @@ end
 -- Utilities --
 ---------------
 
-function node_start(n)
-	
-	if not n then return nil end
-	
-	if n.token then
-		return n[3]
-	else
-		-- Return the first non empty node
-		for i,v in ipairs(n) do
-			if #v > 0 then
-				return node_start(n[i])
-			end
-		end
-	end
-	
-end
-
-function node_end(n)
-	
-	if not n then return nil end
-	
-	if n:isa(Token) then
-		return n.pos
-	else
-		for i = #n,1,-1 do
-			if #n[i] > 0 then
-				return node_end(n[i])
-			end
-		end
-	end
-end
-	
-function node_pos(n)
-	return node_start(n):range(node_end(n))
-end
-
 -- Return useful nodes in lists such as " subtype { ',' subtype } "
 
 function flatten_list(l)
@@ -1297,37 +1305,9 @@ function parse(tokens)
 	local context = ParsingContext(tokens)
 	
 	local success,node = SoolGrammar:parse(context)
-	
-	--print_tree(node)
-	--print''
+	print(success)
+	print(node:to_string())
+	print''
 	
 	return context.errors,node
-end
-
-function print_tree(t,lev)
-	
-	local lev = lev or 0
-	
-	local indent = string.rep("| ",lev)
-	
-	if not t then return end
-	
-	if t.isa and t:isa(Token) then
-		io.write(indent,"'",t.kind,"': ",t.value,'\n')
-	
-	else
-		
-		if #t == 0 then
-			io.write(indent, rule_name(t.rule), ': <empty>\n')
-		elseif #t == 1 and t[1].token then
-			print_tree(t[1],lev)
-		else
-			io.write(indent, rule_name(t.rule), ': {\n')
-			
-			for i,v in ipairs(t) do
-				print_tree(v,lev+1)
-			end
-			io.write(indent,'}\n')
-		end
-	end
 end
