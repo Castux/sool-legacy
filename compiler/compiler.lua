@@ -223,15 +223,13 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
-	do return end
-	
 	-- Gather all class nodes into one list
 	
 	local class_nodes = {}
 	
 	for i,chunk in ipairs(chunks) do
-		for j,class_node in ipairs(chunk[1]) do
-			table.insert(class_nodes,class_node[1])
+		for j,class_node in ipairs(chunk.nodes[1].nodes) do
+			table.insert(class_nodes,class_node)
 		end
 	end
 	

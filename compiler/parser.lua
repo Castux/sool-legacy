@@ -1188,17 +1188,21 @@ TerminalNode = class()
 function TerminalNode:init(rule,token)
 	
 	self.rule = rule
-	self.token = token
+	
+	-- copy the token
+	self.kind = token.kind
+	self.value = token.value
+	self.pos = token.pos
 	
 	return self
 end
 
 function TerminalNode:position()
-	return self.token.pos
+	return self.pos
 end
 
 function TerminalNode:first()
-	return self.token.pos
+	return self.pos
 end
 
 function TerminalNode:to_string(indent)
@@ -1208,7 +1212,7 @@ function TerminalNode:to_string(indent)
 	
 	local indent_s = string.rep("| ",indent)
 	
-	s = indent_s .. '\'' .. self.token.kind .. '\': \'' .. self.token.value .. '\'\n'
+	s = indent_s .. '\'' .. self.kind .. '\': \'' .. self.value .. '\'\n'
 	
 	return s
 end

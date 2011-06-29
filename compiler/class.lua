@@ -26,6 +26,15 @@ function Class:init(context,node)
 	
 	self.node = node
 	
+	-- Basic info gathering
+	
+	self.name_node = node.nodes[2]
+	self.name = self.name_node.value
+	
+	if not node.nodes[3]:isa(EmptyNode) then
+		self.parent_node = node.nodes[3].nodes[2]
+	end
+	
 	-- Memoization
 	
 	self.valid_interface = false
