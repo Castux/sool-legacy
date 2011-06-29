@@ -46,6 +46,7 @@ g.arg_def = S {
 }
 
 g.list_arg_def = S {
+	name = 'list of argument definitions',
 	'arg_def',
 	R { S { T ',', 'arg_def' } }
 }

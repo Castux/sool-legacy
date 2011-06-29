@@ -159,7 +159,7 @@ function Rule:format_error(c)
 	
 	c:adderror('error','failed to parse ' .. self:get_name() .. ': expected ' .. expected .. ', found \'' .. c:peek().value .. '\' instead', c:peek().pos)
 	
-	-- Rule reminder if it has a name. Also, if it contains only one subrule, it's probably a "context" name, so put the inside rule instead
+	-- Rule reminder if it has a name
 	if self.name then
 		c:adderror('info', self.name .. ' := ' .. self:to_string())
 	end
@@ -590,7 +590,7 @@ function Choice:parse(c)
 			local succ,subnode,info = sub:parse(c)
 			
 			if not succ then
-				return false,nil,info
+				return false,subnode,info
 			else
 				return true,subnode
 			end
@@ -671,7 +671,7 @@ function Terminal:parse(c)
 		local str = '\'' .. self.token .. '\'' .. c:format_opt()
 		c:adderror('error','expected ' .. str .. ', found \'' .. head.value .. '\' instead', head.pos)
 		
-		return false,node,true
+		return false,nil,true
 	end
 	
 end
@@ -998,12 +998,29 @@ end
 
 function NamedRule:parse(c)
 	
+	local head = c:peek()
+	local first = self:get_first_set()
+	
+	-- Is lookahead valid?
+	
+	if not first[head.kind] and not self:is_epsilon() then
+		self:format_error(c)
+		return false,nil,true
+	end
+	
 	local succ,node,info = self.rule:parse(c)
 	
-	-- Change the rule
-	node.rule = self
-	
-	return succ,node,info
+	if succ then
+		-- Take node as own
+		node.rule = self
+		return true,node
+	else
+		if info then
+			-- Give context
+			c:adderror('info','in ' .. self:get_name() .. ' started here:', node and node:first())
+		end
+		return false,node
+	end
 end
 
 -------------
@@ -1142,13 +1159,22 @@ function Node:to_string(indent)
 	
 	local indent_s = string.rep("| ",indent)
 	
-	s = indent_s .. self.rule:get_name() .. ': {\n'
+	s = indent_s .. self.rule:get_name() .. ': '
 	
-	for i,v in ipairs(self.nodes) do
-		s = s .. v:to_string(indent + 1)
+	-- Empty repetitions
+	if #self.nodes == 0 then
+		s = s .. '<empty>\n'
+	
+	-- Normal case
+	else
+		s = s .. '{\n'
+		
+		for i,v in ipairs(self.nodes) do
+			s = s .. v:to_string(indent + 1)
+		end
+		
+		s = s .. indent_s .. '}\n'
 	end
-	
-	s = s .. indent_s .. '}\n'
 	
 	return s
 end
@@ -1182,7 +1208,7 @@ function TerminalNode:to_string(indent)
 	
 	local indent_s = string.rep("| ",indent)
 	
-	s = indent_s .. self.token.kind .. ': ' .. self.token.value .. '\n'
+	s = indent_s .. '\'' .. self.token.kind .. '\': \'' .. self.token.value .. '\'\n'
 	
 	return s
 end
@@ -1266,7 +1292,11 @@ function ParsingContext:format_opt()
 			str = str .. ', '
 		end
 		
-		str = str .. opt:get_name()
+		if opt:isa(Sequence) and not opt.name then
+			str = str .. '( ' .. opt:get_name() .. ' )'
+		else
+			str = str .. opt:get_name()
+		end
 	end
 	
 	return str
@@ -1306,7 +1336,7 @@ function parse(tokens)
 	
 	local success,node = SoolGrammar:parse(context)
 	print(success)
-	print(node:to_string())
+	if node then print(node:to_string()) end
 	print''
 	
 	return context.errors,node

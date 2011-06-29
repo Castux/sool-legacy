@@ -223,6 +223,8 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
+	do return end
+	
 	-- Gather all class nodes into one list
 	
 	local class_nodes = {}
