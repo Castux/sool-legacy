@@ -77,9 +77,9 @@ function Class:validate_interface()
 	
 	-- 3. Add all members
 	
-	local mem_met_node = self.node[4]
+	local mem_met_list = self.node.nodes[4].nodes
 	
-	for i,n in ipairs(mem_met_node) do
+	for i,n in ipairs(mem_met_list) do
 		if n.rule.name == 'member definition' then
 			
 			local mem = Member(self.context,n)
@@ -91,8 +91,8 @@ function Class:validate_interface()
 	end
 	
 	-- 4. Add all methods
-
-	for i,n in ipairs(mem_met_node) do
+	
+	for i,n in ipairs(mem_met_list) do
 		if n.rule.name == 'method definition' then
 			
 			local meth = Method()
@@ -104,8 +104,7 @@ function Class:validate_interface()
 	end
 	
 	-- DEBUG
-	
-	print(self.name)
+	print('DEBUG', self.name)
 	for i,v in ipairs(self.members) do
 		print('',v.type:signature(),v.name)
 	end
@@ -128,12 +127,12 @@ function Class:add_member(mem)
 	
 	local other = self.members[mem.name]
 	if other then
-		self.context:adderror('member ' .. mem.name .. ' was already defined', mem.node[3][1][1][3])
+		self.context:adderror('member ' .. mem.name .. ' was already defined', mem.name_node.pos)
 		
 		if other.klass == self then
-			self.context:addinfo('here:',other.node[3][1][1][3])
+			self.context:addinfo('here:',other.name_node.pos)
 		else
-			self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.node[3][1][1][3])
+			self.context:addinfo('in parent class ' .. other.klass.name .. ':', other.name_node.pos)
 		end
 	else
 		-- Add to members table
@@ -150,7 +149,8 @@ function Class:add_member(mem)
 		setter.private = mem.private
 		setter.setter = true
 		
-		self:add_method(setter)
+		table.insert(self.methods,setter)
+		self.methods[setter.sel] = setter
 		
 		-- And getter method
 		
@@ -158,19 +158,22 @@ function Class:add_member(mem)
 		getter.builtin = true
 		getter.private = mem.private
 		
-		self:add_method(getter)
+		table.insert(self.methods,getter)
+		self.methods[getter.sel] = getter
 	end
 
 end
 
 function Class:add_method(meth)
 	
+	meth.klass = self
+	
 	-- Basic forbidden method/member name collision
 	
 	if self.members[meth.name] then
-		self.context:adderror('method definition shadows member of the same name', nova.node_pos(meth.node))
-		self.context:addinfo('defined here:', nova.node_pos(self.members[meth.name].node))
-		return false
+		self.context:adderror('method definition shadows member of the same name', meth.node and meth.node:position(1,7))
+		self.context:addinfo('defined here:', self.members[meth.name].node:position())
+		return
 	end
 		
 	-- Selector collision: complain or overload
@@ -182,9 +185,9 @@ function Class:add_method(meth)
 		-- If it was in the same class, complain
 		
 		if other.klass == self then
-			self.context:adderror('method with selector ' .. meth.sel.sig .. ' was already defined in this class', nova.node_pos(meth.node))
-			self.context:addinfo('here:', nova.node_pos(other.node))
-			return false
+			self.context:adderror('method with selector ' .. meth.sel.sig .. ' was already defined in this class', meth.node:position(1,7))
+			self.context:addinfo('here:', other.node:position(1,7))
+			return
 		
 		-- If it was in a parent class, overload by putting it at the same place
 		
@@ -195,27 +198,22 @@ function Class:add_method(meth)
 					-- Check that the whole signature is the same (return type too)
 					
 					if other.sig ~= meth.sig then
-						self.context:adderror('return type mismatch in method ' .. meth.sig, nova.node_pos(meth.node))
-						self.context:addinfo('that overrides ' .. other.sig, nova.node_pos(other.node))
-						return false
+						self.context:adderror('return type mismatch in method ' .. meth.sig, meth.ret_node:position())
+						self.context:addinfo('that overrides ' .. other.sig, other.ret_node:position())
+						return
 					end
 					
 					-- And replace
 					
 					self.methods[i] = meth
-					self.selectors[meth.sel] = meth
-					return false
-				end				
+					self.methods[meth.sel] = meth
+					return
+				end
 			end
 		end
 	
 	end
 	
-	print('adding ', meth.sig, other)
-	
-	meth.klass = self
-	
 	table.insert(self.methods,meth)
 	self.methods[meth.sel] = meth
-	
 end

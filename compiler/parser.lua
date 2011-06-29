@@ -810,9 +810,7 @@ function Repetition:parse(c)
 				table.insert(c.last_opt,self.rule)
 			end
 			
-			-- And go on
-			return true,node
-		
+			break
 		else
 			local succ,subnode,info = self.rule:parse(c)
 			
@@ -822,6 +820,12 @@ function Repetition:parse(c)
 				table.insert(node.nodes,subnode)
 			end
 		end
+	end
+	
+	if #node.nodes > 0 then
+		return true,node
+	else
+		return true,EmptyNode(self)
 	end
 end
 
@@ -1011,8 +1015,6 @@ function NamedRule:parse(c)
 	local succ,node,info = self.rule:parse(c)
 	
 	if succ then
-		-- Take node as own
-		node.rule = self
 		return true,node
 	else
 		if info then
@@ -1117,18 +1119,18 @@ function Node:position(first,last)
 		error('Empty node, that should nooooot happen')
 	end
 	
+	local first = first or 1
+	local last = last or #self.nodes
+	
 	if first > last then
 		error('Invalid range')
 	end
 	
-	local first = first or 1
-	local last = last or #self.nodes
-	
-	while not self.nodes[first] do
+	while self.nodes[first]:isa(EmptyNode) do
 		first = first + 1
 	end
 	
-	while not self.nodes[last] do
+	while self.nodes[last]:isa(EmptyNode) do
 		last = last - 1
 	end
 	
@@ -1161,22 +1163,32 @@ function Node:to_string(indent)
 	
 	s = indent_s .. self.rule:get_name() .. ': '
 	
-	-- Empty repetitions
-	if #self.nodes == 0 then
-		s = s .. '<empty>\n'
+	s = s .. '{\n'
 	
-	-- Normal case
-	else
-		s = s .. '{\n'
-		
-		for i,v in ipairs(self.nodes) do
-			s = s .. v:to_string(indent + 1)
-		end
-		
-		s = s .. indent_s .. '}\n'
+	for i,v in ipairs(self.nodes) do
+		s = s .. v:to_string(indent + 1)
 	end
 	
+	s = s .. indent_s .. '}\n'
+	
 	return s
+end
+
+
+-- Return useful nodes in lists such as " subtype { ',' subtype } "
+
+function Node:flatten_list()
+	local nodes = {}
+	
+	table.insert(nodes,self.nodes[1])
+	
+	if not self.nodes[2]:isa(EmptyNode) then
+		for i,v in ipairs(self.nodes[2].nodes) do
+			table.insert(nodes,v.nodes[2])
+		end
+	end
+	
+	return nodes
 end
 
 ------------------
@@ -1315,20 +1327,6 @@ end
 ---------------
 -- Utilities --
 ---------------
-
--- Return useful nodes in lists such as " subtype { ',' subtype } "
-
-function flatten_list(l)
-	local nodes = {}
-	
-	table.insert(nodes,l[1])
-	
-	for i,v in ipairs(l[2]) do
-		table.insert(nodes,v[2])
-	end
-	
-	return nodes
-end
 
 -- Public global functions
 

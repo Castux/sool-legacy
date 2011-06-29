@@ -97,13 +97,14 @@ function Type:validate(context,node)
 	
 	-- Weakness
 	
-	if #node[1] > 0 then
+	if not node.nodes[1]:isa(EmptyNode) then
 		single.weak = true
 	end
 	
 	-- Built-in basic classes
 	
-	local t = node[2][1][1]
+	local tnode = node.nodes[2]
+	local t = tnode.kind
 	
 	if t == 'num' then
 		single.klass = Number
@@ -118,11 +119,11 @@ function Type:validate(context,node)
 	
 	elseif t == 'ClassName' then
 		
-		local cname = node[2][1][2]
+		local cname = tnode.value
 		local class = context.classes[cname]
 		
 		if not class then
-			context:adderror('unknown class ' .. cname, node[2][1][3])
+			context:adderror('unknown class ' .. cname, tnode.pos)
 			return false
 		else
 			single.klass = class
@@ -130,33 +131,33 @@ function Type:validate(context,node)
 	
 	-- Templated built-ins. Scary.
 	
-	elseif node[2].rule.name == 'array type' then
+	elseif tnode.rule.name == 'array type' then
 		
 		local subtype = Type()
-		if not subtype:validate(context,node[2][2][1]) then
+		if not subtype:validate(context,tnode.nodes[2]) then
 			return false
 		end
 		
 		single.klass = Array(subtype)
 		
-	elseif node[2].rule.name == 'list type' then
+	elseif tnode.rule.name == 'list type' then
 
 		local subtype = Type()
-		if not subtype:validate(context,node[2][2][1]) then
+		if not subtype:validate(context,tnode.nodes[2]) then
 			return false
 		end
 		
 		single.klass = List(subtype)
 
-	elseif node[2].rule.name == 'table type' then
+	elseif tnode.rule.name == 'table type' then
 
 		local ktype = Type()
-		if not ktype:validate(context,node[2][2][1]) then
+		if not ktype:validate(context,tnode.nodes[2]) then
 			return false
 		end
 
 		local vtype = Type()
-		if not vtype:validate(context,node[2][4][1]) then
+		if not vtype:validate(context,tnode.nodes[4]) then
 			return false
 		end
 		
@@ -173,7 +174,7 @@ function Type:validate(context,node)
 		single.klass == Vector or
 		single.klass == Symbol ) then
 		
-		context:adderror('cannot set ownership information with always-copied type ' .. single.klass.name,node[1][1][1][3])
+		context:adderror('cannot set ownership information with always-copied type ' .. single.klass.name,node.nodes[1].pos)
 		return false
 	end
 	
