@@ -1,0 +1,153 @@
+Refactoring
+
+After writing my fancy automatic parser and starting semantic analysis up to class interface validation, I was already unsatisfied with my choice of internal data structures. Namely, my parse tree (or "concrete syntax tree"). As I mentionned earlier, it was too deep. Full of useless levels that required at least three or 4 consecutive indexings to get the interesting data. Furthermore, the nodes (which were simple lists of subnodes) were not easy to manipulate, and I started having utility functions in the nova table, very error prone due to the variety of node produced by the parser.
+
+Hence came the time of... refactoring. Rewriting code to acheive the same functionality, but in a cleaner and - if possible - more efficient way. In that case, I objectified.
+
+My code was using several paradigms at the same time. The lexer is very imperative, producing bits of data. The parser used this data and the grammar data to organize it in trees and did so by using lots of "switch" code. Grammar rules had field saying what types they were (choice or sequence) and what attributes they had (repetition, optional), hence the "validate" and "parse" function doing basically "if choice then ... else ..." and "if repetition then ... elseif optional then ... end" all the time.
+
+To make it more ugly, the parsing context (which keeps track of the current token) was a "Lua object" made using the upvalues technique:
+
+function new_object()
+	local o = {}
+	
+	local member = 4
+	
+	o.method = function()
+		-- use upvalue member
+	end
+	
+	return o
+end
+
+And finally the analyer used another kind of self-made object-orientation, that I have been using for a long time in Lua, based on class tables used as metatables for objects.
+
+A big mess for sure.
+
+So I rewrote everything to use my better Lua object system. Rules in the grammar are objects: Sequence, Choice, and Terminal are the basic blocks. The first two can (must) have at least two subrules. Terminal just holds a string. They can be wrapped inside Optional and Repetition objects, which themselves can have only one subrule. OOP is good, and it makes the current code easier to write in sool later for the dreaded bootstrapping sool compiler.
+
+Thanks to Lua's syntactic sugar, we can remove parentheses in function calls that take a single table, and my object system uses the class name as constructor. And we end up with stuff like:
+
+Sequence { Terminal 'a', Choice { Terminal 'b', Terminal 'c' } }
+
+for rule: 'a' ( 'b' | 'c' ). The same rule name resolving that before exists, so sool's grammar looks like this (using shorcuts):
+
+g.class_def = S {
+	name = 'class definition',
+	T 'class',
+	T 'ClassName',
+	O { S { T ':', T 'ClassName' } },
+	R { C { 'member_def', 'method_def' } },
+	T 'end'
+}
+
+Then we make a Grammar object with that table of rules and the entry rule, and happily parse:
+	
+	SoolGrammar = Grammar(g,'chunk')
+	local context = ParsingContext(tokens)
+	local success,node = SoolGrammar:parse(context)
+
+Each rule object has a validate() and a parse(context) method, and parse() returns a Node object. Nodes are glorified lists of subnodes (for sequences and repetitions) or TerminalNodes, which are basically tokens. There is also the EmptyNode for repetitions or optionals that did not match.
+
+Now that nodes are objects, it's a lot easier to request their Position, subnodes, first token, position range between two subrules (for diagnostic messages, we often need to print meaningful portions of the original text) and to pretty print them:
+
+member definition: {
+| [ 'private' ]: <empty>
+| type declaration: {
+| | [ '~' ]: <empty>
+| | 'vec': 'vec'
+| }
+| 'Name': 'v2'
+}
+
+All of that dealing with special cases, absent subnodes and all the stuff that kept making me index nil with the data-based version. Now all code is nicely separated into classes, all tidy and clean. So far, a lot less bugs.
+
+Also, the parse tree is less deep, since choices return directly the chosen subnode (or an EmptyNode), repetitions are either an EmptyNode or a Node with subnodes, and TerminalNodes do not add a wrapping table around tokens as they used to.
+There are a few utility methods like "flatten_list" that expect a node created by a rule like " subrule { ',' subrule } " and return only the interesting subnodes in a list. All this combined will (should) make the parse tree easier to handle, and the analyzer code a lot cleaner.
+
+So far, I converted the code that validates up to classes' interfaces, and it's been going great. We now populate Class objects with names, parent classes (checking for circular inheritence). Inherit members and methods. Add members (with name collision detection and automatic filling or getter/setter methods), methods (there again, name collision with members, selector collisions with other methods, and method overriding).
+
+I also reviewed some core concepts of the analyzer:
+	Objects are instances of classes (they have no "type").
+	Variables have types (ownership + class of pointed object).
+
+In the implementation, I went even one step deeper, there is a SingleType object (weak = true/false, class), and a Type object, which is a wrapper list of single types. That way, methods will have one "argument type", one "return type", and expressions one "type", variables one "type". Some of them will be multiple, some not, but then we can have a centralised (in the Type class) management of assignment and type compatibility, etc. That avoids having to handle multiple cases in multiple places.
+
+Likewise, when it comes to that, there will be an Expression class, which may be multiple-valued, and will deal with flattening lists and counting elements, and all the annoying things like that.
+
+The next step will be creating the Block object, which will have a certain importance, since it will be were local variables will be stored. The protector of lexical scoping. The holder of names.
+
+The main block of a method will receive the arguments as locals, in the same way that the block in a loop will receive the iterator name as a local. Same for the "if/while cond as name then".
+
+I am not sure how close to the parse tree should be the abstract tree. How soon to apply transformations. Should I have objects for each control structure, for instance. Can I write assembly directly from these straight after validation, or should I have steps of intermediate representation? I read a paper that promoted the use of "nano-passes", each one having one precise small goal, transforming the tree towards its final form. I'd rather not get too much documentation on compiler design. One of the goal of the endeavor is to experiment by myself and learn on the way. That implies also making mistakes and discarding bad ideas. But also generating my own good ideas, which is awesome.
+
+But here are a few thoughts.
+
+1. When I instanciate an object with
+
+Obj(arg)
+
+there are actually several steps:
+
+obj = allocate memory for an Obj
+call obj.init(arg)
+
+Now validating (and later generating code for) the message is exactly the same as if I had called later obj.init(arg). Therefore the code should not be duplicated. Does that mean that I can transform my instanciation instruction and replace it with an internal "allocate" instruction, followed by a regular method call?
+After which only I would start the validation of my tree?
+
+But then if there is a problem, will the user see a diagnostic about a messaging instruction (that he did not write), or about the instanciation? How to make the difference?
+
+Or should I just have the code that validates my instanciation call, behind, some generic messaging validation code that somehow will know what to do?
+
+2. The syntax to access a member and a local is the same (using its name), and they both produce a "method call" node without arguments. Should I just have the validating code deal with both cases, or transform the tree into two different data structures, that each deal with things the way they have to? Because later, the code generation will be very different anyway.
+
+3. Message passing itself will take many forms. If the object is of a builtin class, it will be a direct function call. If it's a user-made object, there will be use of virtual tables. Even then, we can imagine that methods that are actually not overridden can in fact be called directly as well. Plus, later, the generic 'obj' that will use a hash table dispatch.
+
+Is that in the realm of optimisation already, should that be a separate pass?
+
+4. Actual code (all that is not interface, that is, the content of blocks) has a very tree-like structure, as illustrated by the parse tree. But on the other hand, low-level code is very linear. Evaluating "a = b + c" is really:
+
+tmp1 = evaluate c
+tmp2 = evaluate b
+tmp3 = call tmp2.+(tmp3)
+assign tmp3 to a
+
+The last step is a lie. If 'a' is not local, it's really:
+
+call self.a=(tmp3)
+
+See, here again we have a hidden message passing, we really shouldn't have a different validation/code generation (that the two others already mentionned: the explicit one, and the instanciation one).
+
+Now, once we know which 'a' we're talking about, there even one more step if it's a strong variable:
+
+if a is not nil, free the pointed object
+assign tmp3 to a
+
+I realise that I currently have a very monolithic approach. As I go through the parse tree, I build the internal representation (Classes, Methods, Members, Types, etc) and validate on the fly, making sure that everything - so far - is in accordance with the language definition.
+
+That "nanopass" design paper (http://www.cs.indiana.edu/~dyb/pubs/nano-jfp.pdf) is not that easy to read. I admit I didn't get most of it, and I was lost with the first lines of Scheme they show. But the abstract and concept do make a lot of sense.
+
+The first step would be to make an abstract syntax tree (AST) from the parse tree. That is, associate an object to each significant node. Remove the tokens, keep their meaning. Have fields in objects instead of lists of undifferenciated subnodes.
+Then create "passes", that is, sets of functions that apply to particular AST nodes, and do one simple task. Each pass would traverse the whole tree and apply these functions (or methods) to the given AST nodes. They could even be defined in a different file for clarity. A pseudo-code common framework could be:
+
+Pass = {
+	name (string)
+	concerned AST nodes (list of AST classes)
+}
+
+Applying a pass would be as simple as traversing the whole AST, and when finding a node of the required type, calling the pass name on it. Some optimization would prevent going through the whole tree but somehow targeting directly only the wanted nodes, but that's detail.
+
+And the compiling process would simply be applying all passes one by one. The final product should be assembly code (or the very last step before).
+
+With the names used in the paper, there would be different kinds of passes:
+1. simplification. Like replacing binary operations with their equivalent message passing, or argument passing with assignments to temporary values. Or replacing list constructors with instanciation and setting methods. Reduce the number of existing constructs to common atomic operations.
+2. verification. Obvious stuff like name shadowing, or less like type compatibility in assignment. After the simplification, there should be less cases of that (to continue the example, argument passing, explicit assignment, handling return values, etc. can all be seen as a multiple assignment, and therefore there would be only one kind of verification there).
+3. conversion. Go from high level to low level. Replace 'if' constructs with labels and branch instructions
+4. optimization. Try to make things go faster. Remove code that is never executed, or that has no effect at all.
+5. analysis. Gather information about structures, to be used in later passes. I'm thinking for instance to have the compiler detect which methods are never overriden, so that they do not need to be virtual, or which classes are not subclassed, or which methods make no use of self and can be "static" in C++ terms. Type inferring will probably be one of these too.
+
+The advantage of these small passes, as advertised by the paper, is that we can monitor the state of the tree between each of them and therefore track bugs more efficiently. Each task should be very small, doing one precise unique thing. Also, optional passes can be easily enabled or disabled, from the pass framework, instead of having 'if' stuff deep into analyzer code refering to outside options.
+
+The more I think about it, the more I like it. I still have doubts about the diagnostic problem. Once the tree is super-transformed, how to make error messages user friendly? The first AST will have direct references to the parse tree, but when replacing nodes with other nodes, how to keep the relation to the user's code?
+
+Am I already going to refactor my brand new up-to-interfaces analyzer? Maybe it's for the greater good. To be continued...
