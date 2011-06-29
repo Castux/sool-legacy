@@ -30,7 +30,7 @@ g.class_def = S {
 g.member_def = S {
 	name = 'member definition',
 	O { T 'private' },
-	T 'type',
+	'type',
 	T { name = 'member name', 'Name' }
 }
 

@@ -100,7 +100,7 @@ function Rule:to_string()
 end
 
 function Rule:get_name()
-	return self.name and self.name:gsub(' ','_') or self:to_string()
+	return self.name or self:to_string()
 end
 
 function Rule:is_epsilon()
@@ -135,6 +135,34 @@ end
 
 function Rule:validate()
 	error('Override this')
+end
+
+-- Returns: success (bool), node, context requested when error (bool)
+
+function Rule:parse(context)
+	error('Override me')
+end
+
+function Rule:format_error(c)
+	
+	local expected = ""
+	local count = 0
+	for k,v in pairs(self:get_first_set()) do
+		expected = expected .. "'" .. k .. "' "
+		count = count + 1
+	end
+	expected = expected:sub(1,#expected-1)
+	
+	if count > 1 then
+		expected = 'one of ' .. expected
+	end
+	
+	c:adderror('error','failed to parse ' .. self:get_name() .. ': expected ' .. expected .. ', found \'' .. c:peek().value .. '\' instead', c:peek().pos)
+	
+	-- Rule reminder if it has a name. Also, if it contains only one subrule, it's probably a "context" name, so put the inside rule instead
+	if self.name then
+		c:adderror('info', self.name .. ' := ' .. self:to_string())
+	end
 end
 
 --------------
@@ -329,6 +357,48 @@ function Sequence:validate()
 	return self.valid and ret
 end
 
+function Sequence:parse(c)
+	
+	local head = c:peek()
+	local first = self:get_first_set()
+	
+	-- Is lookahead valid?
+	
+	if not first[head.kind] and not self:is_epsilon() then
+	
+		self:format_error(c)
+		return false,nil,true
+	end
+	
+	-- Yes, parse then
+	
+	local node = Node(self)
+	
+	for i,sub in ipairs(self.rules) do
+		
+		local succ,subnode,info = sub:parse(c)
+		
+		node.nodes[i] = subnode
+		
+		if not succ then
+			if info and self.name then
+				-- Give context
+				c:adderror('info','in ' .. self:get_name() .. ' started here:', node:first())
+				
+				return false,node
+			else
+				-- Forward context request
+				return false,node,info
+			end
+		end
+		
+	end
+	
+	-- Hey, success
+	
+	return true,node
+end
+
 ------------
 -- Choice --
 ------------
@@ -497,6 +567,38 @@ function Choice:validate()
 	return self.valid and ret
 end
 
+function Choice:parse(c)
+	
+	local head = c:peek()
+	local first = self:get_first_set()
+	
+	-- Is lookahead valid?
+	
+	if not first[head.kind] and not self:is_epsilon() then
+	
+		self:format_error(c)
+		return false,nil,true
+	end
+	
+	-- Yes, parse then
+	
+	for i,sub in ipairs(self.rules) do
+		
+		local first = sub:get_first_set()
+		
+		if first[head.kind] then
+			local succ,subnode,info = sub:parse(c)
+			
+			if not succ then
+				return false,nil,info
+			else
+				return true,subnode
+			end
+		end
+	end
+	
+end
+
 --------------
 -- Terminal --
 --------------
@@ -553,6 +655,27 @@ end
 function Terminal:validate()
 	return true
 end
+
+function Terminal:parse(c)
+	
+	local head = c:peek()
+	
+	if head.kind == self.token then
+		
+		local node = TerminalNode(self,head)
+		c:consume()
+		
+		return true,node
+	else
+		
+		local str = '\'' .. self.token .. '\'' .. c:format_opt()
+		c:adderror('error','expected ' .. str .. ', found \'' .. head.value .. '\' instead', head.pos)
+		
+		return false,node,true
+	end
+	
+end
+
 ----------------
 -- Repetition --
 ----------------
@@ -665,6 +788,43 @@ function Repetition:validate()
 	return self.rule:validate() and self.valid
 end
 
+function Repetition:parse(c)
+	
+	local first = self.rule:get_first_set()
+	local node = Node(self)
+	
+	while true do
+	
+		local head = c:peek()
+		
+		-- Is lookahead valid?
+		if not first[head.kind] then
+			
+			if self.name then
+				table.insert(c.last_opt,self)
+			elseif self.rule:isa(Choice) then
+				for i,sub in ipairs(self.rule.rules) do
+					table.insert(c.last_opt,sub)
+				end
+			else
+				table.insert(c.last_opt,self.rule)
+			end
+			
+			-- And go on
+			return true,node
+		
+		else
+			local succ,subnode,info = self.rule:parse(c)
+			
+			if not succ then
+				return false,node,info
+			else
+				table.insert(node.nodes,subnode)
+			end
+		end
+	end
+end
+
 --------------
 -- Optional --
 --------------
@@ -738,6 +898,40 @@ function Optional:validate()
 	return self.rule:validate()
 end
 
+function Optional:parse(c)
+	
+	local head = c:peek()
+	local first = self:get_first_set()
+	
+	-- Is lookahead valid?
+	
+	if not first[head.kind] then
+		
+		-- Hey, it's OK, we're optional anyway
+		-- Remember us
+		
+		if self.name then
+			table.insert(c.last_opt,self)
+		elseif self.rule:isa(Choice) then
+			for i,sub in ipairs(self.rule.rules) do
+				table.insert(c.last_opt,sub)
+			end
+		else
+			table.insert(c.last_opt,self.rule)
+		end
+		
+		-- And go on
+		
+		return true,EmptyNode(self)
+	
+	else
+		
+		-- Return directly the subrule's node
+		
+		return self.rule:parse(c)
+	end
+end
+
 ---------------
 -- NamedRule --
 ---------------
@@ -802,6 +996,16 @@ function NamedRule:validate()
 	return self.rule:validate()
 end
 
+function NamedRule:parse(c)
+	
+	local succ,node,info = self.rule:parse(c)
+	
+	-- Change the rule
+	node.rule = self
+	
+	return succ,node,info
+end
+
 -------------
 -- Grammar --
 -------------
@@ -853,11 +1057,9 @@ function Grammar:validate()
 	return self.valid
 end
 
-function Grammar:parse(tokens)
+function Grammar:parse(context)
 	
-	local c = ParsingContext(tokens)
-	
-	local success,node = self.entry:parse(c)
+	local success,node = self.entry:parse(context)
 end
 
 ----------
@@ -896,6 +1098,10 @@ function Node:position(first,last)
 		error('Empty node, that should nooooot happen')
 	end
 	
+	if first > last then
+		error('Invalid range')
+	end
+	
 	local first = first or 1
 	local last = last or #self.nodes
 	
@@ -908,6 +1114,23 @@ function Node:position(first,last)
 	end
 	
 	return self.nodes[first]:position():range(self.nodes[last]:position())
+end
+
+-- Get the position of the first token in the node tree
+
+function Node:first()
+	
+	if #self.nodes == 0 then
+		error('Empty node, that should nooooot happen')
+	end
+	
+	local first = first or 1
+	
+	while self.nodes[first]:isa(EmptyNode) do
+		first = first + 1
+	end
+	
+	return self.nodes[first]:first()
 end
 
 ------------------
@@ -926,6 +1149,34 @@ end
 
 function TerminalNode:position()
 	return self.token.pos
+end
+
+function TerminalNode:first()
+	return self.token.pos
+end
+
+---------------
+-- EmptyNode --
+---------------
+
+-- Used for filling in optionals and repetitions that parse nothing.
+-- For implementation reasons, it's better to have something that nil.
+
+EmptyNode = class()
+
+function EmptyNode:init(rule)
+	
+	self.rule = rule
+	
+	return self
+end
+
+function EmptyNode:position()
+	return nil
+end
+
+function EmptyNode:first()
+	error('Should never be called')
 end
 
 ---------------------
@@ -971,27 +1222,10 @@ function ParsingContext:format_opt()
 			str = str .. ', '
 		end
 		
-		str = str .. rule_name(opt)
+		str = str .. opt:get_name()
 	end
 	
 	return str
-end
-
-function ParsingContext:expect(tok,node)
-	
-	local head = self:peek()
-	
-	if head.kind == tok then
-		table.insert(node,head)
-		self:consume()
-		return true
-	else
-		
-		local str = '\'' .. tok .. '\'' .. self:format_opt()
-		
-		self:adderror('error','expected ' .. str .. ', found \'' .. head.value .. '\' instead', head.pos)
-		return false
-	end
 end
 
 function ParsingContext:adderror(typ,mess,pos)
@@ -999,139 +1233,6 @@ function ParsingContext:adderror(typ,mess,pos)
 	local err = {'Parser', typ, mess, pos}
 	table.insert(self.errors,err)
 end
-
--- Returns: success (bool), node, context requested (bool)
-function ParsingContext:parse_rule(r)
-	
-	local nodes = {}
-	nodes.rule = r
-	
-	local node = {}
-	node.rule = r
-	
-	-- Terminal
-	if r.terminal then
-		
-		if not self:expect(r[1],node) then
-			return false,node,true
-		else
-			return true,node
-		end
-	end
-	
-	local first = first_set(r)
-	
-	while true do
-		
-		node = {}
-		node.rule = r
-		
-		local function retnode()
-			if r.repetition then
-				return nodes
-			else
-				return node
-			end
-		end
-		
-		-- Check that we can apply this rule
-		local head = self:peek()
-		if not first[head.kind] then
-			
-			-- It's ok, return success and the node how it is now (empty for optional, with the already parsed things for repetition)
-			if is_epsilon(r) then
-				
-				-- Remember me
-				if r.choice then
-					for i,sub in ipairs(r) do
-						table.insert(self.last_opt,sub)
-					end
-				elseif not r.name and r[1] then
-					table.insert(self.last_opt,r[1])
-				else
-					table.insert(self.last_opt,r)
-				end
-				
-				return true,retnode()
-			
-			else
-				local expected = ""
-				local count = 0
-				for k,v in pairs(first) do
-					expected = expected .. "'" .. k .. "' "
-					count = count + 1
-				end
-				expected = expected:sub(1,#expected-1)
-				
-				if count > 1 then
-					expected = 'one of ' .. expected
-				end
-				
-				self:adderror('error','failed to parse ' .. rule_name(r) .. ': expected ' .. expected .. ', found \'' .. head.value .. '\' instead', head.pos)
-				
-				-- Rule reminder if it has a name. Also, if it contains only one subrule, it's probably a "context" name, so put the inside rule instead
-				if r.name then
-					self:adderror('info', r.name .. ' := ' .. rule_to_string( #r == 1 and r[1] or r ))
-				end
-				
-				return false,retnode(),true
-			end
-		
-		end
-		
-		-- Sequence
-		if not r.choice then
-			
-			for i,sub in ipairs(r) do
-				
-				local succ,subnode,info = self:parse_rule(sub)
-				
-				table.insert(node,subnode)
-				
-				if not succ then
-					if info and r.name then
-						-- Give context
-						self:adderror('info','in ' .. rule_name(r) .. ' started here:', node_start(node))
-						
-						return false,retnode()
-					end
-					
-					return false,retnode(),info
-				end
-				
-			end
-			
-		-- Choice
-		else
-			
-			for i,sub in ipairs(r) do
-				
-				local first = first_set(sub)
-				
-				if first[head.kind] then
-					local succ,subnode,info = self:parse_rule(sub)
-					
-					if not succ then
-						return false,retnode(),info
-					else
-						node = subnode
-					end
-				end
-			end
-			
-		end
-		
-		-- Should we stop or continue?
-		if not r.repetition then
-			return true,retnode()
-		else
-			table.insert(nodes,node)
-		end
-	end
-	
-	error('Unreachable')
-end
-	
 
 ---------------
 -- Utilities --
@@ -1193,9 +1294,9 @@ SoolGrammar = dofile 'sool_grammar.lua'
 
 function parse(tokens)
 	
-	local context = ParsingContext(tokens,SoolGrammar)
+	local context = ParsingContext(tokens)
 	
-	--local success,node = context:parse()
+	local success,node = SoolGrammar:parse(context)
 	
 	--print_tree(node)
 	--print''
