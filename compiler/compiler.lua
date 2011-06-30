@@ -1,6 +1,6 @@
 require 'lexer'
 require 'parser'
-require 'Context'
+require 'ast'
 
 --[[
 File structure
@@ -223,21 +223,19 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
-	-- Gather all class nodes into one list
+	-- Transform parse tree into abstract syntax tree
 	
-	local class_nodes = {}
+	local context = Context()
 	
 	for i,chunk in ipairs(chunks) do
-		for j,class_node in ipairs(chunk.nodes[1].nodes) do
-			table.insert(class_nodes,class_node)
-		end
+		context:parse(chunk)
 	end
 	
-	chunks = nil
+	print(context:to_string())
 	
 	-- Launch analysis
 	
-	local context = Context()
+	do return end
 	
 	local errors = context:validate(class_nodes)
 	
