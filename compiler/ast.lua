@@ -118,14 +118,14 @@ function Class:parse(node)
 			mem:parse(n)
 			table.insert(self.members,mem)
 		
-		--elseif n.rule.name == 'method definition' then
+		elseif n.rule.name == 'method definition' then
 			
-			--local meth = Method()
-			--meth:parse(n)
-			--table.insert(self.methods,meth)
+			local meth = Method()
+			meth:parse(n)
+			table.insert(self.methods,meth)
 		
-		--else
-			--error('Wrong node: ' .. n.rule.name)
+		else
+			error('Wrong node: ' .. n.rule.name)
 		end
 	end
 	
@@ -148,11 +148,15 @@ function Class:to_string()
 	for i,v in ipairs(self.members) do
 		table.insert(t,v:to_string())
 	end
+	for i,v in ipairs(self.methods) do
+		table.insert(t,v:to_string())
+	end
 	
 	s = s .. table.concat(t,'\n')
 	
 	return 'Class:\n' .. self:indent(s)
 end
+
 ------------
 -- Member --
 ------------
@@ -411,4 +415,179 @@ end
 
 function ClassType:to_string()
 	return 'ClassType:\n' .. self:indent('class name: ' .. self.class_name)
+end
+
+------------
+-- Method --
+------------
+
+Method = class(AbstractNode)
+
+function Method:init()
+	
+	self.private = false
+	self.rtypes = {}
+	self.name = ''
+	self.setter = false
+	self.args = {}
+	self.body = nil
+	
+	return self
+end
+
+function Method:children()
+	
+	local c = {}
+	table.append(c,rtypes)
+	table.append(c,args)
+	table.insert(c,body)
+	
+	return c
+end
+
+function Method:parse(node)
+	
+	assert( node.rule.name == 'method definition' )
+	
+	-- Privacity
+	
+	if not node.nodes[2]:isa(EmptyNode) then
+		self.private = true
+	end
+	
+	-- Return types
+	
+	if not node.nodes[3]:isa(EmptyNode) then
+		local nodes = node.nodes[3]:flatten_list()
+		
+		for i,v in ipairs(nodes) do
+			local t = Type()
+			t:parse(v)
+			table.insert(self.rtypes,t)
+		end
+	end
+	
+	-- Name
+	
+	local name_node = node.nodes[4]
+	
+	if name_node.nodes[1].kind == 'Name' then
+		
+		self.name = name_node.nodes[1].value
+		if not name_node.nodes[2]:isa(EmptyNode) then
+			self.name = self.name .. '='
+			self.setter = true
+		end
+		
+	else
+		
+		self.name = name_node.nodes[2].value
+	end
+	
+	-- Arguments
+	
+	local arg_node = node.nodes[6]
+	
+	if not arg_node:isa(EmptyNode) then
+		
+		local nodes = arg_node:flatten_list()
+		for i,v in ipairs(nodes) do
+			local t = Argument()
+			t:parse(v)
+			table.insert(self.args,t)
+		end
+	end
+	
+	-- Body
+	
+	self.body = Block()
+	self.body:parse(node.nodes[8])
+	
+end
+
+function Method:to_string()
+	
+	local s = 'private: ' .. tostring(self.private) .. '\n'
+	
+	local t = {}
+	for i,v in ipairs(self.rtypes) do
+		table.insert(t,v:to_string())
+	end
+	
+	s = s .. table.concat(t,'\n') .. (#t > 0 and '\n' or '')
+	
+	s = s .. 'name: ' .. self.name .. '\n'
+	s = s .. 'setter: ' .. tostring(self.setter) .. '\n'
+	
+	local t = {}
+	for i,v in ipairs(self.args) do
+		table.insert(t,v:to_string())
+	end
+	
+	s = s .. table.concat(t,'\n') .. (#t > 0 and '\n' or '')
+	
+	s = s .. (self.body and self.body:to_string() or '<no body>')
+	
+	return 'Method:\n' .. self:indent(s)
+end
+
+--------------
+-- Argument --
+--------------
+
+Argument = class(AbstractNode)
+
+function Argument:init()
+	
+	self.type = nil
+	self.name = ''
+	
+	return self
+end
+
+function Argument:parse(node)
+	
+	self.node = node
+	
+	assert( node.rule.name == 'argument definition' )
+	
+	self.type = Type()
+	self.type:parse(node.nodes[1])
+	
+	self.name = node.nodes[2].value
+	
+end
+
+function Argument:children()
+	return {self.type}
+end
+
+function Argument:to_string()
+	
+	local s = self.type:to_string() .. '\nname: ' .. self.name
+	
+	return 'Argument:\n' .. self:indent(s)
+end
+
+-----------
+-- Block --
+-----------
+
+Block = class(AbstractNode)
+
+function Block:init()
+	
+	return self
+end
+
+function Block:parse(node)
+	
+	assert( node.rule.name == 'block' )
+	
+	self.node = node
+	
+end
+
+function Block:to_string()
+	return 'Block'
 end
