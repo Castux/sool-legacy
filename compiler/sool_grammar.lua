@@ -12,40 +12,52 @@ local g = {}
 g.chunk = S {
 	name = 'chunk',
 	R { 'class_def' },
-	T 'EOF'
+	T 'EOF',
+	
+	abstr = function(n) return Chunk(n[1]) end
 }
 
 g.class_def = S {
 	name = 'class definition',
 	T 'class',
 	T 'ClassName',
-	O { S { T ':', T 'ClassName' } },
+	O { S { T ':', T 'ClassName', abstr = function(n) return n[2] end } },
 	R { C { 'member_def', 'method_def' } },
-	T 'end'
+	T 'end',
+	
+	abstr = function(n) return Class(n[2],n[3],n[4]) end
 }
 
 g.member_def = S {
 	name = 'member definition',
 	O { T 'private' },
 	'type',
-	T { name = 'member name', 'Name' }
+	T { name = 'member name', 'Name' },
+	
+	abstr = function(n) return Member(n[1],n[2],n[3]) end
 }
 
 g.list_type = S {
 	'type',
-	R { S { T ',', 'type' } }
+	R { S { T ',', 'type', abstr = function(n) return n[2] end } },
+	
+	abstr = function(n) table.insert(n[2], n[1]) return n[2] end
 }
 
 g.arg_def = S {
 	name = 'argument definition',
 	N { name = 'argument type', 'type' },
-	T { name = 'argument name', 'Name' }
+	T { name = 'argument name', 'Name' },
+	
+	function(n) return Argument(n[1],n[2]) end
 }
 
 g.list_arg_def = S {
 	name = 'list of argument definitions',
 	'arg_def',
-	R { S { T ',', 'arg_def' } }
+	R { S { T ',', 'arg_def', abstr = function(n) return n[2] end } },
+	
+	abstr = function(n) table.insert(n[2], n[1]) return n[2] end
 }
 
 g.method_def = S {
