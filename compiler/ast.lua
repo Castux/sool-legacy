@@ -399,11 +399,365 @@ end
 
 Block = class(AbstractNode)
 
-function Block:init()
+function Block:init(stats,final)
+	
+	self.stats = stats
+	
+	table.insert(self.stats,final)
 	
 	return self
 end
 
 function Block:to_string()
-	return 'Block'
+	local t = {}
+	
+	for i,v in ipairs(self.stats) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'Block:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+-----------------------------
+-- Break, Continue, Return --
+-----------------------------
+
+Break = class(AbstractNode)
+
+function Break:init()
+	
+	return self
+end
+
+function Break:to_string()
+	return 'Break'
+end
+
+Continue = class(AbstractNode)
+
+function Continue:init()
+	
+	return self
+end
+
+function Continue:to_string()
+	return 'Continue'
+end
+
+Return = class(AbstractNode)
+
+function Return:init(rvals)
+	
+	self.rvals = rvals
+	
+	return self
+end
+
+function Return:to_string()
+	
+	if #self.rvals > 0 then
+		local t = {}
+		
+		for i,v in ipairs(self.rvals) do
+			table.insert(t,v:to_string())
+		end
+		
+		return 'Return:\n' .. self:indent(table.concat(t,'\n'))
+	
+	else
+		return 'Return'
+	end
+end
+
+------------------------
+-- Atomic expressions --
+------------------------
+
+AtomicNumber = class(AbstractNode)
+
+function AtomicNumber:init(val)
+	
+	self.val = val
+	
+	return self
+end
+
+function AtomicNumber:to_string()
+	return 'AtomicNumber:\n' .. self:indent(self.val)
+end
+
+AtomicString = class(AbstractNode)
+
+function AtomicString:init(val)
+	
+	self.val = val
+	
+	return self
+end
+
+function AtomicString:to_string()
+	return 'AtomicString:\n' .. self:indent(self.val)
+end
+
+AtomicBool = class(AbstractNode)
+
+function AtomicBool:init(val)
+	
+	self.val = val
+	
+	return self
+end
+
+function AtomicBool:to_string()
+	return 'AtomicBool:\n' .. self:indent(tostring(self.val))
+end
+
+AtomicSymbol = class(AbstractNode)
+
+function AtomicSymbol:init(val)
+	
+	self.val = val
+	
+	return self
+end
+
+function AtomicSymbol:to_string()
+	return 'AtomicSymbol:\n' .. self:indent(self.val)
+end
+
+AtomicNil = class(AbstractNode)
+
+function AtomicNil:init(val)
+	
+	return self
+end
+
+function AtomicNil:to_string()
+	return 'AtomicNil'
+end
+
+------------------
+-- Constructors --
+------------------
+
+ListCons = class(AbstractNode)
+
+function ListCons:init(exps)
+	
+	self.exps = exps
+	
+	return self
+end
+
+function ListCons:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.exps) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'ListCons:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+ArrayCons = class(AbstractNode)
+
+function ArrayCons:init(exps)
+	
+	self.exps = exps
+	
+	return self
+end
+
+function ArrayCons:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.exps) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'ArrayCons:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+VectorCons = class(AbstractNode)
+
+function VectorCons:init(exps)
+	
+	self.exps = exps
+	
+	return self
+end
+
+function VectorCons:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.exps) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'VectorCons:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+TableCons = class(AbstractNode)
+
+function TableCons:init(kvpairs)
+	
+	self.pairs = kvpairs
+	
+	return self
+end
+
+function TableCons:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.pairs) do
+		table.insert(t,v.key:to_string())
+		table.insert(t,v.value:to_string())
+	end
+	
+	return 'TableCons:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+ObjectCons = class(AbstractNode)
+
+function ObjectCons:init(cname,args)
+	
+	self.class_name = cname
+	
+	if args and args.isa then
+		self.args = {args}
+	elseif args then
+		self.args = args
+	else
+		self.args = {}
+	end
+	
+	return self
+end
+
+function ObjectCons:to_string()
+	
+	local s = 'class: ' .. self.class_name .. '\n'
+	
+	local t = {}
+	for i,v in ipairs(self.args) do
+		table.insert(t,v:to_string())
+	end
+	
+	s = s .. table.concat(t,'\n')
+	
+	return 'ObjectCons:\n' .. self:indent(s:gsub('\n$',''))
+end
+
+--------
+-- Do --
+--------
+
+Do = class(AbstractNode)
+
+function Do:init(block)
+	
+	self.body = block
+	
+	return self
+end
+
+function Do:to_string()
+	return 'Do:\n' .. self:indent(self.body:to_string())
+end
+
+-----------
+-- While --
+-----------
+
+While = class(AbstractNode)
+
+function While:init(cond,name,body)
+	
+	self.cond = cond
+	self.name = name
+	self.body = body
+	
+	return self
+end
+
+function While:to_string()
+	
+	local s = self.cond:to_string() .. '\n'
+	s = s .. 'local name of cond: ' .. (self.name or '<none>') .. '\n'
+	s = s .. self.body:to_string()
+	
+	return 'While:\n' .. self:indent(s)
+end
+
+--------
+-- If --
+--------
+
+If = class(AbstractNode)
+
+-- alts = { cond = Expression, body = Block }
+
+function If:init(alts,default,name)
+	
+	self.alts = alts
+	self.default = default
+	
+	self.name = name
+	
+	return self
+end
+
+function If:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.alts) do
+		table.insert(t, v.cond:to_string())
+		table.insert(t, v.body:to_string())
+	end
+	
+	if self.default then
+		table.insert(t, self.default:to_string())
+	end
+	
+	s = table.concat(t,'\n') .. '\n'
+	s = s .. 'local name of cond: ' .. (self.name or '<none>')
+	
+	return 'If:\n' .. self:indent(s)
+end
+
+---------
+-- For --
+---------
+
+For = class(AbstractNode)
+
+function For:init(names,exps,body)
+	
+	self.names = names
+	self.exps = exps
+	self.body = body
+	
+	return self
+end
+
+function For:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.names) do
+		table.insert(t,'name: ' .. v)
+	end
+	
+	for i,v in ipairs(self.exps) do
+		table.insert(t,v:to_string())
+	end
+	
+	table.insert(t,self.body:to_string())
+	
+	return 'For:\n' .. self:indent(table.concat(t,'\n'))
 end
