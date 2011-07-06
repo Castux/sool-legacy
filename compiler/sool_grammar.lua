@@ -1,3 +1,5 @@
+-- Shortcuts
+
 local S = Sequence
 local C = Choice
 local T = Terminal
@@ -6,6 +8,23 @@ local R = Repetition
 local O = Optional
 
 local N = NamedRule
+
+-- Helper function for lists following the model: rule := subrule { ',' subrule }
+
+local flatten = function(n)
+	
+	local t = {n[1]}
+	
+	for i,v in ipairs(n[2]) do
+		table.insert(t,v[2])
+	end
+	
+	return t
+end
+
+------------------------
+-- Grammar definition --
+------------------------
 
 local g = {}
 
@@ -34,14 +53,14 @@ g.member_def = S {
 	'type',
 	T { name = 'member name', 'Name' },
 	
-	abstr = function(n) return Member(n[1],n[2],n[3]) end
+	abstr = function(n) return Member(n[1] ~= nil,n[2],n[3]) end
 }
 
 g.list_type = S {
 	'type',
-	R { S { T ',', 'type', abstr = function(n) return n[2] end } },
+	R { S { T ',', 'type' } },
 	
-	abstr = function(n) table.insert(n[2], n[1]) return n[2] end
+	abstr = flatten
 }
 
 g.arg_def = S {
@@ -49,15 +68,15 @@ g.arg_def = S {
 	N { name = 'argument type', 'type' },
 	T { name = 'argument name', 'Name' },
 	
-	function(n) return Argument(n[1],n[2]) end
+	abstr = function(n) return Argument(n[1],n[2]) end
 }
 
 g.list_arg_def = S {
 	name = 'list of argument definitions',
 	'arg_def',
-	R { S { T ',', 'arg_def', abstr = function(n) return n[2] end } },
+	R { S { T ',', 'arg_def' } },
 	
-	abstr = function(n) table.insert(n[2], n[1]) return n[2] end
+	abstr = flatten
 }
 
 g.method_def = S {
@@ -67,12 +86,14 @@ g.method_def = S {
 	O { name = 'return types', 'list_type' },
 	C {
 		name = 'method name',
-		S { T 'Name', O { T '=' } },
-		S { T 'op', 'binop' }
+		S { T 'Name', O { T '=' }, abstr = function(n) return { name = n[1] .. (n[2] and '=' or ''), setter = n[2] ~= nil } end },
+		S { T 'op', 'binop', abstr = function(n) return { name = n[2], setter = false } end }
 	},
 	T '(', O { 'list_arg_def' }, T ')',
 	'block',
-	T 'end'
+	T 'end',
+	
+	abstr = function(n) return Method(n[2],n[3],n[4].name,n[4].setter,n[6],n[8]) end
 }
 
 g.type = S {
@@ -80,15 +101,33 @@ g.type = S {
 	O { T '~' },
 	C {
 		name = 'type',
-		T 'num',
-		T 'vec',
-		T 'sym',
-		T 'str',
-		T 'ClassName',
-		S { name = 'array type', T '[', N { name = 'subtype', 'type' }, T ']' },
-		S { name = 'list type', T '/', N { name = 'subtype', 'type' }, T '\\' },
-		S { name = 'table type', T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}' }
-	}
+		T { 'num', abstr = function(val) return NumberType() end },
+		T { 'vec', abstr = function(val) return VectorType() end },
+		T { 'sym', abstr = function(val) return SymbolType() end },
+		T { 'str', abstr = function(val) return StringType() end },
+		T { 'ClassName', abstr = function(val) return ClassType(val) end },
+		
+		S {
+			name = 'array type',
+			T '[', N { name = 'subtype', 'type' }, T ']',
+			
+			abstr = function(n) return ArrayType(n[2]) end
+		},
+		S {
+			name = 'list type',
+			T '/', N { name = 'subtype', 'type' }, T '\\',
+			
+			abstr = function(n) return ListType(n[2]) end
+		},
+		S {
+			name = 'table type',
+			T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}',
+			
+			abstr = function(n) return TableType(n[2],n[4]) end
+		}
+	},
+	
+	abstr = function(n) return Type(n[1] ~= nil,n[2]) end
 }
 
 g.block = S {
@@ -99,7 +138,9 @@ g.block = S {
 		T 'break',
 		T 'continue',
 		S { name = 'return statement', T 'return', O { name = 'list of return values', 'list_exp' } }
-	} }
+	} },
+	
+	abstr = function(n) return Block() end
 }
 
 g.statement = C {

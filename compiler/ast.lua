@@ -46,17 +46,6 @@ function Context:init()
 	return self
 end
 
-function Context:parse(chunk)
-	
-	assert(chunk.rule.name == 'chunk')
-	
-	for i,v in ipairs(chunk.nodes[1].nodes) do
-		local c = Class()
-		c:parse(v)
-		table.insert(self.classes,c)
-	end
-end
-
 function Context:children()
 	
 	return self.classes
@@ -73,69 +62,58 @@ function Context:to_string()
 end
 
 -----------
+-- Chunk --
+-----------
+
+Chunk = class(AbstractNode)
+
+function Chunk:init(classes)
+	
+	self.classes = classes
+	
+	return self
+end
+
+function Chunk:to_string()
+	local t = {}
+	
+	for i,v in ipairs(self.classes) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'Chunk:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+-----------
 -- Class --
 -----------
 
 Class = class(AbstractNode)
 
-function Class:init()
+function Class:init(name,parent,mem_meth)
 	
-	self.name = ''
-	self.parent_name = nil
+	self.name = name
+	self.parent_name = parent
 	
 	self.members = {}
 	self.methods = {}
 	
-	return self
-end
-
-function Class:parse(node)
-	
-	assert(node.rule.name == 'class definition')
-	
-	self.node = node
-	
-	-- Name
-	
-	self.name_node = node.nodes[2]
-	self.name = self.name_node.value
-	
-	-- Parent name
-	
-	if not node.nodes[3]:isa(EmptyNode) then
-		self.parent_name_node = node.nodes[3].nodes[2]
-		self.parent_name = self.parent_name_node.value
-	end
-	
-	-- Members and methods
-	
-	local mem_met_list = node.nodes[4].nodes
-	
-	for i,n in ipairs(mem_met_list) do
-		if n.rule.name == 'member definition' then
-			
-			local mem = Member()
-			mem:parse(n)
-			table.insert(self.members,mem)
+	for i,v in ipairs(mem_meth) do
 		
-		elseif n.rule.name == 'method definition' then
-			
-			local meth = Method()
-			meth:parse(n)
-			table.insert(self.methods,meth)
-		
+		if v:isa(Member) then
+			table.insert(self.members,v)
+		elseif v:isa(Method) then
+			table.insert(self.methods,v)
 		else
-			error('Wrong node: ' .. n.rule.name)
+			error('Expected Member or Method object')
 		end
 	end
 	
+	return self
 end
 
 function Class:children()
-	local c = {}
-	table.append(c,self.members)
-	table.append(c,self.methods)
-	return c
+	return {self.members, self.methods}
 end
 
 function Class:to_string()
@@ -163,37 +141,13 @@ end
 
 Member = class(AbstractNode)
 
-function Member:init()
+function Member:init(priv,typ,name)
 	
-	self.private = false
-	self.type = nil
-	self.name = ''
+	self.private = priv
+	self.type = typ
+	self.name = name
 	
 	return self
-end
-
-function Member:parse(n)
-	
-	assert(n.rule.name == 'member definition')
-	
-	self.node = n
-	
-	-- Privacity
-	
-	if not n.nodes[1]:isa(EmptyNode) then
-		self.private = true
-	end
-	
-	-- Type
-	
-	self.type = Type()
-	self.type:parse(n.nodes[2])
-	
-	-- Name
-	
-	self.name_node = n.nodes[3]
-	self.name = n.nodes[3].value
-	
 end
 
 function Member:children()
@@ -215,56 +169,12 @@ end
 
 Type = class(AbstractNode)
 
-function Type:init()
+function Type:init(weak,tclass)
 	
-	self.weak = false
-	self.tclass = nil
+	self.weak = weak
+	self.tclass = tclass
 	
 	return self
-end
-
-function Type:parse(node)
-	
-	self.node = node
-	
-	-- Weakness
-	
-	if not node.nodes[1]:isa(EmptyNode) then
-		self.weak = true
-	end
-	
-	-- TypeClass
-	
-	local tnode = node.nodes[2]
-	local t = tnode.kind
-	
-	if t == 'num' then
-		self.tclass = NumberType()
-		self.tclass:parse(tnode)
-	elseif t == 'str' then
-		self.tclass = StringType()
-		self.tclass:parse(tnode)
-	elseif t == 'vec' then
-		self.tclass = VectorType()
-		self.tclass:parse(tnode)
-	elseif t == 'sym' then
-		self.tclass = SymbolType()
-		self.tclass:parse(tnode)
-	elseif t == 'ClassName' then
-		self.tclass = ClassType()
-		self.tclass:parse(tnode)
-	elseif tnode.rule.name == 'array type' then
-		self.tclass = ArrayType()
-		self.tclass:parse(tnode)
-	elseif tnode.rule.name == 'list type' then
-		self.tclass = ListType()
-		self.tclass:parse(tnode)
-	elseif tnode.rule.name == 'table type' then
-		self.tclass = TableType()
-		self.tclass:parse(tnode)
-	else
-		error('Invalid type declaration node: ' .. t)
-	end
 end
 
 function Type:children()
@@ -324,20 +234,11 @@ end
 
 CompositeType = class(AbstractNode)
 
-function CompositeType:init()
+function CompositeType:init(sub)
 	
-	self.subtype = nil
+	self.subtype = sub
 	
 	return self
-end
-
-function CompositeType:parse(n)
-	
-	self.node = n
-	
-	self.subtype = Type()
-	self.subtype:parse(n.nodes[2])
-	
 end
 
 function CompositeType:children()
@@ -361,24 +262,12 @@ end
 
 TableType = class(AbstractNode)
 
-function TableType:init()
+function TableType:init(key,value)
 	
-	self.keytype = nil
-	self.valuetype = nil
+	self.keytype = key
+	self.valuetype = value
 	
 	return self
-end
-
-function TableType:parse(n)
-	
-	self.node = n
-	
-	self.keytype = Type()
-	self.keytype:parse(n.nodes[2])
-	
-	self.valuetype = Type()
-	self.valuetype:parse(n.nodes[4])
-	
 end
 
 function TableType:children()
@@ -395,18 +284,11 @@ end
 
 ClassType = class(AbstractNode)
 
-function ClassType:init()
+function ClassType:init(name)
 	
-	self.class_name = ''
+	self.class_name = name
 	
 	return self
-end
-
-function ClassType:parse(n)
-	self.node = n
-	
-	self.class_name = n.value
-	
 end
 
 function ClassType:children()
@@ -423,14 +305,16 @@ end
 
 Method = class(AbstractNode)
 
-function Method:init()
+function Method:init(priv,rtypes,name,setter,args,body)
 	
-	self.private = false
-	self.rtypes = {}
-	self.name = ''
-	self.setter = false
-	self.args = {}
-	self.body = nil
+	self.private = priv
+	self.rtypes = rtypes
+	
+	self.name = name
+	self.setter = setter
+	
+	self.args = args
+	self.body = body
 	
 	return self
 end
@@ -443,66 +327,6 @@ function Method:children()
 	table.insert(c,body)
 	
 	return c
-end
-
-function Method:parse(node)
-	
-	assert( node.rule.name == 'method definition' )
-	
-	-- Privacity
-	
-	if not node.nodes[2]:isa(EmptyNode) then
-		self.private = true
-	end
-	
-	-- Return types
-	
-	if not node.nodes[3]:isa(EmptyNode) then
-		local nodes = node.nodes[3]:flatten_list()
-		
-		for i,v in ipairs(nodes) do
-			local t = Type()
-			t:parse(v)
-			table.insert(self.rtypes,t)
-		end
-	end
-	
-	-- Name
-	
-	local name_node = node.nodes[4]
-	
-	if name_node.nodes[1].kind == 'Name' then
-		
-		self.name = name_node.nodes[1].value
-		if not name_node.nodes[2]:isa(EmptyNode) then
-			self.name = self.name .. '='
-			self.setter = true
-		end
-		
-	else
-		
-		self.name = name_node.nodes[2].value
-	end
-	
-	-- Arguments
-	
-	local arg_node = node.nodes[6]
-	
-	if not arg_node:isa(EmptyNode) then
-		
-		local nodes = arg_node:flatten_list()
-		for i,v in ipairs(nodes) do
-			local t = Argument()
-			t:parse(v)
-			table.insert(self.args,t)
-		end
-	end
-	
-	-- Body
-	
-	self.body = Block()
-	self.body:parse(node.nodes[8])
-	
 end
 
 function Method:to_string()
@@ -537,10 +361,10 @@ end
 
 Argument = class(AbstractNode)
 
-function Argument:init()
+function Argument:init(typ,name)
 	
-	self.type = nil
-	self.name = ''
+	self.type = typ
+	self.name = name
 	
 	return self
 end
@@ -578,14 +402,6 @@ Block = class(AbstractNode)
 function Block:init()
 	
 	return self
-end
-
-function Block:parse(node)
-	
-	assert( node.rule.name == 'block' )
-	
-	self.node = node
-	
 end
 
 function Block:to_string()

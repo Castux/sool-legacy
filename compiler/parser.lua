@@ -137,7 +137,7 @@ function Rule:validate()
 	error('Override this')
 end
 
--- Returns: success (bool), node, context requested when error (bool)
+-- Returns: success (bool), parse node, AST node, context requested when error (bool)
 
 function Rule:parse(context)
 	error('Override me')
@@ -181,6 +181,10 @@ function Sequence:init(t)
 	
 	self.name = t.name
 	t.name = nil
+	
+	-- Get AST builder if any
+	self.abstr = t.abstr
+	t.abstr = nil
 	
 	-- Use rule table directly
 	self.rules = t
@@ -373,30 +377,41 @@ function Sequence:parse(c)
 	-- Yes, parse then
 	
 	local node = Node(self)
+	local astlist = {}
 	
 	for i,sub in ipairs(self.rules) do
 		
-		local succ,subnode,info = sub:parse(c)
+		local succ,subnode,subast,info = sub:parse(c)
 		
 		node.nodes[i] = subnode
+		astlist[i] = subast
 		
 		if not succ then
 			if info and self.name then
 				-- Give context
 				c:adderror('info','in ' .. self:get_name() .. ' started here:', node:first())
 				
-				return false,node
+				return false,node,nil
 			else
 				-- Forward context request
-				return false,node,info
+				return false,node,nil,info
 			end
 		end
 		
 	end
 	
-	-- Hey, success
+	-- Hey, success, build AST node
 	
-	return true,node
+	local ast
+	
+	if self.abstr then
+		ast = self.abstr(astlist)
+	else
+		print(self:get_name(), "function less seq")
+		ast = astlist
+	end
+	
+	return true,node,ast
 end
 
 ------------
@@ -577,7 +592,7 @@ function Choice:parse(c)
 	if not first[head.kind] and not self:is_epsilon() then
 	
 		self:format_error(c)
-		return false,nil,true
+		return false,nil,nil,true
 	end
 	
 	-- Yes, parse then
@@ -587,12 +602,12 @@ function Choice:parse(c)
 		local first = sub:get_first_set()
 		
 		if first[head.kind] then
-			local succ,subnode,info = sub:parse(c)
+			local succ,subnode,subast,info = sub:parse(c)
 			
 			if not succ then
-				return false,subnode,info
+				return false,subnode,subast,info
 			else
-				return true,subnode
+				return true,subnode,subast
 			end
 		end
 	end
@@ -615,7 +630,9 @@ function Terminal:init(arg)
 		
 		self.name = arg.name
 		self.token = arg[1]
-	
+		
+		self.abstr = arg.abstr
+		
 	else
 		
 		if type(arg) ~= 'string' then
@@ -665,13 +682,20 @@ function Terminal:parse(c)
 		local node = TerminalNode(self,head)
 		c:consume()
 		
-		return true,node
+		local ast
+		if self.abstr then
+			ast = self.abstr(head.value)
+		else
+			ast = head.value
+		end
+		
+		return true,node,ast
 	else
 		
 		local str = '\'' .. self.token .. '\'' .. c:format_opt()
 		c:adderror('error','expected ' .. str .. ', found \'' .. head.value .. '\' instead', head.pos)
 		
-		return false,nil,true
+		return false,nil,nil,true
 	end
 	
 end
@@ -792,6 +816,7 @@ function Repetition:parse(c)
 	
 	local first = self.rule:get_first_set()
 	local node = Node(self)
+	local astlist = {}
 	
 	while true do
 	
@@ -812,20 +837,21 @@ function Repetition:parse(c)
 			
 			break
 		else
-			local succ,subnode,info = self.rule:parse(c)
+			local succ,subnode,subast,info = self.rule:parse(c)
 			
 			if not succ then
-				return false,node,info
+				return false,node,subast,info
 			else
 				table.insert(node.nodes,subnode)
+				table.insert(astlist,subast)
 			end
 		end
 	end
 	
 	if #node.nodes > 0 then
-		return true,node
+		return true,node,astlist
 	else
-		return true,EmptyNode(self)
+		return true,EmptyNode(self),astlist
 	end
 end
 
@@ -926,7 +952,7 @@ function Optional:parse(c)
 		
 		-- And go on
 		
-		return true,EmptyNode(self)
+		return true,EmptyNode(self),nil
 	
 	else
 		
@@ -1012,16 +1038,16 @@ function NamedRule:parse(c)
 		return false,nil,true
 	end
 	
-	local succ,node,info = self.rule:parse(c)
+	local succ,node,ast,info = self.rule:parse(c)
 	
 	if succ then
-		return true,node
+		return true,node,ast
 	else
 		if info then
 			-- Give context
 			c:adderror('info','in ' .. self:get_name() .. ' started here:', node and node:first())
 		end
-		return false,node
+		return false,node,ast
 	end
 end
 
@@ -1078,9 +1104,9 @@ end
 
 function Grammar:parse(context)
 	
-	local success,node = self.entry:parse(context)
+	local success,node,ast = self.entry:parse(context)
 	
-	return success,node
+	return success,node,ast
 end
 
 ----------
@@ -1174,22 +1200,6 @@ function Node:to_string(indent)
 	return s
 end
 
--- Return useful nodes in lists such as " subtype { ',' subtype } "
-
-function Node:flatten_list()
-	local nodes = {}
-	
-	table.insert(nodes,self.nodes[1])
-	
-	if not self.nodes[2]:isa(EmptyNode) then
-		for i,v in ipairs(self.nodes[2].nodes) do
-			table.insert(nodes,v.nodes[2])
-		end
-	end
-	
-	return nodes
-end
-
 ------------------
 -- TerminalNode --
 ------------------
@@ -1233,7 +1243,7 @@ end
 ---------------
 
 -- Used for filling in optionals and repetitions that parse nothing.
--- For implementation reasons, it's better to have something that nil.
+-- For implementation reasons, it's better to have something than nil.
 
 EmptyNode = class()
 
@@ -1335,10 +1345,13 @@ function parse(tokens)
 	
 	local context = ParsingContext(tokens)
 	
-	local success,node = SoolGrammar:parse(context)
+	local success,node,ast = SoolGrammar:parse(context)
 	print(success)
 	if node then print(node:to_string()) end
 	print''
 	
-	return context.errors,node
+	print 'AST:'
+	if ast then print(ast:to_string()) end
+	
+	return context.errors,node,ast
 end

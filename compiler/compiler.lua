@@ -223,16 +223,6 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
-	-- Transform parse tree into abstract syntax tree
-	
-	local context = Context()
-	
-	for i,chunk in ipairs(chunks) do
-		context:parse(chunk)
-	end
-	
-	print(context:to_string())
-	
 	-- Launch analysis
 	
 	do return end
