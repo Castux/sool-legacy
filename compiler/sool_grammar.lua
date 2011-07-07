@@ -280,7 +280,9 @@ g.constructor = C {
 g.method_call = S {
 	name = 'method call',
 	T 'Name',
-	O { 'call_arguments' }
+	O { 'call_arguments' },
+	
+	abstr = function(n) return MethodCall(n[1],n[2]) end
 }
 
 g.call_arguments = C {
@@ -295,25 +297,27 @@ g.basic_exp = S {
 	name = 'basic expression',
 	C {
 		'atomic_exp',
-		S { T '(', 'exp', T ')' },
+		S { T '(', 'exp', T ')', abstr = function(n) return n[2] end },
 		'constructor',
 		'method_call'
 	},
 	'exp_tail',
 	
-	abstr = function(n) return n[1] end	-- FIXME
+	abstr = function(n) return BasicExp(n[1],n[2]) end
 }
 
 g.exp_tail = R { C {
 	name = 'basic expression tail',
-	S { name = 'message passing', T '.', 'method_call' },
-	S { name = 'indexing', T '[', 'exp', T ']' }
+	S { name = 'message passing', T '.', 'method_call', abstr = function(n) return n[2] end },
+	S { name = 'indexing', T '[', 'exp', T ']', abstr = function(n) return Indexing(n[2]) end }
 } }
 
 g.unary_operation = S {
 	name = 'unary operation',
 	C { T '-', T '#', T 'not' },
-	'operand'
+	'operand',
+	
+	abstr = function(n) return UnaryOperation(n[1],n[2]) end
 }
 
 g.operand = C {
@@ -334,7 +338,7 @@ g.exp = S {
 	'operand',
 	R { S { name = 'binary operation', 'binop', 'operand' } },
 	
-	abstr = function(n) return n[1] end	-- FIXME
+	abstr = function(n) return Expression(n[1],n[2]) end
 }
 
 g.binop = C {
@@ -352,7 +356,9 @@ g.list_exp = S {
 g.lvalue = S {
 	name = 'left value',
 	'method_call',
-	'exp_tail'
+	'exp_tail',
+	
+	abstr = function(n) return LeftValue(n[1],n[2]) end
 }
 
 g.list_lvalue = S {
@@ -365,7 +371,9 @@ g.list_lvalue = S {
 g.unified_assignment_call = S {
 	name = 'unified assignment and lone method call',
 	'list_lvalue',
-	O { S { T '=', 'list_exp' } }
+	O { S { T '=', 'list_exp', abstr = function(n) return n[2] end } },
+	
+	abstr = function(n) return UnifiedAssignment(n[1],n[2] or {}) end
 }
 
 return Grammar(g,'chunk')

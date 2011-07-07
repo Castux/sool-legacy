@@ -652,6 +652,156 @@ function ObjectCons:to_string()
 	return 'ObjectCons:\n' .. self:indent(s:gsub('\n$',''))
 end
 
+----------------
+-- MethodCall --
+----------------
+
+MethodCall = class(AbstractNode)
+
+function MethodCall:init(name,args)
+	
+	self.name = name
+	
+	if args and args.isa then
+		self.args = {args}
+	elseif args then
+		self.args = args
+	else
+		self.args = {}
+	end
+	
+	return self
+end
+
+function MethodCall:to_string()
+	
+	local s = 'name: ' .. self.name .. '\n'
+	
+	local t = {}
+	for i,v in ipairs(self.args) do
+		table.insert(t,v:to_string())
+	end
+	
+	s = s .. table.concat(t,'\n')
+	
+	return 'MethodCall:\n' .. self:indent(s:gsub('\n$',''))
+end
+
+--------------
+-- BasicExp --
+--------------
+
+BasicExp = class(AbstractNode)
+
+function BasicExp:init(left,tails)
+	
+	self.left = left
+	self.tails = tails
+	
+	return self
+end
+
+function BasicExp:to_string()
+	
+	local s = self.left:to_string() .. '\n'
+	
+	for i,v in ipairs(self.tails) do
+		s = s .. v:to_string() .. '\n'
+	end
+	
+	return 'BasicExp:\n' .. self:indent(s:gsub('\n$',''))
+end
+
+---------------
+-- LeftValue --
+---------------
+
+LeftValue = class(AbstractNode)
+
+function LeftValue:init(left,tails)
+	
+	self.left = left
+	self.tails = tails
+	
+	return self
+end
+
+function LeftValue:to_string()
+	
+	local s = self.left:to_string() .. '\n'
+	
+	for i,v in ipairs(self.tails) do
+		s = s .. v:to_string() .. '\n'
+	end
+	
+	return 'LeftValue:\n' .. self:indent(s:gsub('\n$',''))
+end
+
+--------------
+-- Indexing --
+--------------
+
+Indexing = class(AbstractNode)
+
+function Indexing:init(expr)
+	
+	self.exp = expr
+	
+	return self
+end
+
+function Indexing:to_string()
+	return 'Indexing:\n' .. self:indent(self.exp:to_string())
+end
+
+--------------------
+-- UnaryOperation --
+--------------------
+
+UnaryOperation = class(AbstractNode)
+
+function UnaryOperation:init(unop,expr)
+	
+	self.unop = unop
+	self.exp = expr
+	
+	return self
+end
+
+function UnaryOperation:to_string()
+	
+	local s = 'unop: ' .. self.unop .. '\n'
+	s = s .. self.exp:to_string()
+	
+	return 'UnaryOperation:\n' .. self:indent(s)
+end
+
+----------------
+-- Expression --
+----------------
+
+Expression = class(AbstractNode)
+
+function Expression:init(left,tails)
+	
+	self.left = left
+	self.tails = tails
+	
+	return self
+end
+
+function Expression:to_string()
+	
+	local s = self.left:to_string() .. '\n'
+	
+	for i,v in ipairs(self.tails) do
+		s = s .. 'binop: ' .. v[1] .. '\n'
+		s = s .. v[2]:to_string() .. '\n'
+	end
+	
+	return 'Expression:\n' .. self:indent(s:gsub('\n$',''))
+end
+
 --------
 -- Do --
 --------
@@ -760,4 +910,32 @@ function For:to_string()
 	table.insert(t,self.body:to_string())
 	
 	return 'For:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+-----------------------
+-- UnifiedAssignment --
+-----------------------
+
+UnifiedAssignment = class(AbstractNode)
+
+function UnifiedAssignment:init(lvals,rvals)
+	
+	self.lvals = lvals
+	self.rvals = rvals
+	
+	return self
+end
+
+function UnifiedAssignment:to_string()
+	
+	local t = {}
+	
+	for i,v in ipairs(self.lvals) do
+		table.insert(t,v:to_string())
+	end
+	for i,v in ipairs(self.rvals) do
+		table.insert(t,v:to_string())
+	end
+	
+	return 'UnifiedAssignment:\n' .. self:indent(table.concat(t,'\n'))
 end
