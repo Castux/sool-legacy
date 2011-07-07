@@ -9,7 +9,7 @@ require 'class'
 
 -- This is the root class for the abstract syntax tree.
 -- The only thing it really does is enforce that nodes can return children,
--- from proper tree traversal by the passes.
+-- for proper tree traversal by the passes.
 
 AbstractNode = class()
 
