@@ -180,7 +180,7 @@ lex = function(file)
 			-- Reserved name?
 			local res = {'class', 'meth', 'end', 'num', 'vec', 'str',
 			'return', 'do', 'if', 'then', 'elseif', 'else', 'while',
-			'for', 'in', 'break', 'continue', 'nil', 'false', 'true',
+			'for', 'in', 'break', 'skip', 'nil', 'false', 'true',
 			'private', 'op', 'and', 'or', 'xor', 'not', 'as', 'sym'}
 			
 			local wasres = false

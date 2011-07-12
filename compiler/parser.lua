@@ -407,8 +407,11 @@ function Sequence:parse(c)
 	if self.abstr then
 		ast = self.abstr(astlist)
 	else
-		print(self:get_name(), "function less seq")
 		ast = astlist
+	end
+	
+	if ast.isa and ast:isa(AbstractNode) then
+		ast.node = node
 	end
 	
 	return true,node,ast
@@ -1353,5 +1356,5 @@ function parse(tokens)
 	print 'AST:'
 	if ast then print(ast:to_string()) end
 	
-	return context.errors,node,ast
+	return context.errors,ast
 end

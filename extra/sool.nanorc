@@ -1,7 +1,7 @@
 syntax "sool" ".*\.sool$"
 
 # Keywords
-color brightblue "\<(and|break|do|else|elseif|end|false|for|if|in|nil|not|or|return|then|true|while|as|class|meth|private|op|continue)\>"
+color brightblue "\<(and|break|do|else|elseif|end|false|for|if|in|nil|not|or|return|then|true|while|as|class|meth|private|op|skip)\>"
 
 # Known functions
 color magenta "\<(init|index)\>"

@@ -15,6 +15,8 @@ AbstractNode = class()
 
 function AbstractNode:init()
 	
+	self.node = nil		-- parse tree node, filled in by the parser
+	
 	return self
 end
 
@@ -418,9 +420,9 @@ function Block:to_string()
 	return 'Block:\n' .. self:indent(table.concat(t,'\n'))
 end
 
------------------------------
--- Break, Continue, Return --
------------------------------
+-------------------------
+-- Break, Skip, Return --
+-------------------------
 
 Break = class(AbstractNode)
 
@@ -433,15 +435,15 @@ function Break:to_string()
 	return 'Break'
 end
 
-Continue = class(AbstractNode)
+Skip = class(AbstractNode)
 
-function Continue:init()
+function Skip:init()
 	
 	return self
 end
 
-function Continue:to_string()
-	return 'Continue'
+function Skip:to_string()
+	return 'Skip'
 end
 
 Return = class(AbstractNode)
@@ -698,6 +700,10 @@ function BasicExp:init(left,tails)
 	self.left = left
 	self.tails = tails
 	
+	if #tails == 0 then
+		return left
+	end
+	
 	return self
 end
 
@@ -722,6 +728,10 @@ function LeftValue:init(left,tails)
 	
 	self.left = left
 	self.tails = tails
+	
+	if #tails == 0 then
+		return left
+	end
 	
 	return self
 end
@@ -786,6 +796,10 @@ function Expression:init(left,tails)
 	
 	self.left = left
 	self.tails = tails
+	
+	if #tails == 0 then
+		return left
+	end
 	
 	return self
 end
@@ -912,21 +926,25 @@ function For:to_string()
 	return 'For:\n' .. self:indent(table.concat(t,'\n'))
 end
 
------------------------
--- UnifiedAssignment --
------------------------
+-------------------------
+-- ExpressionStatement --
+-------------------------
 
-UnifiedAssignment = class(AbstractNode)
+ExpressionStatement = class(AbstractNode)
 
-function UnifiedAssignment:init(lvals,rvals)
+function ExpressionStatement:init(lvals,rvals)
 	
 	self.lvals = lvals
 	self.rvals = rvals
 	
+	if #lvals == 1 and #rvals == 0 then
+		return lvals[1]
+	end
+	
 	return self
 end
 
-function UnifiedAssignment:to_string()
+function ExpressionStatement:to_string()
 	
 	local t = {}
 	
@@ -937,5 +955,5 @@ function UnifiedAssignment:to_string()
 		table.insert(t,v:to_string())
 	end
 	
-	return 'UnifiedAssignment:\n' .. self:indent(table.concat(t,'\n'))
+	return 'ExpressionStatement:\n' .. self:indent(table.concat(t,'\n'))
 end

@@ -136,7 +136,7 @@ g.block = S {
 	O { C {
 		name = 'final statement',
 		T { 'break', abstr = function(val) return Break() end },
-		T { 'continue', abstr = function(val) return Continue() end },
+		T { 'skip', abstr = function(val) return Skip() end },
 		
 		S {
 			name = 'return statement',
@@ -199,7 +199,7 @@ g.statement = C {
 		
 		abstr = function(n) return For(n[2],n[4],n[6]) end
 	},
-	'unified_assignment_call'
+	'expression_statement'
 }
 
 g.list_name = S {
@@ -368,12 +368,12 @@ g.list_lvalue = S {
 	abstr = flatten
 }
 
-g.unified_assignment_call = S {
-	name = 'unified assignment and lone method call',
+g.expression_statement = S {
+	name = 'expression statement',
 	'list_lvalue',
 	O { S { T '=', 'list_exp', abstr = function(n) return n[2] end } },
 	
-	abstr = function(n) return UnifiedAssignment(n[1],n[2] or {}) end
+	abstr = function(n) return ExpressionStatement(n[1],n[2] or {}) end
 }
 
 return Grammar(g,'chunk')
