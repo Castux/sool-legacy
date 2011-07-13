@@ -1,0 +1,154 @@
+How I learned to stop worrying and love GC
+
+So if you've followed a bit my previous ramblings, you'll have noticed that I paid particular attention to memory management. From manual allocation and freeing in C/C++, to framework based retain/autorelease pools in Objective-C, via complete garbage collection in Lua, no scheme totally convinced me, and I went on (re)inventing a system for sool.
+
+The idea was, briefly, that there are 2 major problems in dealing with memory:
+1. Memory leaks, that is, losing all references to allocated memory, hence becoming unusable and unfreeable for the rest of the program execution.
+2. Dangling/invalid pointers. That is, having pointers refer to memory that either has been freed from elsewhere, or has moved, or in any case is not what the pointer thinks it is.
+
+My solution to point 1 was to have only one "strong" (memory managing) reference to any object, meaning that assigning the object to a new one would automatically set the previous to nil. When the unique reference to an object disapears (overwritten, goes out of scope, enclosing object is freed, etc), the object is freed.
+
+For practical reasons we needed to have also "weak" references, that also point to the object, but do not "own" it like the strong ones. Meaning you cannot free an object from one of its weak references.
+
+And to solve point 2 (if the object is freed through its unique strong reference, the weak ones will point at garbage), I used the concept of tombstones. All references in fact point to a tombstone that itself points to the object. When the object is freed, the tombstone is set to nil, so that every weak reference now sees nil and avoid dereferencing.
+
+In theory it's a nice system. In practice I was already worried about the performance implications.
+
+1. Systematic double dereference because of the tombstones. Objects are two pointers away, hence any access needs at least two low-level instructions (appart from the Redcore assembly language for the CoreWars game, I don't think any mainstream processor does double addressing).
+2. Weak references need to check that the tombstone is not nil before doing the second dereference. That's one comparison before each method call.
+3. Assignments to a strong variable need the mechanism of "if current non nil, free it, then assign new", with funny special cases such as "if new and old are the same, don't do anything". Assignment becomes far from trivial, and that's a lot of processing (and code) overhead.
+4. Since we never know how many weak references will outlive the strong one, the tombstone needs either to live forever (hello memory leak), or have a reference-counting system. That's even more memory and processing overhead.
+
+While implementing my AST building thingy, I was thinking about this back-end/runtime issue. And I also spend some time reading about other languages, to get inspiration and good ideas. I particularly like the D language. It has very clever features and seems well designed. Overall, I still find it slightly bloated, and there is the issue of the two competing standard libraries, so I don't think I'll be using it soon.
+
+D, like Lua, Java, Smalltalk, Python and many others, uses garbage collection. It's like memory management for dummies. Request memory when you need it, and well, that's all. Unreachable memory is automatically reused, reclaimed, freed to the system, or whatever needs to be done. The point is, don't worry to much about it.
+
+I had doubts about garbage collection. It kind of seemed to be "the easy solution for people who are not good enough for manual memory management". And therefore, it had to be less efficient.
+
+The cons are well known. Depending on algorithms and implementations, there is often the fact that collection cycles happen randomly "once in a while" and can take a lot of time, hence pausing the execution of your program. Which is a problem for real-time stuff and interactive stuff. Also, the so-called "conservative" collectors can still leak a little bit of memory because anything that looks like a pointer will be considered to be one, and if you happen to have random data that looks like it's pointing to some part of memory you own, it won't be freed. But that's a detail, and that's unlikely (especially with 64 bits addresses).
+
+The thing is, I didn't really know about the pros. The first obvious one is that it entirely solves our two memory concerns.
+
+1. No memory leaks: all unreachable memory is reclaimed. That's the basic concept of GC.
+2. No dangling pointers: if a pointer points to something, the memory is not reclaimed, therefore every pointer is valid.
+
+An object has either references to it, and it lives, or no references to it, and it dies. That is simple and elegant. No need for tombstones and double dereferencing, no need for complex assignment mechanism, no need to check for null pointers. GC ensures that every pointer you can access is valid. Magic.
+
+The real only question left is performance. Going through your entire heap once in a while, and checking for all pointers, marking memory blocks as reachable or not, etc. That seems like heavy stuff.
+
+Clearly, bad garbage collection can be even slower than my own system. But good garbage collection... I read about the Boehm-GC which is apparently famous http://www.hpl.hp.com/personal/Hans_Boehm/gc/ It's written by guys who actually know how memory works at hardware level, they know about caches, and they have over the years developped pretty badass algorithms.
+
+Incremental GC (don't run a full cycle once in a while, but run small steps more often to avoid pausing execution), generational heuristics (young objects tend to die faster, while old objects tend to live longer, so perform GC mostly on young objects, and rarely on old ones), memory reuse (keep chunks of the same size together, and lists of free ones, to allocate faster), grouping (try to keep objects in the same cache lines so that the processors doesn't cache/uncache all the time), and whatnot.
+
+If you read their papers and documentation and algorithm descriptions, it really looks like they know what their are doing. And they claim that using GC is in fact, in most cases, more memory efficient and processor efficient than manual memory management.
+
+And most importantly, even if performance is just similar, programming time and effort is, on the other hand, greatly reduced. Allocate, forget about it. Make new objects as you need them and just let them go out of scope.
+
+Relax. Stop worrying.
+
+So yeah, I'm pretty relaxed now. Implementing my own garbage collection could be interesting, but it will never compete with existing ones. The Boehm-GC has a persmissive license, which means I can include it in my runtime. And if some day I get bored, I can always make my own, but I don't think that's going to happen any time soon...
+
+Lua uses its own mark-and-sweep garbage collector, but in that case, it's relatively easy since the only composite type is the table (so you always know how to traverse them to find references), and every variable lives in a Lua context. In a compiled language, you need to look for pointers in the stack, the heap, the registers, etc, which is apparently non-trivial. I wonder how LuaJIT deals with this. Does it keep enough of the original Lua runtime so that GC is unchanged, or does it happily transforms everything as low-level as possible, I do not know.
+But it would seem that sool is going to be garbage collected.
+
+Good bye lists
+==============
+
+The more I implement, the more I think about the whole thing on the side, and the more I want to change the whole thing. My last obsession is that I should remove lists. I actually never used lists so much, since growable arrays have a reasonable appending performance.
+
+My original idea was that in games, you often have to keep track of a bunch of objects that have random lifespans. Enemies, bullets, whatever, they might disapear at any game frame. And removing objects from the middle of arrays is not too nice. Hence the use of a linked lists, from which you can remove things in constant time.
+
+Buuuut, since I haven't managed to find a real nice way to iterate over lists without having a separate iterator object, and since lists actually use a lot a memory just for next/previous pointers, I don't know. It's pretty easy to just set array elements to nil, and once in a while "clean" them by moving everything not nil to the beginning, hence filling the holes. And that would be provided in the standard library.
+
+Arrays and hash tables also both have a very linear internal structure, which makes it trivial to iterate on with just a number iterator, which fits my current idea of the generic for loop.
+
+And less features means less work, which means it's going to be ready sooner. In fact, I might even omit the hash table for the first releases (although some other features will need them anyway: runtime symbols, dynamic dispatch for late binding).
+
+The problem with strings
+========================
+
+Strings were going to be simple arrays of bytes. So internally, they could probably use the same array data structure. That way, concatenation, insertion, and other algorithms would in fact be the same on arrays and strings.
+
+To reflect that on the sool side (and not only internally), we would need a byte type. And strings would just be of type [byte], kind of like C strings were char[]. Well, my issue with that is that I had decided to have only one number type, the "number", which would happen to be a double. One size fits all. Simple, at the cost of non optimality.
+
+So now we'd need a "byte" type. The problem is that we'd need it only inside arrays, for strings, because honestly, who uses 8 bits integers for anything else than characters in strings, or as random binary data, which anyway always comes in more that one item.
+
+And to make things even more fun, it's nowadays not enough to have bytes to hold text. 8 bits encodings are a pain. Unicode is the way to go, so that means either a string of bytes in some encoding such as UTF-8, or an array of Unicode code-points, which are 4 bytes wide. So now we'd also need a "widechar" (or simple "char" but that would be confusing for C people) type, so that we could have arrays of them to represent text. And standard methods to convert one into the other, since dealing with UTF-8 is annoying (indexing bytes instead of characters).
+
+So now we have byte, char, number. An ugly way would be to say, well, the biggest wins. Everything is still a number. Make arrays of numbers (so, doubles, 8 bytes wide), and each number can hold a byte or a character. Hello memory waste.
+
+So, erm, I don't know what to do. I want to avoid the multiplication of basic types, or I'll end up having them all. Unsigned/signed integers or size 8, 16, 32, 64, and oh why not 128. And single and double precision floats. And vectors of them all, of dimension 2, 3 and 4.
+
+THIS IS MADNESS.
+
+My original solution, which is the Lua one too, might be the best. Strings are (internally) arrays of bytes. Period. Expose the same functionality for them than for arrays, except indexing a single value (because we wouldn't know what to do with a byte).
+
+You could either take a substring with only one character, or get a single byte value as a number, like in Lua. Except we'd do that with a better syntax. Problem solved.
+
+Except for wide characters, that are still a pain. It would really be nifty to be able to index by character (and not by byte in UTF-8), and to use the find/replace/match pattern methods with wide characters too. Now in Lua you can do:
+
+("Oh hai, my name is Noé"):find("é")
+
+because even though the "é" is two bytes, the find method will look for the sequence of them, but not in pattern classes:
+
+("Here's a lé and here's a la"):find("l[éa]")
+
+because there it will look individually for each of the two bytes that form "é" in UTF-8. And that is fail.
+
+I could build a "character" string (as opposed to byte string) that internally also uses an array, but of something wide. Ideally 4 bytes ints, since that would cover the whole Unicode range. And it would present the same methods as the "data string", plus conversion from one to the other according to some encoding (most likely UTF-8).
+
+Then we would have only one additional type. There could be "data" for bytes, "text" for characters. And our only number (if we want to access individual values) would still be the "number", a double. Doesn't matter if it's big, it would be used only for single values, one by one.
+
+Well, that's roughly satisfying.
+
+Types, lots of them
+===================
+
+In the same vein ("less types, more happiness"), I have a problem with vectors. They need to be 2D, 3D, and even 4D (for quaternion rotations in 3D, or normalized coordinates in 3D). But I wanted only one "vec" type. I don't think that's going to be possible.
+
+The only way I see would be to always use a 4D vector, and use only the parts we need. That would be a lot of waste if you need only 2D. For 3D it might actually be more efficient to use 4, if my little LLVM tests were rights.
+
+But still, that's annoying. I'd need vec2, vec3, vec4. Pff. That brings the total to a lot...
+
+number, vec2, vec3, vec4, data, text, symbol
+
+OK, I definitely don't like that. Maybe the 2D could be directly called a complex number, and we could merge 3D and 4D into a single vector type? Or let's forget about higher dimensions, I won't be making 3D games anytime soon anyway. Oh wait, I have already. Crap. Garh. Making programming languages is hard.
+
+Oh and the boolean annoyed me too. So far I thought, "anything not nil is true, nil is false", tada no need for a boolean. Objects would be nil if they point at 0, And numbers would represent nil with a NaN. The problem with that is that operator methods need to return a type, and the most logical would be number. Like in C. I don't like it. And members who only need a truth value need to be numbers too. 63 bits of uselessness.
+
+Sooo, here we go, another one.
+
+number, vec2, vec3, vec4, data, text, symbol, boolean
+
+Plus later we'll need an opaque pointer for interfacing with C. And hopefully I'll make anonymous functions + closures.
+
+Array slicing
+=============
+
+It would sure be nice to be able to do
+
+for elem in array[3:6] do
+
+Or quick insertion/replacement like
+
+a[2:10] = [1,2,3]
+
+Or automatic application of methods to each element of a slice
+
+a[:30].dothis()
+a[] = 10	-- whoo, setting everything to 10
+
+Indexing with an array of numbers would make a slice too:
+
+l = [1,3,4,7,8]
+b = a[l]
+
+And syntactic sugar:
+
+b = a[1,3,4,7,8]
+
+The question is... Is it just a syntax matter, that gets transformed by the compiler into the actual instructions and loops, or is the slice an object, that need a class, and type and OH MY GOD ANOTHER ONE!!!
+
+A slice would look a lot like an iterator, an object used to access another one. And I don't like them much. On the other hand it could be an internal object, since all slice operations result in arrays, or side-effects. No need for a sool type. But still. That's a lot of cases to deal with.
+
+All in all, I'm still having fun. But things are going to get complicated pretty soon...
