@@ -96,38 +96,26 @@ g.method_def = S {
 	abstr = function(n) return Method(n[2],n[3] or {},n[4].name,n[4].setter,n[6] or {},n[8]) end
 }
 
-g.type = S {
-	name = 'type declaration',
-	O { T '~' },
-	C {
-		name = 'type',
-		T { 'num', abstr = function(val) return NumberType() end },
-		T { 'vec', abstr = function(val) return VectorType() end },
-		T { 'sym', abstr = function(val) return SymbolType() end },
-		T { 'str', abstr = function(val) return StringType() end },
-		T { 'ClassName', abstr = function(val) return ClassType(val) end },
-		
-		S {
-			name = 'array type',
-			T '[', N { name = 'subtype', 'type' }, T ']',
-			
-			abstr = function(n) return ArrayType(n[2]) end
-		},
-		S {
-			name = 'list type',
-			T '/', N { name = 'subtype', 'type' }, T '\\',
-			
-			abstr = function(n) return ListType(n[2]) end
-		},
-		S {
-			name = 'table type',
-			T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}',
-			
-			abstr = function(n) return TableType(n[2],n[4]) end
-		}
-	},
+g.type = C {
+	name = 'type',
+	T { 'num', abstr = function(val) return NumberType() end },
+	T { 'vec', abstr = function(val) return VectorType() end },
+	T { 'sym', abstr = function(val) return SymbolType() end },
+	T { 'str', abstr = function(val) return StringType() end },
+	T { 'ClassName', abstr = function(val) return ClassType(val) end },
 	
-	abstr = function(n) return Type(n[1] ~= nil,n[2]) end
+	S {
+		name = 'array type',
+		T '[', N { name = 'subtype', 'type' }, T ']',
+		
+		abstr = function(n) return ArrayType(n[2]) end
+	},
+	S {
+		name = 'table type',
+		T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}',
+		
+		abstr = function(n) return TableType(n[2],n[4]) end
+	}
 }
 
 g.block = S {
@@ -219,13 +207,6 @@ g.atomic_exp = C {
 	T { 'nil', abstr = function(val) return AtomicNil() end },
 }
 
-g.list_constructor = S {
-	name = 'list constructor',
-	T '/', O { 'list_operand' }, T '\\',
-	
-	abstr = function(n) return ListCons(n[2] or {}) end
-}
-
 g.array_constructor = S {
 	name = 'array constructor',
 	T '[', O { 'list_operand' }, T ']',
@@ -270,7 +251,6 @@ g.object_constructor = S {
 
 g.constructor = C {
 	name = 'constructor',
-	'list_constructor',
 	'array_constructor',
 	'vector_constructor',
 	'table_constructor',

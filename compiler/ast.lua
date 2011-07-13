@@ -165,32 +165,6 @@ function Member:to_string()
 	return 'Member:\n' .. self:indent(s)
 end
 
-----------
--- Type --
-----------
-
-Type = class(AbstractNode)
-
-function Type:init(weak,tclass)
-	
-	self.weak = weak
-	self.tclass = tclass
-	
-	return self
-end
-
-function Type:children()
-	return {self.tclass}
-end
-
-function Type:to_string()
-	
-	local s = 'weak: ' .. tostring(self.weak) .. '\n'
-	s = s .. self.tclass:to_string()
-	
-	return 'Type:\n' .. self:indent(s)
-end
-
 ----------------
 -- SimpleType --
 ----------------
@@ -203,10 +177,6 @@ end
 
 function SimpleType:parse(n)
 	self.node = n
-end
-
-function SimpleType:children()
-	return {}
 end
 
 NumberType = class(SimpleType)
@@ -230,28 +200,17 @@ function SymbolType:to_string()
 	return 'SymbolType'
 end
 
--------------------
--- CompositeType --
--------------------
+---------------
+-- ArrayType --
+---------------
 
-CompositeType = class(AbstractNode)
+ArrayType = class(AbstractNode)
 
-function CompositeType:init(sub)
+function ArrayType:init(sub)
 	
 	self.subtype = sub
 	
 	return self
-end
-
-function CompositeType:children()
-	return {self.subtype}
-end
-
-ListType = class(CompositeType)
-ArrayType = class(CompositeType)
-
-function ListType:to_string()
-	return 'ListType:\n' .. self:indent(self.subtype:to_string())
 end
 
 function ArrayType:to_string()

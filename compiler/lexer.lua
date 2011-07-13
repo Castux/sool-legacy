@@ -167,7 +167,7 @@ lex = function(file)
 		end
 		
 		-- Special punctuation
-		m = s:match("^[~%+%-%*/%%^|&=<>:.,;%(%)%[%]{}#\\]",index)
+		m = s:match("^[%+%-%*/%%^|&=<>:.,;%(%)%[%]{}#]",index)
 		if m then
 			addtok(m)
 			break
