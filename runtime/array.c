@@ -4,9 +4,7 @@
 #include "array.h"
 #include "error.h"
 
-#define rawindex(a,i) a->data[i-1]
-
-sool_array *sool_array_new(sool_destructor destructor)
+sool_array *sool_array_new(void)
 {
 	sool_array *a = malloc(sizeof(sool_array));
 	if( a == NULL )
@@ -15,8 +13,6 @@ sool_array *sool_array_new(sool_destructor destructor)
 	a->allocated_count = 0;
 	a->logical_count = 0;
 	
-	a->destructor = destructor;
-
 	a->data = NULL;
 	
 	sool_array_reserve(a,8);
@@ -26,24 +22,30 @@ sool_array *sool_array_new(sool_destructor destructor)
 
 void sool_array_reserve(sool_array *a, uint32 count)
 {
-	if( a->allocated_count >= count )
+	uint32 i;
+	
+	/* Only use this function to grow the array */
+	if( count <= a->allocated_count )
 		return;
 	
-	a->data = realloc(a->data, count*sizeof(*a->data));
+	/* Allocate count + 1 cells, since the 0 cell is not used */
+	a->data = realloc(a->data, (count+1)*sizeof(*a->data));
 	if( a->data == NULL )
 		sool_error("could not allocate memory for array");
-	
-	memset(a->data + a->allocated_count, 0, count - a->allocated_count);
+		
+	/* Fill the new cells with nil */
+	for( i = a->allocated_count + 1 ; i <= count ; i++ )
+		a->data[i] = nil;
 	
 	a->allocated_count = count;
 }
 
-void *sool_array_get(sool_array *a, uint32 index)
+type sool_array_get(sool_array *a, uint32 index)
 {
-	if( index > a->logical_count )
-		return NULL;
+	if( index == 0 || index > a->logical_count )
+		return nil;
 	
-	return rawindex(a,index);
+	return a->data[index];
 }
 
 uint32 sool_array_size(sool_array *a)
@@ -51,43 +53,39 @@ uint32 sool_array_size(sool_array *a)
 	return a->logical_count;
 }
 
-
-void sool_array_set(sool_array *a, uint32 index, void *elem)
+void sool_array_set(sool_array *a, uint32 index, type elem)
 {
-	void **cell;
+	/* Bound checking */
+	if( index == 0 )
+		sool_error("setting array at 0");
 	
-	/* Bound checking/resizing */
 	if( index > a->logical_count )
 	{
-		if( index > a->allocated_count )
-			sool_array_reserve(a,index);
-	
+		/* When appending, double size */
+		if( index == a->allocated_count + 1 )
+			sool_array_reserve(a, a->allocated_count * 2);
+		/* When setting further away, adjust size */
+		else if( index > a->allocated_count + 1 )
+			sool_array_reserve(a, index);
+		
 		a->logical_count = index;
 	}
-
-	/* Index is in 1..logical_count */
-	
-	cell = &rawindex(a,index);
-	
-	/* Release previous element if we own it */
-	if( a->destructor != NULL )
-		a->destructor(*cell);
 	
 	/* Take place */
-	*cell = elem;
+	a->data[index] = elem;
 }
 
-void sool_array_append(sool_array *a, void *elem)
+void sool_array_append(sool_array *a, type elem)
 {
 	/* Double reserved memory if needed */
 	if( a->logical_count == a->allocated_count )
 		sool_array_reserve(a,a->allocated_count*2);
 	
-	a->data[a->logical_count] = elem;
 	a->logical_count++;
+	a->data[a->logical_count] = elem;
 }
 
-void sool_array_insert(sool_array *a, uint32 index, void *elem)
+void sool_array_insert(sool_array *a, uint32 index, type elem)
 {
 	uint32 i;
 	
@@ -101,9 +99,9 @@ void sool_array_insert(sool_array *a, uint32 index, void *elem)
 		sool_array_reserve(a,a->allocated_count*2);
 	
 	for( i = a->logical_count ; i >= index ; i-- )
-		rawindex(a,i+1) = rawindex(a,i);
+		a->data[i+1] = a->data[i];
 	
-	a->data[index-1] = elem;
+	a->data[index] = elem;
 	a->logical_count++;
 }
 
@@ -114,13 +112,10 @@ void sool_array_remove(sool_array *a, uint32 index)
 	if( index > a->logical_count )
 		return;
 	
-	if( a->destructor != NULL )
-		a->destructor( a->data[index-1] );
-	
 	for( i = index; i <= a->logical_count-1 ; i++ )
-		rawindex(a,i) = rawindex(a,i+1);
+		a->data[i] = a->data[i+1];
 	
-	rawindex(a,a->logical_count) = NULL;
+	a->data[a->logical_count] = nil;
 	a->logical_count--;
 }
 
