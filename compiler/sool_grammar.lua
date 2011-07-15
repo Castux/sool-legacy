@@ -187,7 +187,8 @@ g.statement = C {
 		
 		abstr = function(n) return For(n[2],n[4],n[6]) end
 	},
-	'expression_statement'
+	
+	'name_statement'
 }
 
 g.list_name = S {
@@ -283,7 +284,7 @@ g.basic_exp = S {
 	},
 	'exp_tail',
 	
-	abstr = function(n) return BasicExp(n[1],n[2]) end
+	abstr = function(n) return LeftDerivation(n[1],n[2]) end
 }
 
 g.exp_tail = R { C {
@@ -313,17 +314,25 @@ g.list_operand = S {
 	abstr = flatten
 }
 
-g.exp = S {
-	name = 'expression',
-	'operand',
-	R { S { name = 'binary operation', 'binop', 'operand' } },
-	
-	abstr = function(n) return Expression(n[1],n[2]) end
-}
-
 g.binop = C {
 	name = 'binary operator',
 	T '+', T '-', T '*', T '/', T '%', T '<', T '>', T '<=', T '>=', T '==', T 'and', T 'or', T 'xor', T '&', T '|', T '^'
+}
+
+g.binary_operation = S {
+	name = 'binary operation',
+	'binop',
+	'operand',
+	
+	abstr = function(n) return BinaryOperation(n[1],n[2]) end
+}
+
+g.exp = S {
+	name = 'expression',
+	'operand',
+	R { 'binary_operation' },
+	
+	abstr = function(n) return LeftDerivation(n[1],n[2]) end
 }
 
 g.list_exp = S {
@@ -338,7 +347,7 @@ g.lvalue = S {
 	'method_call',
 	'exp_tail',
 	
-	abstr = function(n) return LeftValue(n[1],n[2]) end
+	abstr = function(n) return LeftDerivation(n[1],n[2]) end
 }
 
 g.list_lvalue = S {
@@ -348,12 +357,46 @@ g.list_lvalue = S {
 	abstr = flatten
 }
 
-g.expression_statement = S {
-	name = 'expression statement',
-	'list_lvalue',
-	O { S { T '=', 'list_exp', abstr = function(n) return n[2] end } },
+g.name_statement = S {
+	name = 'assignment',	-- the lvalue and binary operation rules have name fields, so any
+							-- error there will never be propagated up here.
+							-- We can safely assume that the error came from the assignment subrule
 	
-	abstr = function(n) return ExpressionStatement(n[1],n[2] or {}) end
+	'lvalue',
+	
+	C {
+		R { 'binary_operation' },
+		
+		S {
+			O { S { T ',', 'list_lvalue', abstr = function(n) return n[2] end } },
+			S { T '=', 'list_exp', abstr = function(n) return n[2] end },
+			
+			abstr = function(n) n.ass = true; return n end
+		}
+	},
+	
+	abstr = function(n)
+		
+		-- The choice returned nothing -> single lvalue
+		if not n[2] then
+			return n[1]
+		
+		-- Assignment
+		elseif n[2].ass then
+			local lvals = n[2][1]
+			table.insert(lvals,1,n[1])
+			
+			local rvals = n[2][2]
+			
+			return Assignment(lvals,rvals)
+			
+		-- Operations
+		else
+			return LeftDerivation(n[1],n[2])
+		end
+		
+		error('Unreachable')
+	end
 }
 
 return Grammar(g,'chunk')

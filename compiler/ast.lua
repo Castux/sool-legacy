@@ -621,6 +621,7 @@ MethodCall = class(AbstractNode)
 
 function MethodCall:init(name,args)
 	
+	self.left = nil
 	self.name = name
 	
 	if args and args.isa then
@@ -636,7 +637,8 @@ end
 
 function MethodCall:to_string()
 	
-	local s = 'name: ' .. self.name .. '\n'
+	local s = (self.left and self.left:to_string() or '<none>') .. '\n'
+	s = s .. 'name: ' .. self.name .. '\n'
 	
 	local t = {}
 	for i,v in ipairs(self.args) do
@@ -649,64 +651,6 @@ function MethodCall:to_string()
 end
 
 --------------
--- BasicExp --
---------------
-
-BasicExp = class(AbstractNode)
-
-function BasicExp:init(left,tails)
-	
-	self.left = left
-	self.tails = tails
-	
-	if #tails == 0 then
-		return left
-	end
-	
-	return self
-end
-
-function BasicExp:to_string()
-	
-	local s = self.left:to_string() .. '\n'
-	
-	for i,v in ipairs(self.tails) do
-		s = s .. v:to_string() .. '\n'
-	end
-	
-	return 'BasicExp:\n' .. self:indent(s:gsub('\n$',''))
-end
-
----------------
--- LeftValue --
----------------
-
-LeftValue = class(AbstractNode)
-
-function LeftValue:init(left,tails)
-	
-	self.left = left
-	self.tails = tails
-	
-	if #tails == 0 then
-		return left
-	end
-	
-	return self
-end
-
-function LeftValue:to_string()
-	
-	local s = self.left:to_string() .. '\n'
-	
-	for i,v in ipairs(self.tails) do
-		s = s .. v:to_string() .. '\n'
-	end
-	
-	return 'LeftValue:\n' .. self:indent(s:gsub('\n$',''))
-end
-
---------------
 -- Indexing --
 --------------
 
@@ -714,13 +658,18 @@ Indexing = class(AbstractNode)
 
 function Indexing:init(expr)
 	
+	self.left = nil
 	self.exp = expr
 	
 	return self
 end
 
 function Indexing:to_string()
-	return 'Indexing:\n' .. self:indent(self.exp:to_string())
+	
+	local s = (self.left and self.left:to_string() or '<none>') .. '\n'
+	s = s .. self.exp:to_string()
+	
+	return 'Indexing:\n' .. self:indent(s)
 end
 
 --------------------
@@ -745,34 +694,47 @@ function UnaryOperation:to_string()
 	return 'UnaryOperation:\n' .. self:indent(s)
 end
 
-----------------
--- Expression --
-----------------
+---------------------
+-- BinaryOperation --
+---------------------
 
-Expression = class(AbstractNode)
+BinaryOperation = class(AbstractNode)
 
-function Expression:init(left,tails)
+function BinaryOperation:init(binop,expr)
 	
-	self.left = left
-	self.tails = tails
-	
-	if #tails == 0 then
-		return left
-	end
+	self.left = nil
+	self.binop = binop
+	self.right = expr
 	
 	return self
 end
 
-function Expression:to_string()
+function BinaryOperation:to_string()
 	
-	local s = self.left:to_string() .. '\n'
+	local s = (self.left and self.left:to_string() or '<none>') .. '\n'
+	s = s .. 'binop: ' .. self.binop .. '\n'
+	s = s .. self.right:to_string()
 	
-	for i,v in ipairs(self.tails) do
-		s = s .. 'binop: ' .. v[1] .. '\n'
-		s = s .. v[2]:to_string() .. '\n'
+	return 'BinaryOperation:\n' .. self:indent(s)
+end
+
+-------------------------------------------
+-- For basic_exp, left_value, expression --
+-------------------------------------------
+
+-- This function expects a node and a list of nodes,
+-- and restores left derivation
+
+function LeftDerivation(left,tails)
+	
+	local left = left
+	
+	for i,v in ipairs(tails) do
+		v.left = left
+		left = v
 	end
 	
-	return 'Expression:\n' .. self:indent(s:gsub('\n$',''))
+	return left
 end
 
 --------
@@ -885,13 +847,13 @@ function For:to_string()
 	return 'For:\n' .. self:indent(table.concat(t,'\n'))
 end
 
--------------------------
--- ExpressionStatement --
--------------------------
+----------------
+-- Assignment --
+----------------
 
-ExpressionStatement = class(AbstractNode)
+Assignment = class(AbstractNode)
 
-function ExpressionStatement:init(lvals,rvals)
+function Assignment:init(lvals,rvals)
 	
 	self.lvals = lvals
 	self.rvals = rvals
@@ -903,16 +865,23 @@ function ExpressionStatement:init(lvals,rvals)
 	return self
 end
 
-function ExpressionStatement:to_string()
+function Assignment:to_string()
 	
-	local t = {}
+	local t = {'left:'}
 	
 	for i,v in ipairs(self.lvals) do
 		table.insert(t,v:to_string())
 	end
+	
+	table.insert(t, 'right:')
+	
 	for i,v in ipairs(self.rvals) do
 		table.insert(t,v:to_string())
 	end
 	
-	return 'ExpressionStatement:\n' .. self:indent(table.concat(t,'\n'))
+	return 'Assignment:\n' .. self:indent(table.concat(t,'\n'))
+end
+
+function ExpressionAssignment(lvals,rvals)
+
 end

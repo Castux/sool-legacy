@@ -371,7 +371,7 @@ function Sequence:parse(c)
 	if not first[head.kind] and not self:is_epsilon() then
 	
 		self:format_error(c)
-		return false,nil,true
+		return false,nil,nil,true
 	end
 	
 	-- Yes, parse then
