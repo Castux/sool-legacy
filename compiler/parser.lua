@@ -592,10 +592,15 @@ function Choice:parse(c)
 	
 	-- Is lookahead valid?
 	
-	if not first[head.kind] and not self:is_epsilon() then
-	
-		self:format_error(c)
-		return false,nil,nil,true
+	if not first[head.kind] then
+		
+		if not self:is_epsilon() then
+			self:format_error(c)
+			return false,nil,nil,true
+		
+		else
+			return true,nil,nil
+		end
 	end
 	
 	-- Yes, parse then
@@ -615,6 +620,7 @@ function Choice:parse(c)
 		end
 	end
 	
+	error('Unreachable')
 end
 
 --------------
