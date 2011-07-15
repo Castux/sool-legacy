@@ -93,7 +93,7 @@ g.method_def = S {
 	'block',
 	T 'end',
 	
-	abstr = function(n) return Method(n[2],n[3] or {},n[4].name,n[4].setter,n[6] or {},n[8]) end
+	abstr = function(n) return Method(n[2] ~= nil,n[3] or {},n[4].name,n[4].setter,n[6] or {},n[8]) end
 }
 
 g.type = C {
@@ -383,7 +383,7 @@ g.name_statement = S {
 		
 		-- Assignment
 		elseif n[2].ass then
-			local lvals = n[2][1]
+			local lvals = n[2][1] or {}
 			table.insert(lvals,1,n[1])
 			
 			local rvals = n[2][2]

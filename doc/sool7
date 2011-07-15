@@ -20,6 +20,6 @@ list.strip(|x > 1|)
 
 The signature of the function can be inferred from the method it is used in (here a list of numbers would have a strip method that expects a num::num function). The arguments are taken to be the unknown names that appear in the function, in order (here x). And the return value is the value of the last statement-expression.
 
-Of course it implies a whole lot of new things, like having a built-in "function" type, which itself contains a return type and an argument type. To be any useful it would also actually need closures. And because of the prototype inferring, it should be always passed directly as argument to a method (or at least have a delayed type inferring like locals). Plus that breaks the "everything is an object", or else we need to make these functions "first class" objects that can be assigned, passed as argument, and sent messages to.
+Of course it implies a whole lot of new things, like having a built-in "function" type, which itself contains a return type and an argument type, and the single expression as statement grammar rule. To be any useful it would also actually need closures. And because of the prototype inferring, it should be always passed directly as argument to a method (or at least have a delayed type inferring like locals). Plus that breaks the "everything is an object", or else we need to make these functions "first class" objects that can be assigned, passed as argument, and sent messages to.
 
 Fun fun. But that's for later. Aligator.
