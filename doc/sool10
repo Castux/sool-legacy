@@ -1,0 +1,133 @@
+Abstract syntax tree
+
+My last implementation related post was about refactoring the parser. And refactor I did. I have a shiny new parse tree ("concrete syntax tree") made of tokens and nodes of tokens. But being a simple parse tree, nodes also carry all the useless syntactic fillings. The comas in lists, the parentheses around arguments, the "meth" at the beginning of a method definition. And even if each node can remember which rule of the grammar produced it, that's still very much static data.
+
+We want to have a dynamic internal representation of the program, made of objects, that will be subject to all the verification/transformation passes until we end up with low level machine code. That's the Abstract Syntax Tree.
+
+So, let's roll, and make all our classes of AST objects. For instance, a member definition would be, in pseudo C++:
+
+class ASTMember : public ASTNode
+{
+	bool private;
+	ASTType *type;
+	std::string name;
+}
+
+A while loop:
+
+class ASTWhile : public ASTNode
+{
+	ASTExp *condition;
+	ASTBlock *body;
+}
+
+A binary operation:
+
+class ASTBinop : public ASTExp
+{
+	ASTExp *left;
+	std::string operator;
+	ASTExp *right;
+}
+
+And so on. My first approach was to first build the parse tree, with the automated parser, and then only pass it to a top level AST element, which would take what it needs from it, discard the useless tokens, and recursively build its children AST nodes, passing the children parse node to them.
+
+For instance, the while rule would produce a parse node with the following children:
+
+'while', node for condition, 'do', node for block, 'end'
+
+And the constructor would be:
+
+ASTWhile::ASTWhile( ParseNode *n )
+{
+	condition = new ASTExp( n->GetChild[2] );
+	body = new ASTBlock( n->GetChild[4] );
+}
+
+It seems easy enough like that. But it had a few problems. First, remembering the numbers of the children nodes. Always had to switch back and forth from the AST objects and the grammar definition to check which subnode has what number. Not that's it's anoying, but it might be better to keep related information in the same place. Plus some objects are more complex, there are repetitions to deal with, optionals that do not produce any nodes at all. Finally, that forces to go through each level of the grammar, even when it's not necessary.
+
+Here even if my while condition is just "true", the parse tree will have a top level expression (without any binary operation), a basic expression (without any expression tail), and within that a boolean literal.
+
+Having the AST mirror exactly the parse tree (and therefore be as uselessly deep) seemed like a mistake.
+
+I refactored :)
+
+Now all the AST building is defined directly in the grammar. Each sequence rule can have an "abstr" function. It takes a list of sub-AST-nodes, and should return an AST node. Repetitions just give the list of subnodes, choices pass directly the subnode, and terminal rules produce a single string.
+
+The parser, along with building the parse tree, calls this abstr function at the end of each sequence rule, and returns the result along with the parse node. We directly build both trees in parallel. Magic. For instance:
+
+g.class_def = S {
+	name = 'class definition',
+	T 'class',
+	T 'ClassName',
+	O { S { T ':', T 'ClassName', abstr = function(n) return n[2] end } },
+	R { C { 'member_def', 'method_def' } },
+	T 'end',
+	
+	abstr = function(n) return Class(n[2],n[3],n[4]) end
+}
+
+Our Class object expects to receive as init arguments: a name string, a parent name string (or nil), and a list of members and methods AST objects.
+
+At the price of making the grammar file a bit heavier, we gather the whole parsing information at the same place. The AST object definition only has to worry about two strings and a list, instead of tokens and parse nodes.
+
+And it gives us more power. Or rather, allows us to apply power in a more organized way. The best use of this is for restoring left-derivation. As I discussed earlier, the structure of the LL(1) parser makes it impossible to have left-recursion, which forces to transform some rules into right repetitions, which naturally gives a right-derivation.
+
+But we decided that operators are left-associative.
+
+g.exp = S {
+	name = 'expression',
+	'operand',
+	R { 'binary_operation' },
+	
+	abstr = function(n) return left_derivation(n[1],n[2]) end
+}
+
+The basic rule gives us the leftmost term, and a list of binary operations (composed of an operator and an operand each). We simply pass them to a function that reshapes everything nicely:
+
+function left_derivation(left,tails)
+	
+	local left = left
+	
+	for i,v in ipairs(tails) do
+		v.left = left
+		left = v
+	end
+	
+	return left
+end
+
+And "1+2+3+4" that was parsed as:
+
+1,((<empty>,+,2),(<empty>,+,3),(<empty>,+,4))
+
+becomes a tree of binary operations:
+
+((1,+,2),+,3),+,4)
+
+Hurray. The left_derivation function is used also for the expression tails:
+
+blah.foo.bar.yay is parsed as:
+
+blah,(foo,bar,yay)
+
+and corrected as a tree of method calls:
+
+((((<none>,blah),foo),bar),yay)
+
+And while we're at it, if the tail (operators and operands, or method calls) is empty, we directly return the left AST node. No need to keep the grammar-enforced deepness.
+
+Where it gets really fancy is for compensating the weakness of the LL(1) grammar. There are three statements that deal with expressions. A lone method call "member[3].print", a side effect operator application "foo += 3", and an assignment "bar.bie, ken = 1,2".
+
+stat := lvalue
+stat := lvalue { 'binop' operand }
+stat := list_lvalues '=' list_expressions
+
+As they all start with lvalues, there's first/first conflicts all over, and the only way to have our LL(1) parser deal with that is to left-factor the rules. And so we end up with:
+
+stat := lvalue
+		( { 'binop' operand } | [ ',' list_lvalues ] '=' list_expressions )
+
+Uuuugly. And most importantly, no way we make an AST object that can hold the three possible branches of the rule. We want either the lvalue alone, or a left-derivation of binary operations, or an assignment. And that is done using a proper "abstr" function in each branch.
+
+Nice. Now we have a well formed elegant AST. We can start validation. More fun to come.
