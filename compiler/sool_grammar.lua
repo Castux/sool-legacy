@@ -383,7 +383,7 @@ g.name_statement = S {
 		
 		-- Assignment
 		elseif n[2].ass then
-			local lvals = n[2][1]
+			local lvals = n[2][1] or {}
 			table.insert(lvals,1,n[1])
 			
 			local rvals = n[2][2]
