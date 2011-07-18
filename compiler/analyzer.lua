@@ -1,19 +1,24 @@
 require 'class'
 
+----------
+-- Pass --
+----------
+
 Pass = class()
 
-function Pass:init(name)
+function Pass:init(name,dir)
 	
 	-- Info
 	self.name = name
-	self.desc = ''
 	
 	-- Traversal order:
 	-- 'bottom-up' (postorder depth-first)
 	-- 'top-down' (preorder depth-first)
-	self.dir = ''
+	self.dir = dir
 	
-	self.tasks = {}
+	if dir ~= 'top-down' and dir ~= 'bottom-up' then
+		error('Wrong traversal direction')
+	end
 	
 	return self
 end
@@ -32,9 +37,8 @@ function Pass:apply(node,parent)
 		end
 	end
 	
-	local task = self.tasks[node.class]
-	if task then
-		local ret = task(node)
+	if node[self.name] then
+		local ret = node[self.name](node)
 		
 		if ret then
 			parent:replace_child(node,ret)
@@ -52,16 +56,33 @@ function Pass:apply(node,parent)
 	end
 end
 
+--------------
+-- Analyzer --
+--------------
 
--- Example pass
+Analyzer = class()
 
-lol = Pass('lol')
-lol.desc = 'do the lulz'
-lol.dir = 'bottom-up'
-
-lol.tasks = {
+function Analyzer:init()
 	
-	[BinaryOperation] = function(node)
-		return MethodCall(node.left,node.binop,node.right)
+	self.passes = {}
+	self.errors = {}
+	
+	return self
+end
+
+function Analyzer:validate(context)
+	
+	-- Apply passes in order
+	
+	for i,pass in ipairs(self.passes) do
+		pass:apply(context)
 	end
-}
+	
+	return self.errors
+end
+
+------------------
+-- SoolAnalyzer --
+------------------
+
+SoolAnalyzer = Analyzer()

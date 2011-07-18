@@ -1,7 +1,7 @@
 require 'lexer'
 require 'parser'
 require 'ast'
-require 'Pass'
+require 'analyzer'
 
 --[[
 File structure
@@ -238,15 +238,7 @@ function compile(list)
 	
 	-- Launch analysis
 	
-	print(context:to_string())
-	
-	lol:apply(context)
-	
-	print(context:to_string())
-	
-	do return end
-	
-	local errors = context:validate(class_nodes)
+	local errors = SoolAnalyzer:validate(context)
 	
 	local errcount,warncount = 0,0
 	for i,err in ipairs(errors) do
