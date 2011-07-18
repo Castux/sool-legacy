@@ -1,6 +1,7 @@
 require 'lexer'
 require 'parser'
 require 'ast'
+require 'Pass'
 
 --[[
 File structure
@@ -223,7 +224,25 @@ function compile(list)
 		table.insert(chunks,chunk)
 	end
 	
+	-- Gather all classes into a context
+	
+	context = Context()
+	
+	for i,chunk in ipairs(chunks) do
+		for j,cl in ipairs(chunk.classes) do
+			table.insert(context.classes,cl)
+		end
+	end
+	
+	chunks = nil
+	
 	-- Launch analysis
+	
+	print(context:to_string())
+	
+	lol:apply(context)
+	
+	print(context:to_string())
 	
 	do return end
 	

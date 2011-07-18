@@ -21,7 +21,48 @@ function AbstractNode:init()
 end
 
 function AbstractNode:children()
-	error('Override this')
+	
+	local c = {}
+	
+	for k,v in pairs(self) do
+		if type(v) == 'table' then
+		
+			if v.isa and v:isa(AbstractNode) then
+				table.insert(c,v)
+			else
+				for l,w in ipairs(v) do
+					if w.isa and w:isa(AbstractNode) then
+						table.insert(c,w)
+					end
+				end
+			end
+		end
+	end
+	
+	return c
+end
+
+function AbstractNode:replace_child(old,new)
+	
+	for k,v in pairs(self) do
+		if v == old then
+			self[k] = new
+			print('replaced key')
+			return
+		
+		elseif type(v) == 'table' and not v.isa then
+			for i,w in ipairs(v) do
+				if w == old then
+					v[i] = new
+					print('replaced in list')
+					return
+					
+				end
+			end
+		end
+	end
+	
+	error('Node not found')
 end
 
 function AbstractNode:to_string()
@@ -46,11 +87,6 @@ function Context:init()
 	self.classes = {}
 	
 	return self
-end
-
-function Context:children()
-	
-	return self.classes
 end
 
 function Context:to_string()
@@ -114,10 +150,6 @@ function Class:init(name,parent,mem_meth)
 	return self
 end
 
-function Class:children()
-	return {self.members, self.methods}
-end
-
 function Class:to_string()
 	
 	local s = 'name: ' .. self.name .. '\n'
@@ -150,10 +182,6 @@ function Member:init(priv,typ,name)
 	self.name = name
 	
 	return self
-end
-
-function Member:children()
-	return {self.type}
 end
 
 function Member:to_string()
@@ -231,10 +259,6 @@ function TableType:init(key,value)
 	return self
 end
 
-function TableType:children()
-	return {self.keytype,self.valuetype}
-end
-
 function TableType:to_string()
 	return 'TableType:\n' .. self:indent(self.keytype:to_string() .. '\n' .. self.valuetype:to_string())
 end
@@ -250,10 +274,6 @@ function ClassType:init(name)
 	self.class_name = name
 	
 	return self
-end
-
-function ClassType:children()
-	return {}
 end
 
 function ClassType:to_string()
@@ -278,16 +298,6 @@ function Method:init(priv,rtypes,name,setter,args,body)
 	self.body = body
 	
 	return self
-end
-
-function Method:children()
-	
-	local c = {}
-	table.append(c,rtypes)
-	table.append(c,args)
-	table.insert(c,body)
-	
-	return c
 end
 
 function Method:to_string()
@@ -341,10 +351,6 @@ function Argument:parse(node)
 	
 	self.name = node.nodes[2].value
 	
-end
-
-function Argument:children()
-	return {self.type}
 end
 
 function Argument:to_string()
@@ -609,9 +615,9 @@ end
 
 MethodCall = class(Expression)
 
-function MethodCall:init(name,args)
+function MethodCall:init(left,name,args)
 	
-	self.left = nil
+	self.left = left
 	self.name = name
 	
 	if args and args.isa then
@@ -778,9 +784,15 @@ If = class(AbstractNode)
 
 function If:init(alts,default,name)
 	
-	self.alts = alts
-	self.default = default
+	self.conds = {}
+	self.bodies = {}
 	
+	for i,v in ipairs(alts) do
+		self.conds[i] = v.cond
+		self.bodies[i] = v.body
+	end
+	
+	self.default = default
 	self.name = name
 	
 	return self
@@ -790,9 +802,9 @@ function If:to_string()
 	
 	local t = {}
 	
-	for i,v in ipairs(self.alts) do
-		table.insert(t, v.cond:to_string())
-		table.insert(t, v.body:to_string())
+	for i = 1,#self.conds do
+		table.insert(t, self.conds[i]:to_string())
+		table.insert(t, self.bodies[i]:to_string())
 	end
 	
 	if self.default then

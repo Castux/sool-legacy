@@ -263,7 +263,7 @@ g.method_call = S {
 	T 'Name',
 	O { 'call_arguments' },
 	
-	abstr = function(n) return MethodCall(n[1],n[2]) end
+	abstr = function(n) return MethodCall(nil,n[1],n[2]) end
 }
 
 g.call_arguments = C {

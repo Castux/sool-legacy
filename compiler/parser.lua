@@ -1355,12 +1355,6 @@ function parse(tokens)
 	local context = ParsingContext(tokens)
 	
 	local success,node,ast = SoolGrammar:parse(context)
-	print(success)
-	if node then print(node:to_string()) end
-	print''
-	
-	print 'AST:'
-	if ast then print(ast:to_string()) end
 	
 	return context.errors,ast
 end
