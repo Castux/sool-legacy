@@ -4,4 +4,4 @@ env = Environment()
 
 env['CC'] = 'clang'
 env.Append(CCFLAGS = '-Wall -ansi -pedantic -Werror')
-env.Program( 'soolrt', sources )
+env.Program( 'test', sources )
