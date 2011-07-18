@@ -1,0 +1,66 @@
+What we want
+============
+
+Two kind of slices:
+
+- Range: a[2:4] a[:4] a[2:] a[]
+- Selection: a[1,3,4], a[[1,3,4]]
+
+In examples, use the "whole" slice but could be any other.
+
+Operations:
+
+- Extract array from array: a = b[2:12]
+- Call void methods on elements: a[].dothing
+- Call the same non-void method and elements and collect results: a = b[] * 3
+- Iterate on parallel on several arrays and call methods: a[].dothing(b[])
+- Same with result collecting: res = a[] + b[] * 3 - c[]
+
+All these were in expressions only. What about assignments?
+
+- Assign same value to elements: a[] = 4
+- Assign different values to elements: a[1:3] = [1,2,3], a[2:4] = b[3:5]
+
+There are three different things.
+
+- Slice in expression: implies prior execution in a loop, and sometimes returning an array as result:
+
+for i in a[] + b[] do end
+a = b[2:4]
+
+- Slice on left side of assignment: run the whole assignment for each element:
+
+a[2:4] = b[] * 2 + c[4:6]
+
+That is slightly incompatible. If the right side in an expression (which is it), it should have been priorly executed and put in a vector. So:
+
+a[] = b[] + c[]
+
+resolves to:
+
+temparray = b[] + c[]
+a[] = temparray
+
+Which seems to mean that we should assign the whole temparray to each element of a. Which is nonsense. Also what happens to:
+
+a[][] = 5
+
+(should mean run two nested loops, and set 5 to every element of the 2D array)
+
+But it does in fact mean:
+
+for i in #a do a[i][i] = 5 end
+
+Fail.
+
+What about:
+
+a[], b[] = c[] + 1, d[] + 3
+
+If c and d have different lengths, should it work anyway (be per-assignment) or fail (per-statement).
+
+And what happens to expressions within lvalues:
+
+a[b[]*2] = 5
+
+Slices are le fail.
