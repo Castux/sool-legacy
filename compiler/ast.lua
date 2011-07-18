@@ -430,11 +430,21 @@ function Return:to_string()
 	end
 end
 
+----------------
+-- Expression --
+----------------
+
+Expression = class(AbstractNode)
+
+function Expression:init()
+	return self
+end
+
 ------------------------
 -- Atomic expressions --
 ------------------------
 
-AtomicNumber = class(AbstractNode)
+AtomicNumber = class(Expression)
 
 function AtomicNumber:init(val)
 	
@@ -447,7 +457,7 @@ function AtomicNumber:to_string()
 	return 'AtomicNumber:\n' .. self:indent(self.val)
 end
 
-AtomicString = class(AbstractNode)
+AtomicString = class(Expression)
 
 function AtomicString:init(val)
 	
@@ -460,7 +470,7 @@ function AtomicString:to_string()
 	return 'AtomicString:\n' .. self:indent(self.val)
 end
 
-AtomicBool = class(AbstractNode)
+AtomicBool = class(Expression)
 
 function AtomicBool:init(val)
 	
@@ -473,7 +483,7 @@ function AtomicBool:to_string()
 	return 'AtomicBool:\n' .. self:indent(tostring(self.val))
 end
 
-AtomicSymbol = class(AbstractNode)
+AtomicSymbol = class(Expression)
 
 function AtomicSymbol:init(val)
 	
@@ -486,7 +496,7 @@ function AtomicSymbol:to_string()
 	return 'AtomicSymbol:\n' .. self:indent(self.val)
 end
 
-AtomicNil = class(AbstractNode)
+AtomicNil = class(Expression)
 
 function AtomicNil:init(val)
 	
@@ -501,27 +511,7 @@ end
 -- Constructors --
 ------------------
 
-ListCons = class(AbstractNode)
-
-function ListCons:init(exps)
-	
-	self.exps = exps
-	
-	return self
-end
-
-function ListCons:to_string()
-	
-	local t = {}
-	
-	for i,v in ipairs(self.exps) do
-		table.insert(t,v:to_string())
-	end
-	
-	return 'ListCons:\n' .. self:indent(table.concat(t,'\n'))
-end
-
-ArrayCons = class(AbstractNode)
+ArrayCons = class(Expression)
 
 function ArrayCons:init(exps)
 	
@@ -541,7 +531,7 @@ function ArrayCons:to_string()
 	return 'ArrayCons:\n' .. self:indent(table.concat(t,'\n'))
 end
 
-VectorCons = class(AbstractNode)
+VectorCons = class(Expression)
 
 function VectorCons:init(exps)
 	
@@ -561,7 +551,7 @@ function VectorCons:to_string()
 	return 'VectorCons:\n' .. self:indent(table.concat(t,'\n'))
 end
 
-TableCons = class(AbstractNode)
+TableCons = class(Expression)
 
 function TableCons:init(kvpairs)
 	
@@ -582,7 +572,7 @@ function TableCons:to_string()
 	return 'TableCons:\n' .. self:indent(table.concat(t,'\n'))
 end
 
-ObjectCons = class(AbstractNode)
+ObjectCons = class(Expression)
 
 function ObjectCons:init(cname,args)
 	
@@ -617,7 +607,7 @@ end
 -- MethodCall --
 ----------------
 
-MethodCall = class(AbstractNode)
+MethodCall = class(Expression)
 
 function MethodCall:init(name,args)
 	
@@ -654,7 +644,7 @@ end
 -- Indexing --
 --------------
 
-Indexing = class(AbstractNode)
+Indexing = class(Expression)
 
 function Indexing:init(expr)
 	
@@ -676,7 +666,7 @@ end
 -- UnaryOperation --
 --------------------
 
-UnaryOperation = class(AbstractNode)
+UnaryOperation = class(Expression)
 
 function UnaryOperation:init(unop,expr)
 	
@@ -698,7 +688,7 @@ end
 -- BinaryOperation --
 ---------------------
 
-BinaryOperation = class(AbstractNode)
+BinaryOperation = class(Expression)
 
 function BinaryOperation:init(binop,expr)
 	
@@ -858,10 +848,6 @@ function Assignment:init(lvals,rvals)
 	self.lvals = lvals
 	self.rvals = rvals
 	
-	if #lvals == 1 and #rvals == 0 then
-		return lvals[1]
-	end
-	
 	return self
 end
 
@@ -880,8 +866,4 @@ function Assignment:to_string()
 	end
 	
 	return 'Assignment:\n' .. self:indent(table.concat(t,'\n'))
-end
-
-function ExpressionAssignment(lvals,rvals)
-
 end

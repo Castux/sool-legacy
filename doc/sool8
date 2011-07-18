@@ -68,8 +68,8 @@ There are a few utility methods like "flatten_list" that expect a node created b
 So far, I converted the code that validates up to classes' interfaces, and it's been going great. We now populate Class objects with names, parent classes (checking for circular inheritence). Inherit members and methods. Add members (with name collision detection and automatic filling or getter/setter methods), methods (there again, name collision with members, selector collisions with other methods, and method overriding).
 
 I also reviewed some core concepts of the analyzer:
-	Objects are instances of classes (they have no "type").
-	Variables have types (ownership + class of pointed object).
+1. Objects are instances of classes (they have no "type").
+2. Variables have types (ownership + class of pointed object).
 
 In the implementation, I went even one step deeper, there is a SingleType object (weak = true/false, class), and a Type object, which is a wrapper list of single types. That way, methods will have one "argument type", one "return type", and expressions one "type", variables one "type". Some of them will be multiple, some not, but then we can have a centralised (in the Type class) management of assignment and type compatibility, etc. That avoids having to handle multiple cases in multiple places.
 

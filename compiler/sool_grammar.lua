@@ -93,7 +93,7 @@ g.method_def = S {
 	'block',
 	T 'end',
 	
-	abstr = function(n) return Method(n[2],n[3] or {},n[4].name,n[4].setter,n[6] or {},n[8]) end
+	abstr = function(n) return Method(n[2] ~= nil,n[3] or {},n[4].name,n[4].setter,n[6] or {},n[8]) end
 }
 
 g.type = C {
