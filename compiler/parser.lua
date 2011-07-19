@@ -698,6 +698,10 @@ function Terminal:parse(c)
 			ast = head.value
 		end
 		
+		if type(ast) == 'table' then
+			ast.node = node
+		end
+		
 		return true,node,ast
 	else
 		

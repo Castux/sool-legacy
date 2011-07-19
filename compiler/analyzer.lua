@@ -20,6 +20,9 @@ function Pass:init(name,dir)
 		error('Wrong traversal direction')
 	end
 	
+	-- Ref to analyzer for error collecting
+	self.analyzer = nil
+	
 	return self
 end
 
@@ -38,7 +41,7 @@ function Pass:apply(node,parent)
 	end
 	
 	if node[self.name] then
-		local ret = node[self.name](node)
+		local ret = node[self.name](node,self.analyzer)
 		
 		if ret then
 			parent:replace_child(node,ret)
@@ -81,8 +84,31 @@ function Analyzer:validate(context)
 	return self.errors
 end
 
+function Analyzer:add_pass(pass)
+	pass.analyzer = self
+	table.insert(self.passes,pass)
+end
+
+function Analyzer:add_error(message,pos)
+	local err = {'analyzer','error',message,pos}
+	table.insert(self.errors,err)
+end
+
+function Analyzer:add_info(message,pos)
+	local err = {'analyzer','info',message,pos}
+	table.insert(self.errors,err)
+end
+
 ------------------
 -- SoolAnalyzer --
 ------------------
 
 SoolAnalyzer = Analyzer()
+
+SoolAnalyzer:add_pass( Pass('lol','top-down') )
+
+function AbstractNode:lol(a)
+	if self.node then
+		a:add_info(classname(self.class),self.node:position())
+	end
+end
