@@ -8,8 +8,12 @@ require 'class'
 ------------------
 
 -- This is the root class for the abstract syntax tree.
--- The only thing it really does is enforce that nodes can return children,
--- for proper tree traversal by the passes.
+-- Any AbstractNode as member or in a member list is considered a child,
+-- except the member "parent".
+
+-- That ensures proper traversal.
+-- Parents can be set later with a pass, but then must be kept up to date
+-- if any node needs access to its hierarchy (and they usually do).
 
 AbstractNode = class()
 
@@ -25,7 +29,7 @@ function AbstractNode:children()
 	local c = {}
 	
 	for k,v in pairs(self) do
-		if type(v) == 'table' then
+		if k ~= 'parent' and type(v) == 'table' then
 		
 			if v.isa and v:isa(AbstractNode) then
 				table.insert(c,v)
@@ -133,6 +137,8 @@ function Class:init(name,parent,mem_meth)
 	self.name = name
 	self.parent_name = parent
 	
+	self.child_classes = {}		-- Filled in by analyzer
+	
 	self.members = {}
 	self.methods = {}
 	
@@ -228,6 +234,22 @@ function SymbolType:to_string()
 	return 'SymbolType'
 end
 
+function NumberType:signature()
+	return 'num'
+end
+
+function StringType:signature()
+	return 'str'
+end
+
+function VectorType:signature()
+	return 'vec'
+end
+
+function SymbolType:signature()
+	return 'sym'
+end
+
 ---------------
 -- ArrayType --
 ---------------
@@ -243,6 +265,10 @@ end
 
 function ArrayType:to_string()
 	return 'ArrayType:\n' .. self:indent(self.subtype:to_string())
+end
+
+function ArrayType:signature()
+	return '[' .. self.subtype:signature() .. ']'
 end
 
 ---------------
@@ -263,6 +289,10 @@ function TableType:to_string()
 	return 'TableType:\n' .. self:indent(self.keytype:to_string() .. '\n' .. self.valuetype:to_string())
 end
 
+function TableType:signature()
+	return '{' .. self.keytype:signature() .. ',' .. self.valuetype:signature() .. '}'
+end
+
 ---------------
 -- ClassType --
 ---------------
@@ -278,6 +308,10 @@ end
 
 function ClassType:to_string()
 	return 'ClassType:\n' .. self:indent('class name: ' .. self.class_name)
+end
+
+function ClassType:signature()
+	return self.class_name
 end
 
 ------------
