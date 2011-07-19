@@ -1,0 +1,142 @@
+AST traversal
+
+I was a bit stuck on how to traverse the AST. Since each node is an object with named fields (instead of elements in a "children" list, for instance), I would have potentially needed to write a "get children" function to iterate on them and traverse the tree. But thanks to Lua's dynamism, I made only one function at AbstractNode level, that goes through all members of the table (since Lua objects are tables) and gather everything that looks like an AbstractNode. It also goes through lists and get nodes there too. For instance the Block object has a list of statements. Magic. And it's not too slow, for now.
+
+Now once that is plugged to the pass system, I can have something fun like:
+
+SoolAnalyzer:add_pass( Pass('lol','top-down') )
+
+function AbstractNode:lol(a)
+    if self.node then
+        a:add_info(classname(self.class),self.node:position())
+    end
+end
+
+The analyzer is a list of passes, applied one by one to the tree. Each pass has a "name", which is simply the name of a method to call on each node (if it answers to it). It also passes itself as argument, for error collecting. This example pass simply goes through all nodes, and reports their name and position as an information diagnostic. On a short example, it produces this:
+
+Compiler info: successfully lexed file example.sool for a total of 50 tokens
+Compiler info: successfully parsed file example.sool
+analyzer info: example.sool:1-15: Class
+class MyClass
+    
+    meth str dothat([num] n, {sym,Class} c)
+        
+        b = a + (10 * 20)
+        for i,v in [1,2,3] do
+            if v then
+                break
+            end
+        end
+        
+        return lol
+    end
+    
+end
+analyzer info: example.sool:3-13: Method
+    meth str dothat([num] n, {sym,Class} c)
+        
+        b = a + (10 * 20)
+        for i,v in [1,2,3] do
+            if v then
+                break
+            end
+        end
+        
+        return lol
+    end
+analyzer info: example.sool:3: Argument
+    meth str dothat([num] n, {sym,Class} c)
+                    ^^^^^^^                 
+analyzer info: example.sool:3: ArrayType
+    meth str dothat([num] n, {sym,Class} c)
+                    ^^^^^                   
+analyzer info: example.sool:3: NumberType
+    meth str dothat([num] n, {sym,Class} c)
+                     ^^^                    
+analyzer info: example.sool:3: Argument
+    meth str dothat([num] n, {sym,Class} c)
+                             ^^^^^^^^^^^^^  
+analyzer info: example.sool:3: TableType
+    meth str dothat([num] n, {sym,Class} c)
+                             ^^^^^^^^^^^    
+analyzer info: example.sool:3: SymbolType
+    meth str dothat([num] n, {sym,Class} c)
+                              ^^^           
+analyzer info: example.sool:3: ClassType
+    meth str dothat([num] n, {sym,Class} c)
+                                  ^^^^^     
+analyzer info: example.sool:3: StringType
+    meth str dothat([num] n, {sym,Class} c)
+         ^^^                                
+analyzer info: example.sool:5-12: Block
+        b = a + (10 * 20)
+        for i,v in [1,2,3] do
+            if v then
+                break
+            end
+        end
+        
+        return lol
+analyzer info: example.sool:5: Assignment
+        b = a + (10 * 20)
+        ^^^^^^^^^^^^^^^^^ 
+analyzer info: example.sool:5: BinaryOperation
+        b = a + (10 * 20)
+            ^^^^^^^^^^^^^ 
+analyzer info: example.sool:5: BinaryOperation
+        b = a + (10 * 20)
+                ^^^^^^^^^ 
+analyzer info: example.sool:5: AtomicNumber
+        b = a + (10 * 20)
+                      ^^  
+analyzer info: example.sool:5: AtomicNumber
+        b = a + (10 * 20)
+                 ^^       
+analyzer info: example.sool:5: MethodCall
+        b = a + (10 * 20)
+            ^             
+analyzer info: example.sool:5: MethodCall
+        b = a + (10 * 20)
+        ^                 
+analyzer info: example.sool:6-10: For
+        for i,v in [1,2,3] do
+            if v then
+                break
+            end
+        end
+analyzer info: example.sool:7-9: Block
+            if v then
+                break
+            end
+analyzer info: example.sool:7-9: If
+            if v then
+                break
+            end
+analyzer info: example.sool:7: MethodCall
+            if v then
+               ^      
+analyzer info: example.sool:8: Block
+                break
+                ^^^^^ 
+analyzer info: example.sool:8: Break
+                break
+                ^^^^^ 
+analyzer info: example.sool:6: ArrayCons
+        for i,v in [1,2,3] do
+                   ^^^^^^^    
+analyzer info: example.sool:6: AtomicNumber
+        for i,v in [1,2,3] do
+                    ^         
+analyzer info: example.sool:6: AtomicNumber
+        for i,v in [1,2,3] do
+                      ^       
+analyzer info: example.sool:6: AtomicNumber
+        for i,v in [1,2,3] do
+                        ^     
+analyzer info: example.sool:12: Return
+        return lol
+        ^^^^^^^^^^ 
+analyzer info: example.sool:12: MethodCall
+        return lol
+               ^^^ 
+Compiler info: chunk passed validation, for a total of 1 classes
