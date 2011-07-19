@@ -87,10 +87,16 @@ function print_error(err)
 		local str = ""
 		local fline,lline = err[4].fline,err[4].lline
 		local fcol,lcol = err[4].fcol,err[4].lcol
+	
+		if fcol > lcol and fline == lline then
+			fcol = math.floor((fcol + lcol)/2)
+			lcol = fcol
+		end
 		
 		str = file[fline]:sub(1,fcol-1)
-		
+
 		if fline == lline then
+			
 			str = str .. C(file[fline]:sub(fcol,lcol),col)
 			str = str .. file[fline]:sub(lcol+1,-1)
 			str = str .. '\n'

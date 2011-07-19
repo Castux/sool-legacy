@@ -213,6 +213,7 @@ function Class:build_class_hierarchy_helper(a)
 	-- Give class to its parent
 	
 	table.insert(pclass.child_classes, self)
+	self.parent = pclass
 	
 	-- Request removal from root list
 	
@@ -251,9 +252,9 @@ function Member:check_member_redefinition(a)
 	
 end
 
-SoolAnalyzer:add_pass( Pass('build_method_selectors','top-down') )
+SoolAnalyzer:add_pass( Pass('build_methods_type_info','top-down') )
 
-function Method:build_method_selectors(a)
+function Method:build_methods_type_info(a)
 	
 	-- Gather argument types signatures
 
@@ -262,7 +263,7 @@ function Method:build_method_selectors(a)
 		table.insert(t, arg.type:signature())
 	end
 	
-	local sel = self.name .. ':' .. table.concat(t,',')
+	local sel = self.name .. (self.setter and '=' or '') .. ':' .. table.concat(t,',')
 	self.sel = sel
 	
 	-- Reuse class' method table with selector indexing
@@ -276,6 +277,16 @@ function Method:build_method_selectors(a)
 		self.parent.methods[sel] = self
 	end
 	
+	-- Gather return types signatures
+	t = {}
+	for _,ret in ipairs(self.rtypes) do
+		table.insert(t, ret:signature())
+	end
+	
+	local retsig = table.concat(t,',')
+	self.retsig = retsig
+	
+	self.sig = retsig .. ':' .. sel
 end
 
 SoolAnalyzer:add_pass( Pass('check_method_member_collision','top-down') )
@@ -284,8 +295,106 @@ function Method:check_method_member_collision(a)
 	
 	local other = self.parent.members[self.name]
 	if other then
-		a:add_error('method name shadows member', self.node:position(4,4))
+		a:add_error('method definition shadows member', self.node:position(4,4))
 		a:add_info('defined here:', other.node:position(3,3))
 		return
+	end
+end
+
+-----------------
+-- Inheritance --
+-----------------
+
+-- The top-down traversal ensures that a parent inherited its own members/methods already
+
+SoolAnalyzer:add_pass( Pass('inherit_members','top-down') )
+
+function Class:inherit_members(a)
+	
+	if not self.parent_name then
+		return
+	end
+	
+	local mems = self.parent.members
+	
+	for i,mem in ipairs(mems) do
+		local own_mem = self.members[mem.name]
+		
+		local own_meth
+		for i,v in ipairs(self.methods) do
+			if v.name == mem.name then
+				own_meth = v
+			end
+		end
+		
+		if own_mem then
+			a:add_error('member definition shadows parent class member', own_mem.node:position(3,3))
+			a:add_info('defined here:', mem.node:position(3,3))
+		elseif own_meth then
+			a:add_error('method definition shadows parent class member', own_meth.node:position(4,4))
+			a:add_info('defined here:', mem.node:position(3,3))
+		else
+			table.insert(self.members,i,mem)
+			self.members[mem.name] = mem
+		end
+	end
+	
+end
+
+SoolAnalyzer:add_pass( Pass('inherit_methods','top-down') )
+
+function Class:inherit_methods(a)
+	
+	if not self.parent_name then
+		return
+	end
+	
+	local meths = self.parent.methods
+	
+	for i,meth in ipairs(meths) do
+		
+		local own_mem = self.members[meth.name]
+		local own_meth = self.methods[meth.sel]
+		
+		if own_mem then
+			a:add_error('member definition shadows parent class method', own_mem.node:position(3,3))
+			a:add_info('defined here:', meth.node:position(4,4))
+		elseif own_meth then
+			
+			local bad
+			
+			-- We are overriding the parent. The return types and privacity must match.
+			if own_meth.retsig ~= meth.retsig then
+				a:add_error('return type mismatch in method definition', own_meth.node:position(3,3))
+				a:add_info('overriding parent method:', meth.node:position(3,3))
+				bad = true
+			end
+			
+			if own_meth.private ~= meth.private then
+				a:add_error('privacity mismatch in method definition', own_meth.node:position(2,2))
+				a:add_info('overriding parent method:', meth.node:position(2,2))
+				bad = true
+			end
+			
+			if not bad then
+				-- We actually replace the old one, so it must take the correct place
+				-- Remove from list
+				for j,v in ipairs(self.methods) do
+					if v == own_meth then
+						table.remove(self.methods,j)
+					end
+				end
+				-- Add back in the parent's position
+				table.insert(self.methods,i,own_meth)
+				-- Replace indexing by selector
+				self.methods[own_meth.sel] = own_meth
+			end
+			
+		
+		else
+			table.insert(self.methods,i,meth)
+			self.methods[meth.sel] = meth					
+		end
+		
 	end
 end

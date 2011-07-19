@@ -86,7 +86,7 @@ g.method_def = S {
 	O { name = 'return types', 'list_type' },
 	C {
 		name = 'method name',
-		S { T 'Name', O { T '=' }, abstr = function(n) return { name = n[1] .. (n[2] and '=' or ''), setter = n[2] ~= nil } end },
+		S { T 'Name', O { T '=' }, abstr = function(n) return { name = n[1], setter = n[2] ~= nil } end },
 		S { T 'op', 'binop', abstr = function(n) return { name = n[2], setter = false } end }
 	},
 	T '(', O { 'list_arg_def' }, T ')',
