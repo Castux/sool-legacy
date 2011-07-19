@@ -109,6 +109,11 @@ function Analyzer:add_info(message,pos)
 	table.insert(self.errors,err)
 end
 
+function Analyzer:add_warning(message,pos)
+	local err = {'Analyzer','warning',message,pos}
+	table.insert(self.errors,err)
+end
+
 ------------------
 -- SoolAnalyzer --
 ------------------
@@ -233,6 +238,32 @@ function ClassType:check_type_declarations(a)
 		return
 	end
 	
+end
+
+SoolAnalyzer:add_pass( Pass('nested_types_madness','bottom-up') )
+
+function SimpleType:nested_types_madness(a)
+	self.level = 0
+end
+
+function ClassType:nested_types_madness(a)
+	self.level = 0
+end
+
+function ArrayType:nested_types_madness(a)
+	self.level = self.subtype.level + 1
+	
+	if self.level >= 4 and not self.parent:isa(Type) then
+		a:add_warning('type has ' .. self.level .. ' nested levels. THIS IS MADNESS.', self.node:position())
+	end
+end
+
+function TableType:nested_types_madness(a)
+	self.level = math.max(self.keytype.level + 1, self.valuetype.level + 1)
+	
+	if self.level >= 4 and not self.parent:isa(Type) then
+		a:add_warning('type has ' .. self.level .. ' nested levels. THIS IS MADNESS.', self.node:position())
+	end
 end
 
 SoolAnalyzer:add_pass( Pass('check_member_redefinition','top-down') )
@@ -416,3 +447,5 @@ function Class:print_class_info(a)
 	str = str:gsub('\n$','')
 	a:add_info(str)
 end
+
+

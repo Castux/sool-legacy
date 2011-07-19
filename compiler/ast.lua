@@ -199,11 +199,21 @@ function Member:to_string()
 	return 'Member:\n' .. self:indent(s)
 end
 
+-----------
+-- Types --
+-----------
+
+Type = class(AbstractNode)
+
+function Type:init()
+	return self
+end
+
 ----------------
 -- SimpleType --
 ----------------
 
-SimpleType = class(AbstractNode)
+SimpleType = class(Type)
 
 function SimpleType:init()
 	return self
@@ -254,7 +264,7 @@ end
 -- ArrayType --
 ---------------
 
-ArrayType = class(AbstractNode)
+ArrayType = class(Type)
 
 function ArrayType:init(sub)
 	
@@ -275,7 +285,7 @@ end
 -- TableType --
 ---------------
 
-TableType = class(AbstractNode)
+TableType = class(Type)
 
 function TableType:init(key,value)
 	
@@ -297,7 +307,7 @@ end
 -- ClassType --
 ---------------
 
-ClassType = class(AbstractNode)
+ClassType = class(Type)
 
 function ClassType:init(name)
 	
