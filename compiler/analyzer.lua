@@ -398,3 +398,21 @@ function Class:inherit_methods(a)
 		
 	end
 end
+
+SoolAnalyzer:add_pass( Pass('print_class_info','top-down') )
+
+function Class:print_class_info(a)
+	
+	local str = 'class ' .. self.name .. (self.parent_name and ' : ' .. self.parent_name or '' ) .. '\n'
+	
+	for i,v in ipairs(self.members) do
+		str = str .. '    ' .. v.type:signature() .. ' ' .. v.name .. '\n'
+	end
+	
+	for i,v in ipairs(self.methods) do
+		str = str .. '    ' .. v.sig .. '\n'
+	end
+	
+	str = str:gsub('\n$','')
+	a:add_info(str)
+end
