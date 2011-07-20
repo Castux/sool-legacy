@@ -20,6 +20,10 @@ function Pass:init(name,dir)
 		error('Wrong traversal direction')
 	end
 	
+	-- Marking treated nodes to avoid multiple traversal
+	-- (the tree can get a slightly graph-y structure after a while
+	self.done = {}
+	
 	-- Ref to analyzer for error collecting
 	self.analyzer = nil
 	
@@ -27,6 +31,12 @@ function Pass:init(name,dir)
 end
 
 function Pass:apply(node,parent)
+	
+	if self.done[node] then
+		return
+	end
+	
+	self.done[node] = true
 	
 	local node = node
 	local children
@@ -132,6 +142,19 @@ function AbstractNode:set_parent_nodes(a)
 	
 	for _,child in ipairs(ch) do
 		child.parent = self
+	end
+	
+end
+
+SoolAnalyzer:add_pass( Pass('reject_invalid_lvalues','top-down') )
+
+function Assignment:reject_invalid_lvalues(a)
+	
+	for i,v in ipairs(self.lvals) do
+		if v:isa(MethodCall) and (#v.args ~= 0 or v.args.parens) then
+			a:add_error('invalid left value', v.node:position())
+			a:add_info('left values cannot end in method calls with arguments')
+		end
 	end
 	
 end
@@ -448,4 +471,172 @@ function Class:print_class_info(a)
 	a:add_info(str)
 end
 
+----------------------
+-- Lexical analysis --
+----------------------
 
+SoolAnalyzer:add_pass( Pass('collect_locals','top-down') )
+
+-- Lists of locals are held by blocks
+
+Local = class()
+
+function Local:init(name,arg,type)
+	
+	self.type = type
+	self.name = name
+	
+	self.arg = arg or false
+	
+	-- Declaration position
+	self.pos = nil
+	
+	return self
+end
+
+function Local:kind()
+	return self.arg and 'argument' or 'local'
+end
+
+-- Blocks must be able to scan their own scopes
+-- And add locals to it with verifications
+
+function Block:in_scope(name)
+	
+	local loc = self.locals[name]
+	if loc then return loc end
+	
+	local klass = self:get_parent(Class)
+	local mem = klass.members[name]
+	if mem then return mem end
+	
+	local meth
+	for i,v in ipairs(klass.methods) do
+		if v.name == name then
+			meth = v
+			break
+		end
+	end
+	if meth then return meth end
+	
+	return nil
+end
+
+function Block:add_local(l,a)
+	
+	-- Is the name taken already?
+	
+	local other = self:in_scope(l.name)
+	
+	if not other then
+		-- No, cool.
+		self.locals[l.name] = l
+		return
+	end
+	
+	-- Already a local
+	
+	if other:isa(Local) then
+		a:add_error(l:kind() .. ' declaration shadows ' .. other:kind(), l.pos)
+		a:add_info('declared here:', other.pos)
+		return
+	end
+	
+	-- A class member maybe?
+	
+	if other:isa(Member) then
+		a:add_error(l:kind() .. ' declaration shadows class member', l.pos)
+		a:add_info('declared here:', other.node:position())
+		return
+	end
+	
+	-- A method, perhaps.
+	
+	if other:isa(Method) then
+		a:add_error(l:kind() .. ' declaration shadows method name', l.pos)
+		a:add_info('declared here:', other.node:position(4,4))
+		return
+	end
+	
+	error('What the hell is "other" then?')
+end
+
+-- Locals are declared as arguments, and in "as" thingies of whiles and ifs
+-- Locals are implicitely declared in assignments to unknown names
+
+function Method:collect_locals(a)
+	
+	for i,arg in ipairs(self.args) do
+		local loc = Local(arg.name, arg.type, true)
+		loc.pos = arg.node:position()
+		
+		self.body:add_local(loc,a)
+	end
+end
+
+function While:collect_locals(a)
+	
+	if self.name then
+		local loc = Local(self.name)
+		loc.pos = self.node.nodes[3]:position(2,2)
+
+		self.body:add_local(loc,a)
+	end
+end
+
+function If:collect_locals(a)
+	
+	for i,b in ipairs(self.bodies) do
+		if self.names[i] then
+			local loc = Local(self.names[i])
+			loc.pos = self.nodes[i].nodes[3]:position(2,2)
+			
+			self.bodies[i]:add_local(loc,a)
+		end
+	end
+	
+end
+
+function Assignment:collect_locals(a)
+	
+	for i,v in ipairs(self.lvals) do
+		if v:isa(MethodCall) and not v.left and #v.args == 0 then
+			
+			local block = self:get_parent(Block)
+			local other = block:in_scope(v.name)
+			
+			if not other then
+				local loc = Local(v.name)
+				loc.pos = v.node:position()
+				
+				block:add_local(loc,a)
+			end
+		end
+	end
+end
+
+-- Blocks also need to inherit locals from outer blocks. Top-down traversal ensures correctness.
+-- Careful though, some block have their variables set by outer nodes (who are treated first). So
+-- actually we have a bastardized up-down-up-down zigzaggy traversal of lols.
+-- But that'll work out ok.
+
+function Block:collect_locals(a)
+	
+	local outer = self:get_parent(Block)
+	
+	if not outer then
+		return
+	end
+	
+	for name,loc in pairs(outer.locals) do
+	
+		local own = self.locals[name]
+		if own then
+			a:add_error(own:kind() .. ' declaration shadows ' .. loc:kind(), own.pos)
+			a:add_info('declared here:', loc.pos)
+		else
+			self.locals[name] = loc
+		end
+	end
+	
+end

@@ -261,7 +261,7 @@ function compile(list)
 		mess = 'analyzer reported ' .. errcount .. ' error' .. (errcount ~= 1 and 's' or '') ..
 		' and ' .. warncount .. ' warning' .. (warncount ~= 1 and 's' or '')
 	else
-		mess = 'chunk passed validation, for a total of ' .. #context.classes .. ' classes'
+		mess = 'chunk passed validation'
 	end
 	
 	print_error {'Compiler','info',mess}

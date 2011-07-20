@@ -137,6 +137,14 @@ g.block = S {
 	abstr = function(n) return Block(n[1],n[2]) end
 }
 
+local extract_if = function(n)
+	return {
+		cond = n[2],
+		body = n[5],
+		name = n[3] and n[3][2]
+	}
+end
+
 g.statement = C {
 	name = 'statement',
 	
@@ -157,21 +165,19 @@ g.statement = C {
 		abstr = function(n) return While(n[2],n[3],n[5]) end
 	},
 	
+	
+	
 	S {
 		name = 'if construct',
-		T 'if',
-		N { name = 'condition', 'exp' },
-		O { S { name = 'local name of condition', T 'as', T 'Name', abstr = function(n) return n[2] end } },
-		T 'then',
-		'block',
-		R { S { T 'elseif', 'exp', T 'then', 'block', abstr = function(n) return { cond = n[2], body = n[4] } end } },
+		S { T 'if', 'exp', O { S { T 'as', T 'Name' } }, T 'then', 'block', abstr = extract_if },
+		R { S { T 'elseif', 'exp', O { S { T 'as', T 'Name' } }, T 'then', 'block', abstr = extract_if } },
 		O { S { T 'else', 'block', abstr = function(n) return n[2] end } },
 		T 'end',
 		
 		abstr = function(n)
-			local alts = n[6]
-			table.insert(alts, 1, { cond = n[2], body = n[5] })
-			return If(alts,n[7],n[3])
+			local alts = n[2]
+			table.insert(alts, 1, n[1])
+			return If(alts,n[3])
 		end
 	},
 	
@@ -268,7 +274,7 @@ g.method_call = S {
 
 g.call_arguments = C {
 	name = 'argument',
-	S { name = 'parenthesised argument list', T '(', O { 'list_exp' }, T ')', abstr = function(n) return n[2] or {} end },
+	S { name = 'parenthesised argument list', T '(', O { 'list_exp' }, T ')', abstr = function(n) return n[2] or { parens = true } end },
 	'atomic_exp',
 	'object_constructor',
 	'table_constructor'
@@ -344,6 +350,7 @@ g.list_exp = S {
 
 g.lvalue = S {
 	name = 'left value',
+	
 	'method_call',
 	'exp_tail',
 	

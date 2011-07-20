@@ -410,7 +410,8 @@ function Sequence:parse(c)
 		ast = astlist
 	end
 	
-	if ast.isa and ast:isa(AbstractNode) then
+	-- Give a parse node to AbstractNodes that do not have one already
+	if type(ast) == 'table' and not ast.node then
 		ast.node = node
 	end
 	
@@ -1359,6 +1360,10 @@ function parse(tokens)
 	local context = ParsingContext(tokens)
 	
 	local success,node,ast = SoolGrammar:parse(context)
+	
+	if ast then
+		print(ast:to_string())
+	end
 	
 	return context.errors,ast
 end

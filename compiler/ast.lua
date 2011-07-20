@@ -77,6 +77,20 @@ function AbstractNode:indent(str)
 	return '| ' .. str:gsub('\n','\n| ')
 end
 
+function AbstractNode:get_parent(klass)
+	
+	local current = self.parent
+	while current do
+		if current.class == klass then
+			return current
+		end
+		
+		current = current.parent
+	end
+	
+	return nil
+end
+
 -------------
 -- Context --
 -------------
@@ -415,6 +429,8 @@ function Block:init(stats,final)
 	self.stats = stats
 	
 	table.insert(self.stats,final)
+	
+	self.locals = {}	-- Filled by lexical analysis
 	
 	return self
 end
@@ -824,21 +840,25 @@ end
 
 If = class(AbstractNode)
 
--- alts = { cond = Expression, body = Block }
+-- alts = { cond = Expression, body = Block, name = string }
 
 function If:init(alts,default,name)
 	
 	self.conds = {}
 	self.bodies = {}
+	self.names = {}
+	
+	self.nodes = {}
 	
 	for i,v in ipairs(alts) do
 		self.conds[i] = v.cond
 		self.bodies[i] = v.body
+		self.names[i] = v.name
+		self.nodes[i] = v.node
 	end
 	
 	self.default = default
-	self.name = name
-	
+
 	return self
 end
 
@@ -849,14 +869,14 @@ function If:to_string()
 	for i = 1,#self.conds do
 		table.insert(t, self.conds[i]:to_string())
 		table.insert(t, self.bodies[i]:to_string())
+		table.insert(t, self.names[i] or '<none>')
 	end
 	
 	if self.default then
 		table.insert(t, self.default:to_string())
 	end
 	
-	s = table.concat(t,'\n') .. '\n'
-	s = s .. 'local name of cond: ' .. (self.name or '<none>')
+	s = table.concat(t,'\n')
 	
 	return 'If:\n' .. self:indent(s)
 end
