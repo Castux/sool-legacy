@@ -99,6 +99,8 @@ function Analyzer:validate(context)
 		end
 	end
 	
+	print(context:to_string())
+	
 	return self.errors
 end
 
@@ -453,33 +455,15 @@ function Class:inherit_methods(a)
 	end
 end
 
-SoolAnalyzer:add_pass( Pass('print_class_info','top-down') )
-
-function Class:print_class_info(a)
-	
-	local str = 'class ' .. self.name .. (self.parent_name and ' : ' .. self.parent_name or '' ) .. '\n'
-	
-	for i,v in ipairs(self.members) do
-		str = str .. '    ' .. v.type:signature() .. ' ' .. v.name .. '\n'
-	end
-	
-	for i,v in ipairs(self.methods) do
-		str = str .. '    ' .. v.sig .. '\n'
-	end
-	
-	str = str:gsub('\n$','')
-	a:add_info(str)
-end
-
-----------------------
--- Lexical analysis --
-----------------------
+------------------------------
+-- Lexical scoping analysis --
+------------------------------
 
 SoolAnalyzer:add_pass( Pass('collect_locals','top-down') )
 
 -- Lists of locals are held by blocks
 
-Local = class()
+Local = class(AbstractNode)
 
 function Local:init(name,arg,type)
 	
@@ -496,6 +480,10 @@ end
 
 function Local:kind()
 	return self.arg and 'argument' or 'local'
+end
+
+function Local:to_string()
+	return 'Local: ' .. self.name
 end
 
 -- Blocks must be able to scan their own scopes
@@ -531,6 +519,7 @@ function Block:add_local(l,a)
 	if not other then
 		-- No, cool.
 		self.locals[l.name] = l
+		l.parent = self
 		return
 	end
 	
@@ -600,12 +589,15 @@ end
 function Assignment:collect_locals(a)
 	
 	for i,v in ipairs(self.lvals) do
-		if v:isa(MethodCall) and not v.left and #v.args == 0 then
+		if v:isa(MethodCall) and not v.left then
 			
 			local block = self:get_parent(Block)
 			local other = block:in_scope(v.name)
 			
 			if not other then
+				
+				-- Create new local
+				
 				local loc = Local(v.name)
 				loc.pos = v.node:position()
 				
@@ -639,4 +631,25 @@ function Block:collect_locals(a)
 		end
 	end
 	
+end
+
+SoolAnalyzer:add_pass( Pass('discriminate_locals','top-down') )
+
+-- The grammar uses the "MethodCall" both for actual method calls, and evaluation or assignment to locals
+-- Now that we know all the locals' names, we can see the difference.
+
+function MethodCall:discriminate_locals(a)
+	
+	-- There is ambiguity only for calls without an object and without arguments	
+	if self.left or #self.args > 0 then
+		return
+	end
+	
+	local block = self:get_parent(Block)
+	local loc = block.locals[self.name]
+	
+	-- There is indeed a local by that name. Replace the old node with the Local.
+	if loc then
+		return loc
+	end
 end
