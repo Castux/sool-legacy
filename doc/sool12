@@ -1,0 +1,145 @@
+Haven't worked on sool in a bit, since I was in holidays far from technology. The micro-pass analyzer has proven to be both functional and pleasant to work with. I'm however reaching a limitation. The pass I'm about to write is the one dealing with type checking. Sadly, it is difficult to break it down to smaller steps. Ideally, I would like to write several, such as:
+
+- determine type of basic expressions
+- in method calls, check that receiver actually answers to method
+- from method calls and operations, get type of return values
+- check type compatibility in assignments
+- infer type for local declarative assignments
+- infer type for containers with incomplete type (as in "a = []; a[1] = 'hello'")
+- apply type coercion for arguments passing, assignments and return values
+
+However, all these steps are in fact dependent on each other, because of the very recursive nature of an expression. Instead of treating each kind of expression one by one, we must fall back to treating all expressions at the same time, and relying on the bottom-up traversal of the syntax tree to ensure that each expression will have its subexpressions already typed.
+
+So there will be only one big generic "check_type" macro-pass, for all expression nodes. It is also where we'll need to decide how to handle the built-in classes, and how to feed the methods they answer to. And also which types are compatible in assignments, with the tricky trick that we'll need to add a conversion node every time coercion happens.
+
+This should also be the last validation pass. If types agree, we can write correct code behind.
+
+A few ideas before I forget them
+
+I would like an "isa" operator that finds out at runtime if an object is an instance of a certain class, or a parent thereof:
+
+if myobject isa Car then
+
+Since classes are not first class objects, though, the semantics are (litterallyy): "instanciate a temporary Car, and give it to myobject, who will internally check if its class derives from temporary's, which is Car". Of course, the compiler will happily skip the instanciation step. But it means you can also do it with objects:
+
+if mydog isa myanimal then
+
+That will be useful with generic objects, whose types are unknown at compiling. And for classes that have subclasses, to get more precision about which actual class the object is from:
+
+meth punch(Animal a)
+	if a is Bird then
+		-- nah, it flew away
+		return
+	end
+	-- deal normally
+end
+
+Of course, proper object orientation requires you to have the Animal and Bird classes implement the function, with each their own version:
+
+meth punch(Animal a)
+	a.treat_punch
+end
+
+That's the "the receiver dispatches" principle. However, for small pieces of code, it is sometimes cleaner and more logical to have the dispatch happen at the sender. Once the message is sent, sure, the receiver decides if and how to answer, but you can also let the sender decide whether it sends anything at all, depending on the receiver's type.
+
+A very bad thing would be:
+
+meth punch(Animal a)
+	if a isa Bird then
+		a.take_punch_as_bird
+	elseif a isa Cow then
+		a.take_punch_as_cow
+	end
+end
+
+An OK thing would be :
+
+meth attack(Animal a)
+	if a isa Bird then
+		use_bow(a)
+	elseif a isa Cow then
+		use_sword(a)
+	end
+end
+
+That is, if I'm not mistaken in the term, a form of double dispatch. Some languages allow the definition of methods overloaded by both sender and recipient. Since here the language is built-in with single dispatch (like most), we can gain expressiveness by giving access to type at runtime.
+
+That brings the interesting question of typecasting. Without it, even in the if and else blocks, a is still an Animal, so we don't have access to methods that would be defined only in each.
+
+I would like to be able to do:
+
+if birdie isa Bird then
+	birdie.tweet
+end
+
+without having to respecify to the compiler that in the body, birdie is indeed a Bird. It is pretty easy if the condition is always of the form "Name isa ClassName", but if "isa" is simply an operator that returns a boolean, you can always do:
+
+yay = birdie isa Bird
+if yay then birdie.tweet end
+
+and the "cast detection" would be lost.
+
+The simple solution is to have "isa" be a special syntax, and not simply an operator. To avoid clashes in the grammar, it could be:
+
+casting someanimal to Bird do
+	someanimal.tweet
+elseto Cow do
+	someanimal.empty_second_stomach
+else
+	-- here's it's still just an Animal
+end
+
+I don't like adding too many syntax elements, but if this one actually proves useful, why not.
+
+Of course, the compiler can resolve many situations at compile time, since it knows the whole class hierarchy. "casting cow to Butterfly" would always fail and "casting cow to Mamal" always succeed, without the need to make a runtime check.It would only generate the compile-time type information in the enclosed block.
+
+"Contains" operator
+
+I want a nice way to quickly check if an object is in a container or not:
+
+if x in primes then print "x is prime" end
+
+I don't like to use the same "in" as in the for loop. The same keywords should always mean the same. It could be instead "isin", but that's a bit weird.
+
+Anyway, it make more sense to ask the container, instead of the containee:
+
+if student_list has "Obi Wan Kenobi" then print "Nice prank" end
+
+This "has" method would be simply boolean and stop at the first occurence. It checks all elements of an array, all values in a table, or anything you want in a user-made container, as long as it answers to "has".
+
+Now I'm actually not sure if there's a point in making that an operator, since calling the method directly wouldn't be much different:
+
+if list.has(element) then
+if list.has "lol" then
+
+Maybe that's a remainder of my very first initial idea that any word could be a binary operator, and would simply map to the method. But it made the grammar a lot more complicated. So complicated that I gave up.
+
+That could be used also to simplify conditions:
+
+if x in [1,3,4,5,7,8] then
+
+could be translated to the relevant if-else blocks instead of instanciating an array. Stuff like:
+
+if x in Range(2,6) then
+
+could be inlined nicely. I'm not sure about this Range thing. I would like one because we use them all the time in games, but the syntax should be a lot cleaner.
+
+if x in 2,10 then
+
+reminds of the generic for, which we made a lot less generic with the special cases of numerical expressions. Maybe we need a real range object, that could be built from numbers. 2:10, 10:2:-1.
+
+Then the if and the for syntax would be unified. Also there could be fancy operations on ranges (that would in fact become sets or something):
+
+for x in 2:10 + 100:200 do
+if 1:10.hasnot x then
+
+Since not has high precedence, negating has is easier if there is another method, instead of writing
+
+if not(1:10.has x) then
+
+I'm not sure about using ":" as an "upto" operator. That would break the table constructor. "~" perhaps.
+
+if 1~10.has x then
+for x in 1~10 do
+
+I will decide later.
