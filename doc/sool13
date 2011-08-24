@@ -1,0 +1,130 @@
+A few more thoughts about type casting
+
+Something bothered me about my two previous ideas. The first one was an operator that would check whether an object is an instance of a class or a parent thereof, the "is" or "isa" operator, typically used in "if" statements:
+
+if animal is Bird then
+	-- do things with bird
+end
+
+The issue with that is that in the body, animal is still not a Bird. So we need an additional syntax to make it a Bird. Like it can be done in Java:
+
+if (aAnimal instanceof Fish){
+	Fish fish = (Fish)aAnimal;
+	fish.swim();
+}
+
+Two different but related things, is it really necessary? Furthermore, nothing prevents you to be an idiot and do:
+
+if animal is Fish then
+	cast animal to Bird		-- fail.
+end
+
+So I had the idea of making a special "casting if", which is syntactic, and therefore gives the compiler a lot more control and knowledge:
+
+casting animal to Fish do
+	animal.swim	-- Hey, it's ok, the block executes 
+				-- only if animal is really a fish!
+end
+
+But that raises an ethical question (yes!): outside the construct, animal is an Animal, and inside, it is a Fish. But it has the same name! Double evil:
+
+- if the inside "animal" is not a local, then it means that a variable changed type. Evil.
+- if the inside "animal" is indeed a new local, then it shadows an outside variable. Evil.
+
+So keeping the same name is out of the question. And having a simple "isa" for testing type proves insuffiscient, even useless.
+
+We can therefore have a casting syntax that does both the testing, and adds the new type information (that you can save in a new local if needed).
+
+The easiest idea is to simply generate a runtime error when attempting to do an illegal cast:
+
+birdie = cow castedto Bird		-- fail, program stops.
+
+But since I don't have any plans for catching exceptions or errors, that makes it effectively unsable (how to try casting against several types and picking the right one if it stops at the first failure?) I need a silent error. The Lua style is to return nil and test later.
+
+birdie = animal castedto Bird
+if birdie then
+	birdie.tweet
+end
+
+But that makes it a little cumbersome to test several:
+
+birdie = animal castedto Bird
+cow = animal castedto Cow
+if birdie then
+	birdie.tweet
+elseif cow then
+	cow.ruminate
+end
+
+Thankfully, my "as" syntax saves us there. As a reminder, it saves the value of the condition into a local to the block.
+
+if animal castedto Bird as birdie then
+	birdie.tweet
+elseif animal castedto Cow as cow then
+	cow.ruminate
+end
+
+The "castedto" operator does both the testing (if it fails, it gives nil, which serves as false in a condition), and the type changing (it returns an expression of the type we cast to). Excellent.
+
+Now I'm aware that I'm inventing the wheel. This kind of casting at runtime that returns an invalid pointer as error exists in many languages.
+
+B* b = dynamic_cast<B*>(a);	// C++
+b = a as B;					// C#
+B b = cast(B) a;			// D
+
+C# also has the "crashing" version, with the usual C casting syntax:
+
+B b = (B) a;	// Might throw an exception instead of returning NULL
+
+Anyway, that sounds like a good deal. Now I just need to decide the syntax. "(ClassName)" as prefix breaks my grammar severely. A new keyword that starts the expression like in "cast(B) a" or "cast a to B" would be easier on the parser, but seems heavy. The most pleasant I see is something that looks like a binary operator.  "as" looks good, but I already use it in my if's and while's:
+
+if animal as Bird as birdie then
+	-- broken grammar and broken readability...
+end
+
+ "castedto" is ugly. "a cast B" sounds nonsensical. "a to B" might be ok. I could also use a symbol as operator, but I'm starting to run out of them, and I prefer explicit words.
+
+A little downside of using a keyword is that even though it can be used as a "isa" test (since if the cast succeeds it would return an object, which is non nil, and therefore true), it would looks like an action, and therefore would look odd in a test:
+
+if ennemy castedto Troll then
+	run -- i hate trolls. and "is" or "isa" would have been more natural
+end
+
+Similarly, we could give the "isa" the power of casting (instead of just testing) and kill two birds with one stone, but then the "action" would be lost in translation:
+
+birdie = animal isa Bird	-- erm... is birdie a Bird or a boolean?
+
+Too bad, "as" was really perfect, since it is not a verb, it really means the result of the casting (potentially inexistent), rather than the action:
+
+if animal as Bird then
+	-- well, "animal" still exist as a Bird, so it must be Bird after all
+end
+
+fishie = animal as Fish		-- fishie is the Fishy version of animal
+
+In fact, "as" is so perfect, that I might reconsider using "as" as a syntactic element of my if's and while's. Which leaves the problem of... finding the new "as" for them. It made a lot of sense, since it introduced the new name of the expression:
+
+while getchar as c do
+	-- hey, meet "c", the newest result of getchar
+end
+
+My least bad idea so far is "set":
+
+if something() set result then
+	-- play with result
+end
+while getchar set c do
+	print c
+end
+if animal as Chicken set birdie then
+	roast birdie
+end
+
+A last note: in "animal as Fish", there is no message involved, and most importantly, "Fish" is not an expression, even though it looks like a binary operation. It is assumed to be part of the grammar, and therefore checked by the analyzer before semantic validation.
+
+With the logical operators "not", "and" and "or", "as" will be one of the few exceptions that "everything is a method call".
+
+Last minute edit: "to" for the casting operator is reasonable, and lets the "as" free. The casting is more important than the testing, and anyways, most (all?) testings would require saving the casted variable, since otherwise you can't use it as the specific subtype. And the "object to Type as name" sounds largely ok:
+
+car = vehicule to Car
+if animal to Dog as medor then end
