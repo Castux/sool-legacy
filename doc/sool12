@@ -1,18 +1,20 @@
-Haven't worked on sool in a bit, since I was in holidays far from technology. The micro-pass analyzer has proven to be both functional and pleasant to work with. I'm however reaching a limitation. The pass I'm about to write is the one dealing with type checking. Sadly, it is difficult to break it down to smaller steps. Ideally, I would like to write several, such as:
+Haven't worked on sool in a bit, as I was in holidays far from technology. The micro-pass analyzer has proven to be both functional and pleasant to work with. I'm however reaching a limitation. The pass I'm about to write is the one dealing with type checking. Sadly, it is difficult to break it down to smaller steps. Ideally, I would like to write several, such as:
 
-- determine type of basic expressions
+- determine type of litteral constants
 - in method calls, check that receiver actually answers to method
 - from method calls and operations, get type of return values
+- check types in constructors
 - check type compatibility in assignments
 - infer type for local declarative assignments
 - infer type for containers with incomplete type (as in "a = []; a[1] = 'hello'")
 - apply type coercion for arguments passing, assignments and return values
+- etc.
 
 However, all these steps are in fact dependent on each other, because of the very recursive nature of an expression. Instead of treating each kind of expression one by one, we must fall back to treating all expressions at the same time, and relying on the bottom-up traversal of the syntax tree to ensure that each expression will have its subexpressions already typed.
 
 So there will be only one big generic "check_type" macro-pass, for all expression nodes. It is also where we'll need to decide how to handle the built-in classes, and how to feed the methods they answer to. And also which types are compatible in assignments, with the tricky trick that we'll need to add a conversion node every time coercion happens.
 
-This should also be the last validation pass. If types agree, we can write correct code behind.
+After that I should be almost done for validation.
 
 A few ideas before I forget them
 
@@ -27,14 +29,14 @@ if mydog isa myanimal then
 That will be useful with generic objects, whose types are unknown at compiling. And for classes that have subclasses, to get more precision about which actual class the object is from:
 
 meth punch(Animal a)
-	if a is Bird then
-		-- nah, it flew away
+	if a isa Bird then
+		-- don't bother, it may fly away
 		return
 	end
 	-- deal normally
 end
 
-Of course, proper object orientation requires you to have the Animal and Bird classes implement the function, with each their own version:
+Proper object orientation would require you to have the Animal and Bird classes implement the function, with each their own version:
 
 meth punch(Animal a)
 	a.treat_punch
@@ -93,21 +95,25 @@ I don't like adding too many syntax elements, but if this one actually proves us
 
 Of course, the compiler can resolve many situations at compile time, since it knows the whole class hierarchy. "casting cow to Butterfly" would always fail and "casting cow to Mamal" always succeed, without the need to make a runtime check.It would only generate the compile-time type information in the enclosed block.
 
+Note that casting an object to its superclass should be automatic and silent in argument passing, return values and assignment. A cat is *always* an animal, and wherever an animal is expected, *any* animal can go. That's the beauty of inheritence.
+
+Said otherwise, upcasting can be implicit, while downcasting must be explicit.
+
 "Contains" operator
 
 I want a nice way to quickly check if an object is in a container or not:
 
 if x in primes then print "x is prime" end
 
-I don't like to use the same "in" as in the for loop. The same keywords should always mean the same. It could be instead "isin", but that's a bit weird.
+I don't like to use the same "in" as in the for loop. The same keywords should always mean the same thing. It could be instead "isin", but that's a bit weird.
 
-Anyway, it make more sense to ask the container, instead of the containee:
+Anyway, it makes more sense to ask the container, instead of the containee, who has no idea where he is.
 
 if student_list has "Obi Wan Kenobi" then print "Nice prank" end
 
 This "has" method would be simply boolean and stop at the first occurence. It checks all elements of an array, all values in a table, or anything you want in a user-made container, as long as it answers to "has".
 
-Now I'm actually not sure if there's a point in making that an operator, since calling the method directly wouldn't be much different:
+Now that I see it written, I'm actually not sure if there's a point in making that an operator, since calling the method directly wouldn't be much different:
 
 if list.has(element) then
 if list.has "lol" then
@@ -131,10 +137,7 @@ reminds of the generic for, which we made a lot less generic with the special ca
 Then the if and the for syntax would be unified. Also there could be fancy operations on ranges (that would in fact become sets or something):
 
 for x in 2:10 + 100:200 do
-if 1:10.hasnot x then
-
-Since not has high precedence, negating has is easier if there is another method, instead of writing
-
+if 1:10.has x then
 if not(1:10.has x) then
 
 I'm not sure about using ":" as an "upto" operator. That would break the table constructor. "~" perhaps.
@@ -142,4 +145,4 @@ I'm not sure about using ":" as an "upto" operator. That would break the table c
 if 1~10.has x then
 for x in 1~10 do
 
-I will decide later.
+But "~" made a nice concatenation operator, like in D. I will decide later.
