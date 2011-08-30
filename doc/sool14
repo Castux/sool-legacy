@@ -1,0 +1,148 @@
+Initializers and class members
+
+Non void init()
+===============
+
+Haven't been coding much, but more ideas. First one related to the classic (?) problem of handling failure in constructors. In C++, notably, constructors must return void and therefore cannot report failure. For instance if the parameters passed are invalid or if the initialization of a sub-object failed, you end up with an object fully allocated, partially initialized, and you have no way to know it, except by additional testing. That is so true that very often we write class methods named along "Build", which allocate a local object, try to initialize it, and in case of failure, return an error code or handle it accordingly. Not nice.
+
+So my "constructors" (or rather "initializers") can either return void, or an object of the considered class. If it returns void, it is simply called on the object right after allocation. Normal. If it returns an object, that object is the one returned by the object constructor expression. Easy enough.
+
+That allows for fun stuff:
+
+- return nil if initialization failed. Say you asked for a polygon with 0 or 1 side, constructor fails, you get nil, deal with it.
+- return another object instead of the one you just allocated. Either from the same class, or a child class. That can be used for automatic specialisation. You asked for a Polygon with 12 sides, but hey, we happen to have a Dodecagon class ready for you, here, take one of these. Otherwise you get a plain Polygon.
+
+Thanks to garbage collection, the newly allocated object will be reclaimed later, no need to worry about it.
+
+That's a sweet deal also for internized objects: when making a new one, check whether it doesn't exist already, and if it does, return it instead of a new one. However, internizing requires class variables. Hence my next idea.
+
+Class members
+=============
+
+So far, I haven't felt the need for class members. I already solved the need for class methods by using the "selfless" methods: if a method in a certain class does not use the hidden "self" object (only locals, arguments, and other selfless methods from the same class), the compiler makes it automatically a "class method", in that the code generated won't involve passing an object. To call it:
+
+blah = ClassName.classmethod()
+
+The litteral semantics mean "instanciate an object, call the method on it", but the compiler will see that the object is actually not used (since only a selfless method is called on it) and will bypass the instanciation altogether.
+
+What about class variables, that is, members shared by all instances of a certain class. The "static" in C++, Java or C# (one more of the many different meaning of static in C like languages. Guys, you couldn't think of another word?)
+
+Two different things: constant class members or not constant.
+
+One obvious way to simulate constant ones is to use a selfless method that returns it:
+
+meth num myvar()
+	return 10
+end
+
+Thanks to the unified member/method access syntax, calling MyClass.myvar really looks like a member access. And it has the nice advantage of being overridable in children classes. For instance, all Animals must have a speed, but each specific animal has a different one. And that should be a constant shared by all instances:
+
+class Animal
+	meth num speed()
+		error("Override me")
+		return 0
+	end
+end
+
+class Mamoth : Animal
+	meth num speed()
+		return 5
+	end
+end
+
+class Antelope : Animal
+	meth num speed()
+		return 200
+	end
+end
+
+That completely kicks the ass of C++'s static const variables, which are not "virtual". If you write a method "run" in Animal, that uses the speed thing, it will always use Animal::speed, instead of the specific speeds defined in children classes. You'll need to simulate it as I wrote above, with virtual methods.
+
+However, that "simulated" approach is a tad heavy. A method call represents some overhead, and if it only returns one value, that seems a bit overkill. A "proper" way to do it would be a virtual table of values, at class level. They would be inherited, and overridable, like methods. And they would be accessed through a virtual table, like methods. In fact, they could very well be in the same virtual table. As long as subclasses share the same layout for the table, it would work fine. And there too, non overriden class constants would not need to be virtual, they would be resolved directly at compile time.
+
+As for syntax, "const" comes to mind. Since it's constant, we know it can't be changed, and it makes sense that it would be shared among instances. The fact that is is virtual is implicit, since anyway everything is virtual in sool (message receiver always uses its own version of stuff).
+
+class Animal
+	const num speed = 0
+	meth run(num dt)
+		pos = speed*dt + pos
+	end
+end
+
+class Gnu : Animal
+	const num speed = 200
+end
+
+Not too nice that we have to redeclare "const num" since it's already in scope. Actually, why do we need a modifier at all? The "= value" part say it all. And the type can be inferred from the constant on the right. Magic.
+
+Comes, of course, the dreaded question of non constant class variables. Well, it's actually no problem at all. If we have already our constant ones in the virtual table, there's only one step to making them not-so-constant. If you know where to read it (through vtable indirection), you can pretty much write there as well. Haha, solved. Except for the syntax, which now sucks. Since they're not constant, you can't (or don't have to) initialize them directly in their declaration. So relying on "= value" doesn't work anymore.
+
+Anyway, there was a problem with that: except if value is a number, vector or symbol, anything else actually needs object instanciation, which we really can't do at compile time. So there would be hidden code in lonely floating lines in the middle of the class definition. Not very clean. And what if your "constant" needs more than just one expression? Can't code outside of a function!
+
+So, we'd need a class initializer. Blah. And since we didn't really care for constant instance variables, why bother with constant class variables? Let the programmer be clever enough not to overwrite their own constants. So we're left with only the syntax for class members. "static" is too C-ish. I like "shared". Means what it means, a variable shared between instances. With privacy and type, that's starting to be many qualifiers:
+
+class Animal
+	shared num speed
+	shared private str secret
+end
+
+For a class variable, "private" takes an interesting meaning. Since in sool, private means that the sender and receiver of the message must be the same, it would mean that the object has to query itself for the variable. Can't ask it's friend animal, even if the result might be the same. Indeed, the friend Animal might really be a Gnu, and the Gnu's secret is, after all, a secret shared only among Gnus.
+
+So now class init? It wouldn't make sense to re-init shared variables at every object instanciation, so we would need a special class initialization, to be run once at program beginning. It's not really a method, so no "meth" keyword. It doesn't need a name or arguments, since it can't be called, and before the beginning of time, there are no possible arguments to pass it. There is also an issue with mutual recursion. If a class needs an instance of another in its shared variables, that other one must have been initialized before.
+
+But I don't find a syntax I'm satisfied with. Not only for that special "class init" function, but also it brings the crappy concept of writing things twice:
+
+class Animal
+	shared str voice
+	class_init()
+		voice = "generic voice"
+	end
+end
+
+class Cow
+	class_init()
+		voice = "moo"
+	end
+end
+
+On the other hand, if I have an "inline" initialization, it might look like that:
+
+class Animal
+	shared str voice = "generic voice"
+end
+
+class Cow
+	voice = "moo"
+end
+
+That's a lot shorter, but in the Cow, we have a floating assignment. But why not after all. The grammar would need only a small change (allow an unqualified name to appear at class level), plus the "= expression" part after every member def. If it is unqualified, the compiler will expect it to have been declared as a shared variable in a parent class.
+
+In fact, for the lols, what about instance variables? They could have default values as well... Instead of being automatically nil after allocation, and to avoid boring "member = value" lines in the initializer, what would be wrong with:
+
+class Car
+	vec pos = <0,0>
+	[Dude] passengers = []
+end
+
+These things would be executed right before the proper init() call. And then you wouldn't have to repeat yourself in trivial initializers:
+
+class Car
+	vec pos
+	[Dude] passengers
+	
+	meth init()
+		pos = <0,0>
+		passengers = []
+	end
+end
+
+As a final thought. One of my core concepts was "Less writing, more meaning". That implied a whole lot of type infering. Well, if we have init at member declaration, we might be able to discard the type information altogether (provided the expression has a complete type):
+
+class Car
+	pos = <0,0>		-- that's a vector all right
+	[Dude] passengers = [] 	-- couldn't guess here
+	
+	shared number_of_wheels = 4	-- works for shared variables too!
+end
+
+Hurray, one more feature for my "simple" language!
