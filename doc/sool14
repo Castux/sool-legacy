@@ -146,3 +146,48 @@ class Car
 end
 
 Hurray, one more feature for my "simple" language!
+
+Erratum: more class variables
+=============================
+
+After thinking a bit, and reading about it, I realized there was more to it that I thought. My problem is not solved.
+
+That a class variable should be inherited goes without saying. However how exactly it is inherited is another problem. I've met two ways:
+
+- A class variable "cvar" defined in class "C" is shared by all classes derived from C. As in: there is only one cvar, and changing its value from a subclass changes its value in C, and vice versa.
+- A class variable "cvar" defined in class "C" makes all derived classes have their own class variable "cvar". But they are all independent, it is just a matter of keeping the class interface consistant among children.
+
+The first possibility is what Ruby has with @@class_variable. To achieve the second possibility in Ruby, you'd use instance variables on the class object. Yes, in Ruby, classes are objects as well, which is slightly confusing. It works also in Smalltalk, you can have class variables, or class instance variables.
+
+What I described earlier is actually more complex, because it is hybrid. I defined my class variables to work exactly like methods. Defining a class variables makes it available to every derived class, it is shared. But you can also override it, in which case the class get its own private copy (which in turn it shares with its children classes).
+
+So there are three ways to do it. Which one do we want?
+
+The first option would be the most useful for internizing, for instance like I do in my compiler. There is a general Type class, from which is derived every single type, including the composite ones. To internize them, I would keep all the types already instanciated in a single table of Types, hashed by signature. In that case, I would need all Type (and derived) objects to share a single hash table.
+
+The second option is perfect for the "constant property" kind of things, like the speed of animals. All animals must have a speed, but each kind of animal has its own.
+
+My hybrid system allows both: if a class variable is not overridden, it is shared by children. If it is overriden, that makes a new personal copy of it. It is exactly as flexible as the methods inheritence and overriding.
+
+However, I don't see, from here and now, if it would be useful to mix both. That is, having these variables inherited by certain, and overriden by others. It would give personal copies to parts of the inheritence tree.
+
+Not sure. I don't know if that would be ever used in other cases than "one for all" or "one for each". At least the hybrid system allows both, with a single unified syntax. Flexibility lets you shoot yourself in the foot if you like.
+
+Now that I think about it (and tested), this inheritance scheme is what happens in C++. If you don't override, it is shared with the parent. If you do override (which is done explicitely in C++), it is a new variable, which in turn is shared with the children.
+However, the big difference is that in C++ static variables cannot be virtual. So you can't have a generic method in a parent class use the specific global variables in the children classes. And that sucks badly.
+
+Detractors of virtual methods say that they are slow. It adds at least one level of indirection at runtime for dispatch. Which is true. However, like I plan to do with methods, if the compiler notices that a certain class variable is not overridden, it will simply apply static binding, and write the reference to it directly in the code. So the "one shared for all" scheme will really be early-binded.
+
+Let's just have a thought for Objective-C, in which is coded all the higher levels of Mac OS X and iOS, where absolutely every method call is late binded. And it's not done through virtual tables, that would not be enough. No, in the generated code, every object is entirely generic, so every object must be ready to receive any selector. So every runtime class has a big hash table of all the selectors it answers to, and must match every message against it. Talk about slow dispatch. But apparently Apple survived. So I'm not too worried.
+
+NB: little research shows that the ObjC runtime doesn't actually use a hash table. It's more like a two-level sparse array indexed by unique identifiers given to selectors at compile time. But that's the same idea. The main point is that it should be able to answer "no" or "yes, here is the method" to any selector request.
+
+The virtual table is a lot faster because it contains only pointers to the methods of the given object, at fixed indices. It's more like "all classes derived from A have a pointer to their own method blah at index 3 in their vtable". So when we send message blah to an object of class A, or derived, we simply have to do:
+
+object->vtable[3](object);		// in C terms
+
+and it will call the correct blah(). Of course, that is slower than
+
+blah(object);
+
+but terribly more flexible. Especially if the nice compiler checks whether a certain method has been overridden, and does indeed need to be virtual, before actually making it so.
