@@ -1,5 +1,7 @@
 require 'class'
 
+require 'Type'
+
 ----------
 -- Pass --
 ----------
@@ -256,7 +258,7 @@ end
 
 SoolAnalyzer:add_pass( Pass('check_type_declarations','top-down') )
 
-function ClassType:check_type_declarations(a)
+function ClassTypeDecl:check_type_declarations(a)
 	
 	if not a.classes[self.class_name] then
 		a:add_error('unknown class ' .. self.class_name, self.node:position())
@@ -267,26 +269,26 @@ end
 
 SoolAnalyzer:add_pass( Pass('nested_types_madness','bottom-up') )
 
-function SimpleType:nested_types_madness(a)
+function SimpleTypeDecl:nested_types_madness(a)
 	self.level = 0
 end
 
-function ClassType:nested_types_madness(a)
+function ClassTypeDecl:nested_types_madness(a)
 	self.level = 0
 end
 
-function ArrayType:nested_types_madness(a)
+function ArrayTypeDecl:nested_types_madness(a)
 	self.level = self.subtype.level + 1
 	
-	if self.level >= 4 and not self.parent:isa(Type) then
+	if self.level >= 4 and not self.parent:isa(TypeDecl) then
 		a:add_warning('type has ' .. self.level .. ' nested levels. THIS IS MADNESS.', self.node:position())
 	end
 end
 
-function TableType:nested_types_madness(a)
+function TableTypeDecl:nested_types_madness(a)
 	self.level = math.max(self.keytype.level + 1, self.valuetype.level + 1)
 	
-	if self.level >= 4 and not self.parent:isa(Type) then
+	if self.level >= 4 and not self.parent:isa(TypeDecl) then
 		a:add_warning('type has ' .. self.level .. ' nested levels. THIS IS MADNESS.', self.node:position())
 	end
 end
@@ -296,7 +298,7 @@ SoolAnalyzer:add_pass( Pass('check_member_redefinition','top-down') )
 function Member:check_member_redefinition(a)
 	
 	-- Reuse class's member table with name indexing
-	local cl = self.parent	
+	local cl = self.parent
 	
 	local other = cl.members[self.name]
 	if other then
@@ -449,7 +451,7 @@ function Class:inherit_methods(a)
 		
 		else
 			table.insert(self.methods,i,meth)
-			self.methods[meth.sel] = meth					
+			self.methods[meth.sel] = meth
 		end
 		
 	end
@@ -640,7 +642,7 @@ SoolAnalyzer:add_pass( Pass('discriminate_locals','top-down') )
 
 function MethodCall:discriminate_locals(a)
 	
-	-- There is ambiguity only for calls without an object and without arguments	
+	-- There is ambiguity only for calls without an object and without arguments
 	if self.left or #self.args > 0 then
 		return
 	end

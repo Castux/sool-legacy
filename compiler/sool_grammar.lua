@@ -98,23 +98,23 @@ g.method_def = S {
 
 g.type = C {
 	name = 'type',
-	T { 'num', abstr = function(val) return NumberType() end },
-	T { 'vec', abstr = function(val) return VectorType() end },
-	T { 'sym', abstr = function(val) return SymbolType() end },
-	T { 'str', abstr = function(val) return StringType() end },
-	T { 'ClassName', abstr = function(val) return ClassType(val) end },
+	T { 'num', abstr = function(val) return NumberTypeDecl() end },
+	T { 'vec', abstr = function(val) return VectorTypeDecl() end },
+	T { 'sym', abstr = function(val) return SymbolTypeDecl() end },
+	T { 'str', abstr = function(val) return StringTypeDecl() end },
+	T { 'ClassName', abstr = function(val) return ClassTypeDecl(val) end },
 	
 	S {
 		name = 'array type',
 		T '[', N { name = 'subtype', 'type' }, T ']',
 		
-		abstr = function(n) return ArrayType(n[2]) end
+		abstr = function(n) return ArrayTypeDecl(n[2]) end
 	},
 	S {
 		name = 'table type',
 		T '{', N { name = 'key subtype', 'type' }, T ',', N { name = 'value subtype', 'type' }, T '}',
 		
-		abstr = function(n) return TableType(n[2],n[4]) end
+		abstr = function(n) return TableTypeDecl(n[2],n[4]) end
 	}
 }
 

@@ -213,95 +213,95 @@ function Member:to_string()
 	return 'Member:\n' .. self:indent(s)
 end
 
------------
--- Types --
------------
+---------------
+-- TypeDecls --
+---------------
 
-Type = class(AbstractNode)
+TypeDecl = class(AbstractNode)
 
-function Type:init()
+function TypeDecl:init()
 	return self
 end
 
-----------------
--- SimpleType --
-----------------
+--------------------
+-- SimpleTypeDecl --
+--------------------
 
-SimpleType = class(Type)
+SimpleTypeDecl = class(TypeDecl)
 
-function SimpleType:init()
+function SimpleTypeDecl:init()
 	return self
 end
 
-function SimpleType:parse(n)
+function SimpleTypeDecl:parse(n)
 	self.node = n
 end
 
-NumberType = class(SimpleType)
-StringType = class(SimpleType)
-VectorType = class(SimpleType)
-SymbolType = class(SimpleType)
+NumberTypeDecl = class(SimpleTypeDecl)
+StringTypeDecl = class(SimpleTypeDecl)
+VectorTypeDecl = class(SimpleTypeDecl)
+SymbolTypeDecl = class(SimpleTypeDecl)
 
-function NumberType:to_string()
-	return 'NumberType'
+function NumberTypeDecl:to_string()
+	return 'NumberTypeDecl'
 end
 
-function StringType:to_string()
-	return 'StringType'
+function StringTypeDecl:to_string()
+	return 'StringTypeDecl'
 end
 
-function VectorType:to_string()
-	return 'VectorType'
+function VectorTypeDecl:to_string()
+	return 'VectorTypeDecl'
 end
 
-function SymbolType:to_string()
-	return 'SymbolType'
+function SymbolTypeDecl:to_string()
+	return 'SymbolTypeDecl'
 end
 
-function NumberType:signature()
+function NumberTypeDecl:signature()
 	return 'num'
 end
 
-function StringType:signature()
+function StringTypeDecl:signature()
 	return 'str'
 end
 
-function VectorType:signature()
+function VectorTypeDecl:signature()
 	return 'vec'
 end
 
-function SymbolType:signature()
+function SymbolTypeDecl:signature()
 	return 'sym'
 end
 
----------------
--- ArrayType --
----------------
+-------------------
+-- ArrayTypeDecl --
+-------------------
 
-ArrayType = class(Type)
+ArrayTypeDecl = class(TypeDecl)
 
-function ArrayType:init(sub)
+function ArrayTypeDecl:init(sub)
 	
 	self.subtype = sub
 	
 	return self
 end
 
-function ArrayType:to_string()
-	return 'ArrayType:\n' .. self:indent(self.subtype:to_string())
+function ArrayTypeDecl:to_string()
+	return 'ArrayTypeDecl:\n' .. self:indent(self.subtype:to_string())
 end
 
-function ArrayType:signature()
+function ArrayTypeDecl:signature()
 	return '[' .. self.subtype:signature() .. ']'
 end
 
----------------
--- TableType --
----------------
+-------------------
+-- TableTypeDecl --
+-------------------
 
-TableType = class(Type)
+TableTypeDecl = class(TypeDecl)
 
-function TableType:init(key,value)
+function TableTypeDecl:init(key,value)
 	
 	self.keytype = key
 	self.valuetype = value
@@ -309,32 +309,32 @@ function TableType:init(key,value)
 	return self
 end
 
-function TableType:to_string()
-	return 'TableType:\n' .. self:indent(self.keytype:to_string() .. '\n' .. self.valuetype:to_string())
+function TableTypeDecl:to_string()
+	return 'TableTypeDecl:\n' .. self:indent(self.keytype:to_string() .. '\n' .. self.valuetype:to_string())
 end
 
-function TableType:signature()
+function TableTypeDecl:signature()
 	return '{' .. self.keytype:signature() .. ',' .. self.valuetype:signature() .. '}'
 end
 
----------------
--- ClassType --
----------------
+-------------------
+-- ClassTypeDecl --
+-------------------
 
-ClassType = class(Type)
+ClassTypeDecl = class(TypeDecl)
 
-function ClassType:init(name)
+function ClassTypeDecl:init(name)
 	
 	self.class_name = name
 	
 	return self
 end
 
-function ClassType:to_string()
-	return 'ClassType:\n' .. self:indent('class name: ' .. self.class_name)
+function ClassTypeDecl:to_string()
+	return 'ClassTypeDecl:\n' .. self:indent('class name: ' .. self.class_name)
 end
 
-function ClassType:signature()
+function ClassTypeDecl:signature()
 	return self.class_name
 end
 
@@ -404,7 +404,7 @@ function Argument:parse(node)
 	
 	assert( node.rule.name == 'argument definition' )
 	
-	self.type = Type()
+	self.type = TypeDecl()
 	self.type:parse(node.nodes[1])
 	
 	self.name = node.nodes[2].value
