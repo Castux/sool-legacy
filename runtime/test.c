@@ -5,11 +5,10 @@
 
 int main(int argc, char **argv)
 {
-	sool_vec a = {0,2};
-	sool_vec b = {0,2};
-	sool_vec w = sool_vec_cmul(a,b);
+	sool_vec a = {argc,rand()};
+	sool_vec w = sool_vec_ortho(a);
 	
-	printf("%f,%f\n", w.x, w.y);
+	printf("%f,%f, %f\n", w.x, w.y, sool_vec_dot(a,w));
 	
 	return 0;
 }

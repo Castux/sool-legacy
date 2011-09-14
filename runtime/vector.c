@@ -2,6 +2,7 @@
 #include "vector.h"
 
 const sool_num sool_pi = 3.14159265358979323846;
+const sool_vec sool_i = {1.0, 0.0};
 
 sool_vec sool_vec_add(sool_vec a, sool_vec b)
 {
@@ -64,6 +65,11 @@ sool_vec sool_vec_yx(sool_vec a)
 	return b;
 }
 
+sool_vec sool_vec_ortho(sool_vec a)
+{
+	sool_vec b = {-a.y, a.x};
+	return b;
+}
 sool_vec sool_vec_normalize(sool_vec a)
 {
     return sool_vec_div(a,sool_vec_norm(a));
@@ -102,8 +108,19 @@ sool_vec sool_vec_polar(sool_vec a)
 	return res;
 }
 
-sool_vec sool_vec_rect(sool_num len, sool_num dir)
+sool_vec sool_vec_rect(sool_vec a)
 {
+	sool_num len = a.x;
+	sool_num dir = a.y;
 	sool_vec res = {len*cos(dir),len*sin(dir)};
 	return res;
+}
+
+sool_vec sool_vec_rotate(sool_vec a, sool_num angle, sool_vec center)
+{
+	a = sool_vec_sub(a,center);
+	sool_vec rot = {cos(angle),sin(angle)};
+	a = sool_vec_cmul(a,rot);
+	a = sool_vec_add(a,center);
+	return a;
 }
