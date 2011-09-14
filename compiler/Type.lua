@@ -21,7 +21,7 @@ function Type:init(sig)
 	end
 	
 	self.sig = nil
-	self.interface = nil
+	self.interface = Interface()
 	
 	return self
 end
@@ -138,6 +138,7 @@ ValueType = class(Type)
 function ValueType:init(sig)
 	
 	self.sig = sig
+	self.interface = Interface()
 	
 	-- Internize
 	local other = types[self.sig]
@@ -253,9 +254,7 @@ local vec = ValueType("vec")
 
 -- Then give them interfaces
 
-num.interface = Interface()
 num.interface:add(Selector("+",num), num)
 
-vec.interface = Interface()
 vec.interface:add(Selector("+",vec), vec)
 vec.interface:add(Selector("index",num), num)

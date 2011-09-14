@@ -2,7 +2,7 @@
 #include "vector.h"
 
 const sool_num sool_pi = 3.14159265358979323846;
-const sool_vec sool_i = {1.0, 0.0};
+const sool_vec sool_i = {0.0, 1.0};
 
 sool_vec sool_vec_add(sool_vec a, sool_vec b)
 {
