@@ -5,10 +5,11 @@
 
 int main(int argc, char **argv)
 {
-	sool_vec v = {1.0,argc};
-	sool_vec x = sool_vec_normalize(v);
+	sool_vec a = {0,2};
+	sool_vec b = {0,2};
+	sool_vec w = sool_vec_cmul(a,b);
 	
-	printf("%f,%f\n", x.x, x.y);
+	printf("%f,%f\n", w.x, w.y);
 	
 	return 0;
 }

@@ -7,7 +7,7 @@ env.Append(LIBS = 'm')
 
 # Build types
 
-btype = ARGUMENTS.get('build','debug')  # Defaults to debug
+btype = ARGUMENTS.get('build','debug') # Defaults to debug
 
 if btype == 'debug':
     env.Append(CCFLAGS = '-g')
