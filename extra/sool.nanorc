@@ -7,10 +7,10 @@ color brightblue "\<(and|break|do|else|elseif|end|false|for|if|in|nil|not|or|ret
 color magenta "\<(init|index)\>"
 
 # Types
-color cyan "\<(str|num|vec|sym|([A-Z][A-Za-z0-9_]*))\>"
+color cyan "\<(str|num|vec|sym)\>"
 
 # Numbers
-color cyan "[0-9]+(\.[0-9]+)?([eE][0-9]+)?"
+color cyan "\<[0-9]+(\.[0-9]+)?([eE][0-9]+)?"
 color cyan "0x[0-9a-fA-F]+"
 
 # Strings and symbols

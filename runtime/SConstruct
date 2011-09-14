@@ -2,6 +2,19 @@ sources = Glob('*.c')
 
 env = Environment()
 
-env['CC'] = 'clang'
-env.Append(CCFLAGS = '-Wall -ansi -pedantic -Werror')
+env.Append(CCFLAGS = '--std=c99 -pedantic -Wall -Werror')
+env.Append(LIBS = 'm')
+
+# Build types
+
+btype = ARGUMENTS.get('build','debug')  # Defaults to debug
+
+if btype == 'debug':
+    env.Append(CCFLAGS = '-g')
+elif btype == 'release':
+    env.Append(CCFLAGS = '-O3 -flto')
+    env.Append(LINKFLAGS = '-O3 -flto')
+
+print('Build type: \x1b[1;32m' + btype + '\x1b[0m')
+
 env.Program( 'test', sources )

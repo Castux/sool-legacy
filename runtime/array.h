@@ -1,9 +1,9 @@
 #ifndef ARRAY_H
 #define ARRAY_H
 
-#include "defines.h"
+#include "types.h"
 
-typedef int type;
+typedef sool_num type;
 #define nil (0)
 
 typedef struct
