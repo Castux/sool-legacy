@@ -183,8 +183,15 @@ function Class:to_string()
 	for i,v in ipairs(self.methods) do
 		table.insert(t,v:to_string())
 	end
+	s = s .. table.concat(t,'\n') .. '\n'
 	
+	s = s .. 'children classes:\n'
+	t = {}
+	for i,v in ipairs(self.child_classes) do
+		table.insert(t,v:to_string())
+	end
 	s = s .. table.concat(t,'\n')
+	
 	
 	return 'Class:\n' .. self:indent(s)
 end
@@ -231,10 +238,6 @@ SimpleTypeDecl = class(TypeDecl)
 
 function SimpleTypeDecl:init()
 	return self
-end
-
-function SimpleTypeDecl:parse(n)
-	self.node = n
 end
 
 NumberTypeDecl = class(SimpleTypeDecl)
@@ -396,19 +399,6 @@ function Argument:init(typ,name)
 	self.name = name
 	
 	return self
-end
-
-function Argument:parse(node)
-	
-	self.node = node
-	
-	assert( node.rule.name == 'argument definition' )
-	
-	self.type = TypeDecl()
-	self.type:parse(node.nodes[1])
-	
-	self.name = node.nodes[2].value
-	
 end
 
 function Argument:to_string()

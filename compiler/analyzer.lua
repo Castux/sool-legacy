@@ -440,6 +440,7 @@ function Class:inherit_methods(a)
 				for j,v in ipairs(self.methods) do
 					if v == own_meth then
 						table.remove(self.methods,j)
+						break
 					end
 				end
 				-- Add back in the parent's position
