@@ -21,6 +21,8 @@ sool_vec sool_vec_cmul(sool_vec a, sool_vec b);		/* Complex multiplication */
 sool_num sool_vec_norm(sool_vec a);
 sool_num sool_vec_sqnorm(sool_vec a);
 sool_vec sool_vec_normalize(sool_vec a);
+sool_num sool_vec_dist(sool_vec a, sool_vec b);
+sool_num sool_vec_sqdist(sool_vec a, sool_vec b);
 
 sool_vec sool_vec_yx(sool_vec a);					/* Simple swap */
 sool_vec sool_vec_ortho(sool_vec a);				/* Returns (-y,x), that is the pi/2 rotation of (x,y) */

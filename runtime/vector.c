@@ -69,6 +69,16 @@ sool_num sool_vec_sqnorm(sool_vec a)
 	return a.x*a.x + a.y*a.y;
 }
 
+sool_num sool_vec_dist(sool_vec a, sool_vec b)
+{
+	return sool_vec_norm(sool_vec_sub(a,b));
+}
+
+sool_num sool_vec_sqdist(sool_vec a, sool_vec b)
+{
+	return sool_vec_sqnorm(sool_vec_sub(a,b));
+}
+
 sool_vec sool_vec_yx(sool_vec a)
 {
 	sool_vec b;
