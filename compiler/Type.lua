@@ -114,7 +114,7 @@ function TableType:init(keytype,valtype)
 	
 	self.keytype = keytype
 	self.valtype = valtype
-	self.sig = '{' .. keytype.sig .. ','.. valtype.sig .. '}'
+	self.sig = '{' .. keytype.sig .. ',' .. valtype.sig .. '}'
 		
 	-- Internize
 	local other = types[self.sig]
