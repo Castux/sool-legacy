@@ -1,0 +1,170 @@
+The lol factor, super keyword, and overridable members
+
+
+C++, my secret love
+-------------------
+
+I loled myself again internally when I realized I was - after thoughtful considerations - not really satisfied with my micropass system. It is hacky, often unadapted, and in the current implementation, terribly inefficient. And it just doesn't feel right.
+
+Added to that was the reflexion about the code generation. To target the LLVM backend, I planned on producing LLVM IR assembly, which is text, to pass later to a series of various LLVM tools to compile to machine code. That is largely suboptimal. A much better way is to use the LLVM API and build an in-memory IR which you can directly use with optimisation passes, the JIT compiler, or even compilation to file. The problem is that it is in C++ (or C), and that would mean wrap that for Lua.
+
+Soooo, I'm seriously considering to switch to C++. I know, I know, C++ is about the complete opposite of Lua, and I claimed before that I hated it. Which is close to true. But, I still know how to use (most of) it. Its demand for strictness will be helpful, seeing how freedom is my curse in Lua. And I have nice sources of inspiration. Like clang. I've been browsing clang's source, and I really like how they're doing their thing. I've seen some nice data structures and algorithmic tricks there, and most importantly, I know that their product works, so the design must not be *complete* crap.
+
+Plus, I somehow feel that a C++ project has more chance to survive big updates and long-term development than Lua, which seem more volatile and artistic. Also, it's gonna be faster than a Lua implementation, which can't hurt since I plan on making a JIT compiler that recompiles your whole program at every run.
+
+So, to lol, or not to lol, I'm not really sure, as this looks like yet another active procrastination method to never complete this project. But it's not dead, on the contrary, I still have more ideas coming, and I can consider the Lua trial as a prototype that taught me some good and some bad designs ideas.
+
+In fact, I have enough new ideas to wonder if I don't need to pause development until I freeze a specification for the language. What's certain is that sool is far from birth.
+
+super keyword is super
+----------------------
+
+So, all our methods are virtual. Therefore, the sender cannot choose which version of the method will be executed on the receiver. It's like our first law of object orientation. However, an object might want to call on itself a parent version of the current method. Its override may not be a replacement, but an addition to the generic procedure.
+
+C++ being C++, you simply use the class name, static binding, hurray. Objective-C, Java, Ruby and others use the keyword "super" to refer to the method implemented by the parent class, or to the object (self) interpreted as an object of the parent class. Semantics and syntaxes vary. 
+
+So clearly we need a super keyword. To mirror the use of self, super should be a simple pointer to the current object, but with the type of the parent class. Classic uses are recursive initializations:
+
+meth init(num a, num b)
+    super.init(a)
+    my_b = b
+end
+
+However, I realized that the semantics are not so clear. Consider:
+
+class Child : Parent
+    meth blah()
+        super.blah()                -- do like the parent
+        print("Children's blah")    -- and additional stuff
+    end
+end
+
+If any object receives the message blah() and executes Child's version of it, it means that it is either a Child, or a descendant of it that didn't override blah(). In any case, we know that super.blah() can only refer to the blah() implemented by Parent. No ambiguity. Now try this:
+
+class Child : Parent
+    meth blah()
+        super.blah()
+        super.foo()
+    end
+    
+    meth foo()
+        -- overrides Parent's
+    end
+end
+
+Still no problem for blah(). But what about foo()? Imagine that somewhere in the descendants of Child some class Weird overrides foo(), but not blah(). So there are three foo()'s: Parent's, Child's and Weird's. And imagine that a Weird instance "weirdo" is passed the message blah(). Virtual magic happens, Child.blah() is called on weirdo. Now, does the "super.foo()" call mean "call the foo() method defined in *your* closest parent", or "call the foo() method defined in the class parent to the one where is defined the current method"?
+
+Haha. Tricky. The "receiver chooses" principle would tend to favor the first option. But then again, why would anyone call to super on a object further down the hierarchy? It's like going "as far down as possible" with virtual tables, and then "one notch up" with super. I makes no sense, because the current class, by definition, has no idea what's happening in its offspring. It has no reason (and no right!) to force static binding on object below itself.
+
+Furthermore, a "virtual binding" of the super method would mean at runtime to go to the virtual table of the object, and use the runtime class information to go up the hierarchy until we find an other implementation of the method than the object's. Sounds slow and just plain weird. "super" is supposed to induce early binding precisely because that's the only case when the sender and the receiver are the same object, and therefore the sender should be able to choose the implementation to call.
+
+Conclusion: the only use of super that makes sense is when calling the same method. From that we can either: - forbid calling other methods
+- allow calling other methods, and bind it to the implementation of the parent of the class where the call is made. Which disregards the fact that maybe that other method has been overridden and that will bypass the whole interest of virtual methods. I don't see use cases, but then again, you might have a very good reason to do it. That's what happens in Objective-C, just tested.
+
+I suppose the Ruby makers thought about that and chose the first option, because the "super" keyword is in fact directly an alias for the parent's implementation of the same method. Here it would look like that:
+
+meth blah()
+    super()
+end
+
+But I don't like it too much. I find it confusing. In fact, I really like the analogy self/super. I think I will make it be the second option: super early binds to the parent's version of the method, with "parent" meaning parent to the class in which the call happens.
+
+I like the self/super analogy so much, that I might even make it mean early binding for self as well. Since the use of self is unnecessary when calling a method or accessing a member, putting it explicitly should mean something. It could mean the same as for super. Early binding. Since it's your own class that you're dealing with, you should know what you're doing. Sender and receiver are the same, all is allowed. Interesting things might happen, that I did not foresee.
+
+Overridable members
+-------------------
+
+Several times along compiler writing, I wondered about one concept, the one that says that members and methods should be accessed with the same syntax. Hence the possibility to call methods without arguments and without parentheses. But I think the actual object-oriented concept, is that the caller might not even know if he's calling a method, or accessing a member.
+
+But with the current system, even with inheritance and virtual tables, we always at compile time if it's a member access (and will result in a simple memory read/write) or a method call (which is a low level function call after virtual table dispatch).
+
+However, quite often it occurred to me while coding that while some object can store a certain property as a value in a member, others in the same hierarchy need to compute it or give it a special treatment. So to accommodate them all, you have to write getters and setters for all of them. And I don't like writing stupid stuff like
+
+meth num getValue()
+    return value
+end
+
+meth setValue(num v)
+    value = v
+end
+
+That is completely out of the question.
+
+So yeah. I want to be able to override members with methods. See how pretty that is:
+
+class Rectangle
+    num width
+    num height
+end
+
+class Square : Rectangle
+    meth width=(num w)
+        super.width = w
+        super.height = w
+    end
+    
+    meth height=(num h)
+        super.height = h
+        super.width = h
+    end
+end
+
+Now any rectangle can use width and height as if they were members, even when it's actually a square and additional processing is required. This makes me happy.
+
+Behind the scenes though, it's a bit more complex. Clearly, low level code can't handle members and methods the same. So the overridden members need to actually be methods, even for a Rectangle. In other word, the compiler will fill in for me the asinine trivial setter and getter.
+
+But wait, you say. That means that now every member access is done through method call, and virtual, too! Hello, slowness!
+
+Well, conceptually yes. In practice, we don't have to do it all the time. First, if a member is never overridden by any child class, it can stay a plain old regular direct early bound member. And that will be most of the cases.
+And even if it is overridden, and a member is transformed into a method, the normal optimization on methods will occur for all the classes below: if a method is not overridden, we know we can early bind it.
+
+So if the member overriding occurs high up in the hierarchy and never again, all the descendants will still be early bound. On the other hand, if it happens way at the bottom, the whole family loses performance. But hey! You can't do better anyway, if you actually need a procedural treatment somewhere in the hierarchy. Only here, the trivial setters and getters are filled automatically.
+
+So, to sum it up. Declaring a member "type name" does three things:
+- allocate a spot in the memory layout of the object
+- create a trivial getter type:name:void
+- create a trivial setter void:name=:type
+
+And these two methods are now treated exactly as any other method. They can be overridden, and if they're not, they will be optimized to early bound method calls, which will most certainly be optimized by the back end, and inlined into the low-level single instruction "object.name = value" or "temp = object.name".
+
+Magnificent! And that leads me to...
+
+Everything that happens to an object is a method call
+-----------------------------------------------------
+
+...almost. But close enough. Boolean operations (and, or, not) and equality, even if they look like method calls, are in fact a concern for the variables, not the objects themselves. They operate on the value of the pointer (nil or not, equal or different to that other pointer). Assignment is a variable problem too. Objects never see the process.
+
+But all the rest is indeed method calls. Along with the newly decided member access, we also had indexing (as right or left value), binary operators and unary operators. They all are syntactic sugar that resolve to method calls. And shall be treated as such.
+
+Also, since I want to make them definable for any object, there is a need for syntax. Lua uses aliases for the operators, such as __add or __sub for + and -. I thought of using index() and setindex(), but that's kind of lacking style. I'll just use the operators themselves:
+
+meth Object [](num index)
+    -- return the object at given index
+end
+
+meth []=(num index, Object element)
+    -- set accordingly
+end
+
+There is one single little problem, the symbol for unary and binary minus is the same, hence ambiguity. Or is there... Haha, there isn't!
+
+meth Object -(Object other)
+    -- if there is another, it's binary... "self - other"
+end
+
+meth Object -()
+    -- if there is no other, it's unary! "-self"
+end
+
+Wonders of polymorphism!
+
+That will also simplify the parser/analyzer. If they're all the same, treat them the same. You can keep an enum of what they were written as, for better diagnostics, but otherwise... No need to repeat the same work.
+
+A final final word, I was thinking of allowing multiple expressions (or none) in indexing. Since that's a method call, no problem, and that would allow for cheap slicing:
+
+myarray[] = 4           -- whoo, setting it all to 4!
+myarray[2,5] = 3        -- setting elements from 2 to 5 to 3
+myarray[2,10,2] = "lol" -- setting 2, 4, 6, 8, 10 to "lol"
+sub = array[2,5]        -- subarray!
+
+And that all translate to the corresponding methods. With total freedom on what you put as arguments.
