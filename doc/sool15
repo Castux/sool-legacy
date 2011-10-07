@@ -1,0 +1,103 @@
+Standard lib in sool, and consequences on the language
+
+I was going through the LDC implementation of the D compiler, and realized that the standard library (one of them, at least) is written in D itself. And somehow, I found that nice. Since I'm not really sure how sool and C will interface, planning to write the runtime and standard library in C poses a problem. If I can write it in sool, integration would be trivial.
+
+What would be the implications of writing runtime and standard library in sool?
+
+1. What's in the "runtime"
+
+Memory management: allocation, reallocation, and freeing of memory. In a simple case, I'd use the system's malloc(), realloc() and free(), but with garbage collection, it would be Boehm GC's equivalents GC_malloc and GC_realloc. These take a size and return a pointer to the data. Wrapping them in sool would mean having a function return a pointer to arbitrary untyped data. So first thing: we would need an "opaque" data type, the equivalent to a void pointer in C. The only legal thing you could do with it would be to re-interpret it as an object. But that is already unsafe, because we don't know what size it is.
+So it would need to be a size + pointer type, the correctness of which would be ensured by the compiler (can't modify the size value without a call to realloc, for instance).
+
+So that works with fixed sized data chunks, that is, all object instances. What about variable size?
+
+We can pretty much build all the rest upon one low-level array type: the growable bound-checking array, the associative table, etc.
+
+Now comes the difficulty. If we have a typeless "data" type (just a chunk of bytes), and we want to use it as an array of typed values, it means we must have a sool side pointer/address mechanism and "sizeof". I disapprove. If on the other hand we want this low level array to have type information, it means that the compiler must be ready to generate instructions for any type there is.
+
+So, assume this is the only built-in composite type: the "low-level array". It contains its length, performs automatic bound checking, and allows setting/getting elements directly as low-level instructions.
+
+At this point our runtime is: allocation of memory for objects, allocation/reallocation of size + data chunks of memory for "low-level arrays", all of this with validity checked by the compiler.
+
+How do we build up on this?
+
+2. Higher level containers
+
+The first basic data type we wanted is the growable array, similar to std::vector, in that it automatically grows the array when accessing an out-of bounds element. It also doubles the size when the array is full, to acheive constant amortized time for access. This we can build using the lower-level array, by wrapping it in a class that also remembers the highest valid index, which gives the "logical" size of the array.
+
+The funny part is that if that growable array wants to be type safe (and we want), it needs to specify which type is the inner low-level array. And therefore we need one "growable array" class per contained type. Can you see where this is going?
+
+Yeah. Templates. Generics. Whatever you call them. A sool-side way to tell the compiler "this is generic code, the algorithms are exactly the same, but the types they work on are different, and have different sizes in memory".
+
+Now that is slightly scary. It means a whole new lot of syntax, and a "template instanciation" mechanism in the compiler. Actually that second point, we would have needed anyway, even if we had the standard containers "built-in" and generated internally by the compiler.
+
+The fact is that it is probably a lot easier to write all the container code in sool itself than in weirdo LLVM API calls. So it might not be a bad thing after all. Same for tables, they associate any type to any other type, double template. Probably easier to write in a high level language.
+
+Where are we now?
+
+[type] -> low-level array, simple enough to be entirely low-level instructions
+Array(type) -> growable array written in sool
+Table(keytype,valuetype) -> table written in sool
+
+That's starting to look an awful lot like:
+
+type[]
+std::vector<type>
+std::map<keytype,valuetype>
+
+When I said that writting my own compiler let me understand better the design of other languages...
+
+Alright, let's say we have templates for classes. By a funny syntactic twist, we could even say that [type] and {type,type} directly map to the standard Array and Table.
+
+3. By-value objects
+
+Building the Table from the array is simple: it's mainly a big array of key/value pairs, that we happen to have placed at indexes "close" to a hash of the key. Milage may vary.
+The question here is "pairs". We can obviously build a class Pair, templated by key and value, and have the Table contain an array of Pair. But it does bother me to allocate small objects on the heap. It adds one level of indirection, and it makes a lot of allocations/deallocations that might strain the garbage collector. See where I'm going again?
+
+Structs! Good old copy-assignment structs that we can pass to functions and return by value. When you just need to hold two or three values together, you might not need the full blown class.
+
+How difficult would it be to add stucts to sool? Not so much. They would be like classes (have members, and methods), except without inheritence, because, well, it shouldn't be necessary. The grammar is exactly the same, except you can use "struct" instead of "class", the analyzer will forbid having a parent struct/class, and the code generator will use them directly as a value, instead of having references to them.
+
+Semantically, making a new struct will always allocate it on the stack, as an automatic variable. And of course, you can never have a reference to a struct.
+
+Structs are also super nice to implement vectors in sool itself. A struct of 2, 3 or 4 numbers, exactly like I started to do in C, and without the question of ABI compatibility between the C compiler and the LLVM types that would be produced by the sool compiler.
+
+4. Strings
+
+The big string question is around. C has crappy null terminated arrays of char, C++ has specialized vector template std::vector<char>, Lua has a complex and opaque internal representation.
+
+String could be a wrapper around an array of char, that also provides additional utilities. For instance copy-on-write, or fancy delayed concatenation: the append method simply accumulates new strings in an array, and does the actual concatenation (with knowledge of the total length) only once, at the first read. Things like that.
+Substrings could transparently use another string's data and a range within it, so there would be no need to copy. Strings could be immutable. Strings could be internized.
+
+A wrapper allows all that and much more. And all of that written in sool.
+
+5. Standard shmandard
+
+If all the standard stuff is coded in sool, the standard classes get a sool interface and can therefore be subclassed (or extended if I add that syntax/concept). Or replaced. Let everyone use what they want, and write their own libraries if they want.
+
+Note that it can also be considered a problem, as with D, for which there are two standard libraries, over which people apparently fight a lot. However, my goal was to have a "simple" language. By putting most things into a library, we keep the language itself to a minimum.
+
+The core of the language is its class sytem, its primitive types, its syntax and its semantic rules. The simpler it is, the more liberty we have to build on it. Like it happens in Lua. The language is very simple, but includes powerful mechanisms, that allow people to make crazy cool things with it, for instance a full object-oriented system.
+
+It seems like the right thing to do.
+
+6. Primitive types
+
+Here is a problem I haven't solved. So far I said, one number type, one boolean. The rest is composite types.
+
+But they need to build on primitive types. Which ones?
+
+Allocation and reallocation can be forced by the compiler to result in correct object pointers or low-level arrays. So could be the input, by forcing reading chunks of certain types. So maybe we do not need any "byte" type, to form a "data" type that would be an array of bytes. But it does seem absurd not to be able to read an arbitrary amount of data. Not having a "byte" forces to meticulously parse any file into specific sool objects or structs. Unpractical?
+
+Strings, we said, would probably wrap arrays of "char". What is char? We said earlier that char should really be a unicode codepoint, that is a uint32. But do we really need a "char" type? Will we ever use the char outside of the string? Maybe not, but if the String is written in sool, it will definitely need a sool-side char.
+And by the way, if we want a utf8 to codepoint converter, we definitely need a byte type, or at least the ability to read a stream byte by byte (even if that returns the values in doubles).
+
+Finally, using a double for integers is fine, until 2^53. Nowadays, it could be wise being able to have a 64 bits integer natively.
+
+In fact, if we want to do *anything* binary and not fall into the Lua trap (where you have to pass through strings and byte-valued doubles and hand written byte operations), we definitely need integer types. C interfacing would greatly benefit from it too.
+
+Since we need bool (in principle, int1, but most likely int8), byte (int8), char (int32), integer (int64), we might as well add the int16 and be complete. That's not so much work for the compiler, since they all have the exact same interface.
+
+While we're at it, why not offer a "float" to complete the "double". That might be needed for C interfacing. The only one missing is the long double, the 80 bits one. Don't know about this one though.
+
+Well, there we go. We went from "number" to the entire C primitive types family. I'm not quite sure what to think about that. Note that the integers are meant for raw data and indexes, so that are unsigned. For all signedness fun, use doubles.
