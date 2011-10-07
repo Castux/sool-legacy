@@ -1,103 +1,170 @@
-Standard lib in sool, and consequences on the language
+The lol factor, super keyword, and overridable members
 
-I was going through the LDC implementation of the D compiler, and realized that the standard library (one of them, at least) is written in D itself. And somehow, I found that nice. Since I'm not really sure how sool and C will interface, planning to write the runtime and standard library in C poses a problem. If I can write it in sool, integration would be trivial.
 
-What would be the implications of writing runtime and standard library in sool?
+C++, my secret love
+-------------------
 
-1. What's in the "runtime"
+I loled myself again internally when I realized I was - after thoughtful considerations - not really satisfied with my micropass system. It is hacky, often unadapted, and in the current implementation, terribly inefficient. And it just doesn't feel right.
 
-Memory management: allocation, reallocation, and freeing of memory. In a simple case, I'd use the system's malloc(), realloc() and free(), but with garbage collection, it would be Boehm GC's equivalents GC_malloc and GC_realloc. These take a size and return a pointer to the data. Wrapping them in sool would mean having a function return a pointer to arbitrary untyped data. So first thing: we would need an "opaque" data type, the equivalent to a void pointer in C. The only legal thing you could do with it would be to re-interpret it as an object. But that is already unsafe, because we don't know what size it is.
-So it would need to be a size + pointer type, the correctness of which would be ensured by the compiler (can't modify the size value without a call to realloc, for instance).
+Added to that was the reflexion about the code generation. To target the LLVM backend, I planned on producing LLVM IR assembly, which is text, to pass later to a series of various LLVM tools to compile to machine code. That is largely suboptimal. A much better way is to use the LLVM API and build an in-memory IR which you can directly use with optimisation passes, the JIT compiler, or even compilation to file. The problem is that it is in C++ (or C), and that would mean wrap that for Lua.
 
-So that works with fixed sized data chunks, that is, all object instances. What about variable size?
+Soooo, I'm seriously considering to switch to C++. I know, I know, C++ is about the complete opposite of Lua, and I claimed before that I hated it. Which is close to true. But, I still know how to use (most of) it. Its demand for strictness will be helpful, seeing how freedom is my curse in Lua. And I have nice sources of inspiration. Like clang. I've been browsing clang's source, and I really like how they're doing their thing. I've seen some nice data structures and algorithmic tricks there, and most importantly, I know that their product works, so the design must not be *complete* crap.
 
-We can pretty much build all the rest upon one low-level array type: the growable bound-checking array, the associative table, etc.
+Plus, I somehow feel that a C++ project has more chance to survive big updates and long-term development than Lua, which seem more volatile and artistic. Also, it's gonna be faster than a Lua implementation, which can't hurt since I plan on making a JIT compiler that recompiles your whole program at every run.
 
-Now comes the difficulty. If we have a typeless "data" type (just a chunk of bytes), and we want to use it as an array of typed values, it means we must have a sool side pointer/address mechanism and "sizeof". I disapprove. If on the other hand we want this low level array to have type information, it means that the compiler must be ready to generate instructions for any type there is.
+So, to lol, or not to lol, I'm not really sure, as this looks like yet another active procrastination method to never complete this project. But it's not dead, on the contrary, I still have more ideas coming, and I can consider the Lua trial as a prototype that taught me some good and some bad designs ideas.
 
-So, assume this is the only built-in composite type: the "low-level array". It contains its length, performs automatic bound checking, and allows setting/getting elements directly as low-level instructions.
+In fact, I have enough new ideas to wonder if I don't need to pause development until I freeze a specification for the language. What's certain is that sool is far from birth.
 
-At this point our runtime is: allocation of memory for objects, allocation/reallocation of size + data chunks of memory for "low-level arrays", all of this with validity checked by the compiler.
+super keyword is super
+----------------------
 
-How do we build up on this?
+So, all our methods are virtual. Therefore, the sender cannot choose which version of the method will be executed on the receiver. It's like our first law of object orientation. However, an object might want to call on itself a parent version of the current method. Its override may not be a replacement, but an addition to the generic procedure.
 
-2. Higher level containers
+C++ being C++, you simply use the class name, static binding, hurray. Objective-C, Java, Ruby and others use the keyword "super" to refer to the method implemented by the parent class, or to the object (self) interpreted as an object of the parent class. Semantics and syntaxes vary. 
 
-The first basic data type we wanted is the growable array, similar to std::vector, in that it automatically grows the array when accessing an out-of bounds element. It also doubles the size when the array is full, to acheive constant amortized time for access. This we can build using the lower-level array, by wrapping it in a class that also remembers the highest valid index, which gives the "logical" size of the array.
+So clearly we need a super keyword. To mirror the use of self, super should be a simple pointer to the current object, but with the type of the parent class. Classic uses are recursive initializations:
 
-The funny part is that if that growable array wants to be type safe (and we want), it needs to specify which type is the inner low-level array. And therefore we need one "growable array" class per contained type. Can you see where this is going?
+meth init(num a, num b)
+    super.init(a)
+    my_b = b
+end
 
-Yeah. Templates. Generics. Whatever you call them. A sool-side way to tell the compiler "this is generic code, the algorithms are exactly the same, but the types they work on are different, and have different sizes in memory".
+However, I realized that the semantics are not so clear. Consider:
 
-Now that is slightly scary. It means a whole new lot of syntax, and a "template instanciation" mechanism in the compiler. Actually that second point, we would have needed anyway, even if we had the standard containers "built-in" and generated internally by the compiler.
+class Child : Parent
+    meth blah()
+        super.blah()                -- do like the parent
+        print("Children's blah")    -- and additional stuff
+    end
+end
 
-The fact is that it is probably a lot easier to write all the container code in sool itself than in weirdo LLVM API calls. So it might not be a bad thing after all. Same for tables, they associate any type to any other type, double template. Probably easier to write in a high level language.
+If any object receives the message blah() and executes Child's version of it, it means that it is either a Child, or a descendant of it that didn't override blah(). In any case, we know that super.blah() can only refer to the blah() implemented by Parent. No ambiguity. Now try this:
 
-Where are we now?
+class Child : Parent
+    meth blah()
+        super.blah()
+        super.foo()
+    end
+    
+    meth foo()
+        -- overrides Parent's
+    end
+end
 
-[type] -> low-level array, simple enough to be entirely low-level instructions
-Array(type) -> growable array written in sool
-Table(keytype,valuetype) -> table written in sool
+Still no problem for blah(). But what about foo()? Imagine that somewhere in the descendants of Child some class Weird overrides foo(), but not blah(). So there are three foo()'s: Parent's, Child's and Weird's. And imagine that a Weird instance "weirdo" is passed the message blah(). Virtual magic happens, Child.blah() is called on weirdo. Now, does the "super.foo()" call mean "call the foo() method defined in *your* closest parent", or "call the foo() method defined in the class parent to the one where is defined the current method"?
 
-That's starting to look an awful lot like:
+Haha. Tricky. The "receiver chooses" principle would tend to favor the first option. But then again, why would anyone call to super on a object further down the hierarchy? It's like going "as far down as possible" with virtual tables, and then "one notch up" with super. I makes no sense, because the current class, by definition, has no idea what's happening in its offspring. It has no reason (and no right!) to force static binding on object below itself.
 
-type[]
-std::vector<type>
-std::map<keytype,valuetype>
+Furthermore, a "virtual binding" of the super method would mean at runtime to go to the virtual table of the object, and use the runtime class information to go up the hierarchy until we find an other implementation of the method than the object's. Sounds slow and just plain weird. "super" is supposed to induce early binding precisely because that's the only case when the sender and the receiver are the same object, and therefore the sender should be able to choose the implementation to call.
 
-When I said that writting my own compiler let me understand better the design of other languages...
+Conclusion: the only use of super that makes sense is when calling the same method. From that we can either: - forbid calling other methods
+- allow calling other methods, and bind it to the implementation of the parent of the class where the call is made. Which disregards the fact that maybe that other method has been overridden and that will bypass the whole interest of virtual methods. I don't see use cases, but then again, you might have a very good reason to do it. That's what happens in Objective-C, just tested.
 
-Alright, let's say we have templates for classes. By a funny syntactic twist, we could even say that [type] and {type,type} directly map to the standard Array and Table.
+I suppose the Ruby makers thought about that and chose the first option, because the "super" keyword is in fact directly an alias for the parent's implementation of the same method. Here it would look like that:
 
-3. By-value objects
+meth blah()
+    super()
+end
 
-Building the Table from the array is simple: it's mainly a big array of key/value pairs, that we happen to have placed at indexes "close" to a hash of the key. Milage may vary.
-The question here is "pairs". We can obviously build a class Pair, templated by key and value, and have the Table contain an array of Pair. But it does bother me to allocate small objects on the heap. It adds one level of indirection, and it makes a lot of allocations/deallocations that might strain the garbage collector. See where I'm going again?
+But I don't like it too much. I find it confusing. In fact, I really like the analogy self/super. I think I will make it be the second option: super early binds to the parent's version of the method, with "parent" meaning parent to the class in which the call happens.
 
-Structs! Good old copy-assignment structs that we can pass to functions and return by value. When you just need to hold two or three values together, you might not need the full blown class.
+I like the self/super analogy so much, that I might even make it mean early binding for self as well. Since the use of self is unnecessary when calling a method or accessing a member, putting it explicitly should mean something. It could mean the same as for super. Early binding. Since it's your own class that you're dealing with, you should know what you're doing. Sender and receiver are the same, all is allowed. Interesting things might happen, that I did not foresee.
 
-How difficult would it be to add stucts to sool? Not so much. They would be like classes (have members, and methods), except without inheritence, because, well, it shouldn't be necessary. The grammar is exactly the same, except you can use "struct" instead of "class", the analyzer will forbid having a parent struct/class, and the code generator will use them directly as a value, instead of having references to them.
+Overridable members
+-------------------
 
-Semantically, making a new struct will always allocate it on the stack, as an automatic variable. And of course, you can never have a reference to a struct.
+Several times along compiler writing, I wondered about one concept, the one that says that members and methods should be accessed with the same syntax. Hence the possibility to call methods without arguments and without parentheses. But I think the actual object-oriented concept, is that the caller might not even know if he's calling a method, or accessing a member.
 
-Structs are also super nice to implement vectors in sool itself. A struct of 2, 3 or 4 numbers, exactly like I started to do in C, and without the question of ABI compatibility between the C compiler and the LLVM types that would be produced by the sool compiler.
+But with the current system, even with inheritance and virtual tables, we always at compile time if it's a member access (and will result in a simple memory read/write) or a method call (which is a low level function call after virtual table dispatch).
 
-4. Strings
+However, quite often it occurred to me while coding that while some object can store a certain property as a value in a member, others in the same hierarchy need to compute it or give it a special treatment. So to accommodate them all, you have to write getters and setters for all of them. And I don't like writing stupid stuff like
 
-The big string question is around. C has crappy null terminated arrays of char, C++ has specialized vector template std::vector<char>, Lua has a complex and opaque internal representation.
+meth num getValue()
+    return value
+end
 
-String could be a wrapper around an array of char, that also provides additional utilities. For instance copy-on-write, or fancy delayed concatenation: the append method simply accumulates new strings in an array, and does the actual concatenation (with knowledge of the total length) only once, at the first read. Things like that.
-Substrings could transparently use another string's data and a range within it, so there would be no need to copy. Strings could be immutable. Strings could be internized.
+meth setValue(num v)
+    value = v
+end
 
-A wrapper allows all that and much more. And all of that written in sool.
+That is completely out of the question.
 
-5. Standard shmandard
+So yeah. I want to be able to override members with methods. See how pretty that is:
 
-If all the standard stuff is coded in sool, the standard classes get a sool interface and can therefore be subclassed (or extended if I add that syntax/concept). Or replaced. Let everyone use what they want, and write their own libraries if they want.
+class Rectangle
+    num width
+    num height
+end
 
-Note that it can also be considered a problem, as with D, for which there are two standard libraries, over which people apparently fight a lot. However, my goal was to have a "simple" language. By putting most things into a library, we keep the language itself to a minimum.
+class Square : Rectangle
+    meth width=(num w)
+        super.width = w
+        super.height = w
+    end
+    
+    meth height=(num h)
+        super.height = h
+        super.width = h
+    end
+end
 
-The core of the language is its class sytem, its primitive types, its syntax and its semantic rules. The simpler it is, the more liberty we have to build on it. Like it happens in Lua. The language is very simple, but includes powerful mechanisms, that allow people to make crazy cool things with it, for instance a full object-oriented system.
+Now any rectangle can use width and height as if they were members, even when it's actually a square and additional processing is required. This makes me happy.
 
-It seems like the right thing to do.
+Behind the scenes though, it's a bit more complex. Clearly, low level code can't handle members and methods the same. So the overridden members need to actually be methods, even for a Rectangle. In other word, the compiler will fill in for me the asinine trivial setter and getter.
 
-6. Primitive types
+But wait, you say. That means that now every member access is done through method call, and virtual, too! Hello, slowness!
 
-Here is a problem I haven't solved. So far I said, one number type, one boolean. The rest is composite types.
+Well, conceptually yes. In practice, we don't have to do it all the time. First, if a member is never overridden by any child class, it can stay a plain old regular direct early bound member. And that will be most of the cases.
+And even if it is overridden, and a member is transformed into a method, the normal optimization on methods will occur for all the classes below: if a method is not overridden, we know we can early bind it.
 
-But they need to build on primitive types. Which ones?
+So if the member overriding occurs high up in the hierarchy and never again, all the descendants will still be early bound. On the other hand, if it happens way at the bottom, the whole family loses performance. But hey! You can't do better anyway, if you actually need a procedural treatment somewhere in the hierarchy. Only here, the trivial setters and getters are filled automatically.
 
-Allocation and reallocation can be forced by the compiler to result in correct object pointers or low-level arrays. So could be the input, by forcing reading chunks of certain types. So maybe we do not need any "byte" type, to form a "data" type that would be an array of bytes. But it does seem absurd not to be able to read an arbitrary amount of data. Not having a "byte" forces to meticulously parse any file into specific sool objects or structs. Unpractical?
+So, to sum it up. Declaring a member "type name" does three things:
+- allocate a spot in the memory layout of the object
+- create a trivial getter type:name:void
+- create a trivial setter void:name=:type
 
-Strings, we said, would probably wrap arrays of "char". What is char? We said earlier that char should really be a unicode codepoint, that is a uint32. But do we really need a "char" type? Will we ever use the char outside of the string? Maybe not, but if the String is written in sool, it will definitely need a sool-side char.
-And by the way, if we want a utf8 to codepoint converter, we definitely need a byte type, or at least the ability to read a stream byte by byte (even if that returns the values in doubles).
+And these two methods are now treated exactly as any other method. They can be overridden, and if they're not, they will be optimized to early bound method calls, which will most certainly be optimized by the back end, and inlined into the low-level single instruction "object.name = value" or "temp = object.name".
 
-Finally, using a double for integers is fine, until 2^53. Nowadays, it could be wise being able to have a 64 bits integer natively.
+Magnificent! And that leads me to...
 
-In fact, if we want to do *anything* binary and not fall into the Lua trap (where you have to pass through strings and byte-valued doubles and hand written byte operations), we definitely need integer types. C interfacing would greatly benefit from it too.
+Everything that happens to an object is a method call
+-----------------------------------------------------
 
-Since we need bool (in principle, int1, but most likely int8), byte (int8), char (int32), integer (int64), we might as well add the int16 and be complete. That's not so much work for the compiler, since they all have the exact same interface.
+...almost. But close enough. Boolean operations (and, or, not) and equality, even if they look like method calls, are in fact a concern for the variables, not the objects themselves. They operate on the value of the pointer (nil or not, equal or different to that other pointer). Assignment is a variable problem too. Objects never see the process.
 
-While we're at it, why not offer a "float" to complete the "double". That might be needed for C interfacing. The only one missing is the long double, the 80 bits one. Don't know about this one though.
+But all the rest is indeed method calls. Along with the newly decided member access, we also had indexing (as right or left value), binary operators and unary operators. They all are syntactic sugar that resolve to method calls. And shall be treated as such.
 
-Well, there we go. We went from "number" to the entire C primitive types family. I'm not quite sure what to think about that. Note that the integers are meant for raw data and indexes, so that are unsigned. For all signedness fun, use doubles.
+Also, since I want to make them definable for any object, there is a need for syntax. Lua uses aliases for the operators, such as __add or __sub for + and -. I thought of using index() and setindex(), but that's kind of lacking style. I'll just use the operators themselves:
+
+meth Object [](num index)
+    -- return the object at given index
+end
+
+meth []=(num index, Object element)
+    -- set accordingly
+end
+
+There is one single little problem, the symbol for unary and binary minus is the same, hence ambiguity. Or is there... Haha, there isn't!
+
+meth Object -(Object other)
+    -- if there is another, it's binary... "self - other"
+end
+
+meth Object -()
+    -- if there is no other, it's unary! "-self"
+end
+
+Wonders of polymorphism!
+
+That will also simplify the parser/analyzer. If they're all the same, treat them the same. You can keep an enum of what they were written as, for better diagnostics, but otherwise... No need to repeat the same work.
+
+A final final word, I was thinking of allowing multiple expressions (or none) in indexing. Since that's a method call, no problem, and that would allow for cheap slicing:
+
+myarray[] = 4           -- whoo, setting it all to 4!
+myarray[2,5] = 3        -- setting elements from 2 to 5 to 3
+myarray[2,10,2] = "lol" -- setting 2, 4, 6, 8, 10 to "lol"
+sub = array[2,5]        -- subarray!
+
+And that all translate to the corresponding methods. With total freedom on what you put as arguments.
