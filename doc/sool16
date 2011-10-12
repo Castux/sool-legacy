@@ -11,7 +11,7 @@ So it would need to be a size + pointer type, the correctness of which would be 
 
 So that works with fixed sized data chunks, that is, all object instances. What about variable size?
 
-We can pretty much build all the rest upon one low-level array type: the growable bound-checking array, the associative table, etc.
+We can pretty much build all the rest upon one low-level array type: the growable bounds-checking array, the associative table, etc.
 
 Now comes the difficulty. If we have a typeless "data" type (just a chunk of bytes), and we want to use it as an array of typed values, it means we must have a sool side pointer/address mechanism and "sizeof". I disapprove. If on the other hand we want this low level array to have type information, it means that the compiler must be ready to generate instructions for any type there is.
 
@@ -23,13 +23,13 @@ How do we build up on this?
 
 2. Higher level containers
 
-The first basic data type we wanted is the growable array, similar to std::vector, in that it automatically grows the array when accessing an out-of bounds element. It also doubles the size when the array is full, to acheive constant amortized time for access. This we can build using the lower-level array, by wrapping it in a class that also remembers the highest valid index, which gives the "logical" size of the array.
+The first basic data type we wanted is the growable array, similar to std::vector, in that it automatically grows the array when accessing an out-of bounds element. It also doubles the size when the array is full, to achieve constant amortized time for insertion at the end. This we can build using the lower-level array, by wrapping it in a class that also remembers the highest valid index, which gives the "logical" size of the array.
 
 The funny part is that if that growable array wants to be type safe (and we want), it needs to specify which type is the inner low-level array. And therefore we need one "growable array" class per contained type. Can you see where this is going?
 
 Yeah. Templates. Generics. Whatever you call them. A sool-side way to tell the compiler "this is generic code, the algorithms are exactly the same, but the types they work on are different, and have different sizes in memory".
 
-Now that is slightly scary. It means a whole new lot of syntax, and a "template instanciation" mechanism in the compiler. Actually that second point, we would have needed anyway, even if we had the standard containers "built-in" and generated internally by the compiler.
+Now that is slightly scary. It means a whole new lot of syntax, and a "template instantiation" mechanism in the compiler. Actually that second point, we would have needed anyway, even if we had the standard containers "built-in" and generated internally by the compiler.
 
 The fact is that it is probably a lot easier to write all the container code in sool itself than in weirdo LLVM API calls. So it might not be a bad thing after all. Same for tables, they associate any type to any other type, double template. Probably easier to write in a high level language.
 
@@ -45,18 +45,18 @@ type[]
 std::vector<type>
 std::map<keytype,valuetype>
 
-When I said that writting my own compiler let me understand better the design of other languages...
+When I said that writing my own compiler let me understand better the design of other languages...
 
 Alright, let's say we have templates for classes. By a funny syntactic twist, we could even say that [type] and {type,type} directly map to the standard Array and Table.
 
 3. By-value objects
 
-Building the Table from the array is simple: it's mainly a big array of key/value pairs, that we happen to have placed at indexes "close" to a hash of the key. Milage may vary.
+Building the Table from the array is simple: it's mainly a big array of key/value pairs, that we happen to have placed at indexes "close" to a hash of the key. Mileage may vary.
 The question here is "pairs". We can obviously build a class Pair, templated by key and value, and have the Table contain an array of Pair. But it does bother me to allocate small objects on the heap. It adds one level of indirection, and it makes a lot of allocations/deallocations that might strain the garbage collector. See where I'm going again?
 
 Structs! Good old copy-assignment structs that we can pass to functions and return by value. When you just need to hold two or three values together, you might not need the full blown class.
 
-How difficult would it be to add stucts to sool? Not so much. They would be like classes (have members, and methods), except without inheritence, because, well, it shouldn't be necessary. The grammar is exactly the same, except you can use "struct" instead of "class", the analyzer will forbid having a parent struct/class, and the code generator will use them directly as a value, instead of having references to them.
+How difficult would it be to add stucts to sool? Not so much. They would be like classes (have members, and methods), except without inheritance, because, well, it shouldn't be necessary. The grammar is exactly the same, except you can use "struct" instead of "class", the analyzer will forbid having a parent struct/class, and the code generator will use them directly as a value, instead of having references to them.
 
 Semantically, making a new struct will always allocate it on the stack, as an automatic variable. And of course, you can never have a reference to a struct.
 
@@ -77,7 +77,7 @@ If all the standard stuff is coded in sool, the standard classes get a sool inte
 
 Note that it can also be considered a problem, as with D, for which there are two standard libraries, over which people apparently fight a lot. However, my goal was to have a "simple" language. By putting most things into a library, we keep the language itself to a minimum.
 
-The core of the language is its class sytem, its primitive types, its syntax and its semantic rules. The simpler it is, the more liberty we have to build on it. Like it happens in Lua. The language is very simple, but includes powerful mechanisms, that allow people to make crazy cool things with it, for instance a full object-oriented system.
+The core of the language is its class system, its primitive types, its syntax and its semantic rules. The simpler it is, the more liberty we have to build on it. Like it happens in Lua. The language is very simple, but includes powerful mechanisms, that allow people to make crazy cool things with it, for instance a full object-oriented system.
 
 It seems like the right thing to do.
 
@@ -89,8 +89,8 @@ But they need to build on primitive types. Which ones?
 
 Allocation and reallocation can be forced by the compiler to result in correct object pointers or low-level arrays. So could be the input, by forcing reading chunks of certain types. So maybe we do not need any "byte" type, to form a "data" type that would be an array of bytes. But it does seem absurd not to be able to read an arbitrary amount of data. Not having a "byte" forces to meticulously parse any file into specific sool objects or structs. Unpractical?
 
-Strings, we said, would probably wrap arrays of "char". What is char? We said earlier that char should really be a unicode codepoint, that is a uint32. But do we really need a "char" type? Will we ever use the char outside of the string? Maybe not, but if the String is written in sool, it will definitely need a sool-side char.
-And by the way, if we want a utf8 to codepoint converter, we definitely need a byte type, or at least the ability to read a stream byte by byte (even if that returns the values in doubles).
+Strings, we said, would probably wrap arrays of "char". What is char? We said earlier that char should really be a unicode codepoint, that is 0 to 0x10ffff, so the closest would be a uint32. But do we really need a "char" type? Will we ever use the char outside of the string? Maybe not, but if the String is written in sool, it will definitely need a sool-side char.
+And by the way, if we want a UTF-8 to codepoint converter, we definitely need a byte type, or at least the ability to read a stream byte by byte (even if that returns the values in doubles).
 
 Finally, using a double for integers is fine, until 2^53. Nowadays, it could be wise being able to have a 64 bits integer natively.
 
@@ -109,56 +109,13 @@ The prime goal of sool is not to be optimal, but to be simple.
 
 8. Re: templates
 
-sool-side templates, seen from my current point of view, seem like a very nice idea. They simplify the type system: the only built-in recursive type is the low-level array, everything else is templated classes that can be handled all the same.
-Since that had to be coded internally anyway, why not give the possibility to the user. It might even make things clearer, by forcing to have a "template" object in the internal representation, directly created from the source. 
+sool-side templates, seen from my current point of view, seem like a very nice idea. They simplify the type system: the only built-in recursive type is the low-level array, everything else is templated classes that can be handled all the same. Since that had to be coded internally anyway, why not give the possibility to the user. It might even make things clearer, by forcing to have a "template" object in the internal representation, directly created from the source. 
 
 So what is exactly a template, and how would that work? In my head, that's how it goes:
 
-A templated class (or struct) is exactly the same as a normal one, except that one (or several) types are unspecified. All type analysis has to be postponed until the template is instanciated.
+A templated class (or struct) is exactly the same as a normal one, except that one (or several) types are unspecified. All type analysis has to be postponed until the template is instantiated.
 
-Whenever in the rest of the code the class is used, it has to specify the unspecified type(s). That effectively "instanciates" the template into one piece of code where all types are specified, and therefore where full semantic analysis can occur.
-
-Implementation wise, we can imagine that the internal representation of the class will not be duplicated, but simply use a different type when doing the analysis. On the other hand, the code generation will need to generate different piece of low-level code, for each type.
-
-Or does it?
-
-Indeed, we can fear that the sheer number of instanciation will produce huge amounts of code. Any significant program will have many objects, and containers for most of these objects. Will the compiler have to duplicate code for all of these, even when they do mostly the same?
-
-We can try to be more clever. By instanciating template as generically as possible. Take for instance containers, including the standard Array and Table. Containers will never try to do anything with their containees, except storing them and retreiving them. And since all objects are all stored by reference, and all pointers look really the same, we could certainly have all objects use the same template.
-
-But how to automate this without breaking the type system, and without hacking in exceptions and specific optimisations?
-
-First, (for the container example) all objects need to be subclasses of a root Object. Easy enough.
-
-Second, when it instanciate a template, the compiler must try to go up the hierarchy as long as the apparent interface of the templated object does not change. By apparent interface, I mean the methods actually called within the templated class̈́.
-
-For instance, in a generic container, no message is ever sent to the elements, so we can go up to Object. Array(Cow) and Array(Car) both point internally to Array(Object) and the generated code can be exactly the same.
-
-Not quite so if the templated class calls a certain method. Imagine we have:
-
-class Animal
-	meth run() end
-end
-
-class Kitten : Animal
-	meth purr() end
-end
-
-and a templated class Farm(T), that somewhere calls T.run(). When instanciating Farm(Animal), the compiler will see that all Animals answer to run(), and in fact thanks to virtual tables magic, the low-level call is even the same. So when instanciating Farm(Kitten), it will see as well that nothing more is needed than the code for Farm(Animal). Nice.
-
-On the other hand, if Farm calls T.purr(), trying to instanciate Farm(Animal) will fail ("Animal does not answer to purr()"), and instanciating Farm(Kitten) will produce exactly Farm(Kitten), because no class above Kitten in the hierarchy can purr().
-
-Wow.
-
-So the algorithm is: when instanciating the templated class C for the type T, for each message sent to T, find and remember the highest parent of T that can answer to it. If there is none, (T itself doesn't answer to the message) fail the instanciation. If nothing failed, pick the lowest of the remembered classes T2 (potentially T itself), and make C(T2) the internal instanciation for C(T). If C(T2) already exist, don't regenerate the code, simply reuse it.
-
-For structs and primitive types, there can be a similar simplification: if no method is called on them (typical for containers), templates can be shared if the types have the same size. In other words, we can break the type system at low-level if all we need to do is copy fixed sized blocks of memory back and forth.
-
-Now that I write it down, it seems like a lot of trouble. An awful lot.
-
-Or you know, build it first, optimize later, if ever. My small testings in C++ with clang show that all the type information is kept, and that templates are all instanciated, even when types have the same size and don't do specific things.
-
-So my guess is, keep it simple stupid. Instanciate at will, create full blown classes every time you need it, generate lots of code. Trust the compiler to optimize, inline, and make it pretty.
+Whenever in the rest of the code the class is used, it has to specify the unspecified type(s). That effectively "instantiates" the template into one piece of code where all types are specified, and therefore where full semantic analysis can occur.
 
 Then, when templated classes work, we can do funny things like inherit from them, extend them (when I'll have decided that we can do that), and therefore specialize them.
 
@@ -166,34 +123,22 @@ My last only concern is the so-called "low-level" array. Should it look like a t
 
 Now what about syntax? All this conceptual talk is good, but our only link to concepts is language, syntax to manipulate semantics.
 
-C++ uses, of course, theclass<thetype>, and an enclosing template<thetype>{} for definition. D has many different things that are called templates, but for classes it looks like theclass!(thetype) for instanciation, and an enclosing template theclass(thetype){} for definition.
+C++ uses, of course, theclass<thetype>, and an enclosing template<thetype>{} for definition. D has many different things that are called templates, but for classes it looks like theclass!(thetype) for instantiation, and an enclosing template theclass(thetype){} for definition.
 
-The nested < and > are notorious for being confused with the >> shifting operator. And they look too C++y and Java-y for me. Class(Subclass) may be nicer but it looks like a function call. Instanciation with parameters will be weird:
+The nested < and > are notorious for being confused with the >> shifting operator. And they look too C++-y and Java-y for me. Class(Subclass) may be nicer but it looks like a function call. Instantiation with parameters will be weird and grammatically confusing:
 
 var = Array(num)(10)
 
-It's difficult to imagine things without brackets, because of templates with multiple types and recursivity. Things like Array:num would be weird with Table:num,string or Array:Array:num.
+It's difficult to imagine things without brackets, because of templates with multiple types and recursivity. But brackets are getting rare: () are for calls and expressions, {} for table types and constructors, [] for arrays types, array constructors and indexing, <> were supposed to be for vector constructors. Anyway, any of these would strain the grammar since they could also be expressions and constructors that would come after object instanciation. To be very clear we need an additional symbol, which after a ClassName would mean "template instanciation". This could kindof work, even though not totally satisfying:
 
-And what about my [subtype] and {keytype,valuetype}... I kinda liked them, and they were concise. Of course they could be aliases, but they would mean that types do not have unique representations, and we need to have a whole system of canonical vs. interesting type signature. Which is complex. Or they could only be syntactic sugar, actually resolving to Array(subtype) and Table(keytype,valuetype). That shortcut would be lost right after compilation, all error messages would show the actual types. Simple. Better.
+List|num
+Map|(str,Object)
 
-And our wierd friend the low-level array? RawArray(subtype), or any suitable name would work, but that looks like a sool-defined class. Which it is not. Some obvious C-inspired choices could be type*, type[] or *type. Preference to the last one, which reads from left to right "array of type". Any symbol would work as long as it doesn't break the grammar. Technically, any operator (prefix or suffix to the type) would break the grammar since I decided to remove "op" from method names:
+And what about my [subtype] and {keytype,valuetype}... I kinda liked them, and they were concise. Of course they could be aliases, but they would mean that types do not have unique representations, and we need to have a whole system of canonical vs. interesting type signature. Which is complex. Or they could only be syntactic sugar, actually resolving to Array|subtype and Table|(keytype,valuetype). That shortcut would be lost right after compilation, all error messages would show the actual types. Simple. Better.
 
-meth *type *(type a)
-meth type[] blah()
+And our weird friend the low-level array? RawArray(subtype), or any suitable name would work, but that looks like a sool-defined class. Which it is not. But anything else would mean bringing in more syntax. And anyway, the low-level array is not supposed to be used by the end-user, and would appear only in the implementation of the standard lib. So it could be as ugly as:
 
-Is the first "*" the beginning of the return type, or the beginning of the method name? Is the "[]" the end of the type, of the name of the indexing method? I don't have that many ASCII characters left. Let's see: $ @ & ~ ¨ ; : | \ ? ! Nothing here yells "array"... Except maybe |type| which reminds of the box.
+__sool_arr|num
 
-What about allocating them? Using the "class" name for coherence would give:
-
-a = |num|
-b = |String|
-c = ||bool||
-
-Then resizing would be done only with a "length" member:
-
-a.length = 10
-b.length = b.length + 1
-
-Which would translate to calls to gc_realloc followed by default initialization of the new elements (NaN, nil, false, Struct.init, etc).
-
-To be pondered.
+This is difficult. There is a limit between the low-level and the high-level which is hard to set. And the never-ending issue of having the proper syntax to access all of it.
+This is fascinating.
