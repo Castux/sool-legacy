@@ -1,0 +1,184 @@
+About nothing
+
+And by nothing I mean nil, NULL, the invalid object/value, the dreaded "I am naught, but I am here anyway, so deal with me".
+
+1. Why do we need them
+
+The first use is for uninitialized variables. In C, they simply take the value of whatever was there before in memory. That's very random, it could be valid values (but not the ones we'd expect), invalid values, anything.
+
+The language could force explicit initialization of variables. Or it could simply initialize them itself, but that poses the question of "to what value". Since picking 2*pi/3 or even zero would be very arbitrary, it is good to have a special "not a value" value. Same goes for more complex objects.
+
+Second use is for optional function arguments. Instead of having several overloaded versions of the same function with different combinations of arguments, you can simplify by having only one, but giving the possibility of having optional arguments. Instead of passing a valid value, pass the nil value, and inside the function, act accordingly (assign a default value, or run a different algorithm alogether).
+
+Third, for optional return values, obviously. For any operation that can either succeed and return something, or fail and return nothing, instead of having two separate return values (success and result), have only one, that take either the result in case of success, or nil in case of failure. That is a very common idiom in Lua for instance.
+
+Fourth, a billion other uses. Any time you want to get rid of an object, it doesn't mean you necessarily have another one to put in its variable. Put nil. Any temporary object with a fixed location will end up being invalid and need to be marked as such. Might as well have a language mechanism for that.
+
+2. How to implement them
+
+In a dynamicaly typed language like Lua, variables don't have type, only values do. And they carry their type with them in the runtime. There, nil is simply another type, which can have only one value, nil. Any variable can hold an interesting value, or nil instead. Easy enough.
+
+In a statically typed language like sool affects to be, each variable can have only one type, which corresponds to a certain range of values. To represent an "invalid" value, some mechanisms appear naturally:
+
+For reference types, such as pointers, or in sool any object, it happens that not all possible bit patterns are valid. Indeed, only a fraction of the memory addresses are in fact filled with memory allocated to the program. Any other address is invalid. Traditionally, the address 0 is never valid, so we can use it to signify "this pointer points to nothing". That's the classic NULL pointer.
+
+For floating-point numbers, it also happens that not all bit patterns represent numbers. There is a (rather big) range reserved to represent "Not a Number". These result from invalid arithmetic operations like dividing by zero, or overflows. We can easily pick one of these (or any of these) to mean "this is not a valid number".
+
+But that pretty much stops there. For integers, all bit patterns are valid. In some cases, 0 can be chosen to mean "invalid" but that is not general. In C, we sometime use signed integers and say that a negative value represents error. That is fine, but reduces the range of valid values by one bit. It's equivalent to directly assign one bit to "nilness", and use the rest for the actual value.
+
+That divides the range of the integer by 2. Not nice. Alternatively we could choose a single value to mean nil. Zero is often needed, so what about 0xffffffff (of whatever is the highest value in that particular integer size)? Instead of cutting out half the values, we remove only one. And that's fine... Until you need that particular one. A true nil-able integer would require additional storage.
+
+So what, somethign like "struct { bool nilness; int value; }"? Sure that would work. It's a struct, so by copy, and it could be built-in (or hidden). That is strictly equivalent to having the "error status + result" as return value or "optional + value" as argument. Or a "initialized" flag for other variables (locals and members). In fact, since we're adding a whole byte to it, we can even make it mean positive/negative/nil.
+
+But honestly, it severely bothers me that every int gets an additional boolean stuck with it at all times. Especially since booleans can rarely be implemented as anything smaller than a byte. So your method takes in three integers? Well, surprise, it's actually 6... Your string is an array of bytes? Well, your storage requirements just doubled. Clearly that is not gonna work.
+
+As for the others, well, booleans already take up a whole byte for only two values, so no problem here, we can use another one for nil. What about structs? Nil struct could be "only nil members" or "at least one nil member".
+
+3. What to do with them
+
+Whatever the implementation, the existence of nil values imply some additional handling.
+
+The first and foremost feature is to protect from NULL pointer dereference. Since we statically type and early bind (or use virtual tables), we need every object pointer to actually point at an object of the correct type. Since we have no pointer arithmetics, that is always the case, except... if the pointer is NULL.
+
+So any method call (including member access) must be preceeded by a nil check. And because we cannot trust the human being to do that, the compiler itself must do it.
+
+Now since the whole language is based on method calls, that's going to be a lot of nil checks. How do we mitigate that?
+
+The compiler can be clever and optimize a bit. If the user or the compiler already made a nil check (which is going to happen often), no need to do it again until the variable gets a new value. But that works well only for locals, because any method call can have side effects that could change the value of a member of an object. Joys of aliasing. So the compiler would need to be very clever about it and do a lot of semantic checks. And we would need to make several passes of analysis, checking whether methods modify nothing, only self, only arguments, and recursively figure out if that particular variable might have changed since the last nil-check or not.
+
+That sounds very complex. Interesting in terms of compiler theory, but also very complex.
+
+Another solution for objects is the nil-object. Every class MyClass automatically gets a children class MyClassNull, which overrides every method with either empty methods or error generating methods. Since it is a child class, everywhere where you'd expect a MyClass object, you can put a MyClassNull object. And thanks to inheritence and virtual methods, low-level instructions for method calls would always be valid. No need to check for nil-ness anymore! All pointers point to valid objects, but some of them act like idiots ("I'm nil, I can't do anything") at runtime.
+
+Where's the catch? The catch is in "which overrides every method". That implies making every method virtual, and every method call an access through the virtual table. Would that be an acceptable compromise? We decided earlier that "all virtual" was ok, because the compiler would detect what methods were not overridden, and would early bind them. If all methods of all objects are automatically overridden, they all become virtual, and every call is a virtual call. And that is slightly (or a lot) slower.
+
+So which is worst? An automatic maybe-optimized-but-probably-not if-nil-then-error before every method call? Or the doom of early binding, and the rise of the all-virtual?
+
+Here's another idea.
+
+4. The nullable type
+
+A bit of googling and wikipediing brought to my attention a formalisation of the "adding a boolean to integers" concept I mentioned. C# has a funny syntax, a question mark appended to a primitive type. You can declare members and arguments as "int?" or "string?" or things like that. Behind the scenes, it's only a shortcut for a template class "Nullable", which works pretty much by wrapping the primitive in a struct with a boolean saying whether it's null or not.
+
+Functional languages seem to use this a lot too. Haskell and Scala have the Maybe and Option types, which basically mean "nothing, or something of another type".
+
+What would that mean for sool? Each type could have the basic version, the usual one, for which variables can only hold valid values. And each type also has the nullable version, which can additionally hold "nil".
+
+For value types, it means that non nullable version must always be initialized to something (0 for integers, 0.0 or maybe NaN for floats, something for structs...), and possibly, the language must force the user to always give relevant values to their non-nullable variables.
+
+For reference types, it means that the non nullable versions must always point to an allocated object. That implies having the compiler provide automatic instanciation for members. And if it's automatic, it means that the classes must have default init() methods that take no arguments. That can be overridden by an explicit call to init, obviously, but that's an implication to keep in mind. Make one object, and all the hierarchy of contained objects will pop into existence, to acertain that no pointer is invalid.
+
+The magic consequence is that if a variable is of non-nullable type, we know it absolutely always points at a valid object, and there is no need whatsoever to check for nilness. Ever.
+
+But that's not always practical, like if you need a linked list, or any kind of object that must point at another object of the same class. Recursive initialization, infinite loop, doom. So there is also the nullable version of any type. There, the variable can be nil, explicitely saying "hey, I may not be valid, don't do anything with me unless you're sure". For these, we need the compiler to insert nil checks and ensure memory safety.
+
+And for the sake of coherence, primitive types can get their nilable equivalent, therefore bringing the features of optional arguments and uninitializased warning to them too. Even if for integers, that requires sticking a boolean to them.
+
+Pros:
+- the default type is memory safe and still doesn't require compiler inserted nil-checks before every message
+- the default type, integers included, doesn't require additional storage
+- the nullable type requires additional storage only for integers (all the others have plenty of unused values we can use for nil)
+- the nullable type is clearly marked as such (with "?" for instance), so that clarifies the prototypes of methods by saying "this argument is optional" or "this return value might indicate failure"
+- the choice between nullable or not for a member clarifies where is the instanciation done, and can force (or recommend) the user to provide initial values. That's an ambiguity that I often face in Lua with my hacked together object system. Should members have default values directly from the initialization, or should we just wait until someone puts something in them? Should list members start at nil, or with an empty list? That mechanism would force to choose, and ensure correctness.
+
+Cons:
+- the nullable integers do require additional storage (but hey, we didn't even decide yet we'd have integers anyway!)
+- the language and compiler just got one notch more complex again
+- in containers for instance, if the contained type is a non nilable object, it means having big rounds of instantiations every time you resize. It also means additional complexity for removing elements in the middle (can't mark them with nil and cleanup later). Then again, it's the coder's job to choose the right type.
+- I fear the apparition of crappy syntax. Indeed:
+
+If a function takes an optional nilable arg, the first thing we'll probably do is check whether it's nil or not:
+
+meth dothelulz(num? opt_arg)
+	if opt_arg then
+		-- foo
+	else
+		-- bar
+	end
+end
+
+Now inside the "-- foo" body, we know that opt_arg is non nil, but it is still of type "num?". So the compiler will put nil-checks everywhere anyway (except assuming fancy optimization, which we don't assume). We would like to be able to convert the nilable into a non nilable after the hand-written check.
+
+First idea, use a cast "arg = opt_arg to num". But erm, wait, our casting system was based on the fact that it would return nil if the cast failed. So it can return only nilable types. Useless.
+
+So, a kind of cast that throws a runtime error in case a failure? That would be ok, but we'd have to redundantly test twice:
+
+if opt_arg then
+	arg = opt_arg.unnil		-- or any other syntax
+end
+
+That calls for a special syntax to promote nilable variables to the safer non nilable.
+
+if opt_arg as arg then
+	-- technically, arg should still be a "num?"
+	-- could the language make it a "num" instead?
+end
+
+Maybe the compiler could have special cases. When testing nilness of a nilable type, make the local name non nilable. It still requires naming a new variable for every optional argument, if we don't want the nil-checks.
+
+So, if typing a new name is annoying, what about simply changing the type of the variable? Outside the if, it's a type?, inside it's a type. Goody good. Except having two variables with the same name and a different type in the same scope is evil. So what, a special syntax, a new control block, a special if that denilifies variables?
+
+That's exactly the same difficulty that we had with type casting. The variable content is exactly the same, but the information that the compiler needs for compile-time checks and optimization is only available at runtime. So the only safe way is to separate the blocks of code according to how much information we have about the variable. For casting it was "what exact object are you, so can I safely write a call to this particular method?", while here it is "are you non-nil, so that I can write a method call to you at all?"
+
+For casting, we solved this by having the runtime check create a new variable, and result in a nil object in case of failure. Which is *exactly* the point of having nil: result or indication of failure. But that only delayed the problem to dealing with nil objects safely.
+
+Also, casting is meant to be relatively rare and a "serious" operation about which the coder should think twice. So being forced to name a new variable for the casted object is quite ok. In this case, storing, returning and passing nil is supposed to be common and happen all the time. If we could avoid having a crappy redundant syntax, it would be nice.
+
+Now let's just remember that this discussion is only about finding a language-side way to remove systematic nil-check on nilable variables. It is not strictly necessary for the language, it's more about optimization. So maybe it should be the compiler's problem after all.
+
+Sadly, static semantic analysis seems complicated. There are many ways to deal with a non-nil nilable.
+
+if not opt_arg then return end	-- then in the rest, opt_arg != nil
+arg = opt_arg or default_val	-- then arg is never nil
+if opt_arg then else end		-- the case we've been talking about
+
+But for locals, it's quite ok, you can generate a check only when the variable gets a new value. The real difficulty is for members. If you have a method in which lots of member access and messaging happens, there might not be many optimizations possible.
+
+Well, maybe it's going to be ok anyway.
+
+4b. Non-nil promotion
+
+So the previous discussion stated that "casting" to non-nilable will always be redundant either in syntax, or in nil-checks. However, even if we don't need it explicitly, we definitely need it at least implicitly. For assignment, and its hidden form parameter passing.
+
+never_nil = maybe_nil		-- eeeeek!
+
+We can't do this unless we know that maybe_nil is in fact not nil. So either we forbid that assignment without some kind of explicit casting, or we allow the implicit casting and generate a low-level check that might throw an error.
+
+Like we did for casting, and in the general spirit of sool, we'd like to avoid run-time errors as much as possible. Go with the flow, let the user try and fix things before hitting them with a hammer.
+
+So we need some kind of explicit casting or "promotion". And we're back to square 1. Although the previous discussion was for a wrong reason (optimization), it was in fact a natural and valid topic. To which I still don't have a good answer.
+
+I hate to say this, but that looks like a case of "we need exceptions". Being able to divert the flow depending on failure, while still being able to return a non-nilable value?
+
+try
+	non_nil = maybe_nil
+catch
+	-- le fail
+end
+
+But I really don't want exceptions. I will find better.
+
+5. The nil-instance
+
+So our goal was to have an automatic language mechanism to indicate an invalid or absent value, while retaining type safety and memory safety. I write automatic, because you can always do it manually: have a flag in the object stating whether it's valid or not, or choose a particular value to mean nil.
+
+One compromise could be to do automatically the manual technique: for each class, have a hidden (or not) shared variable called "nil", of its own type. Have the class initialization instantiate one object and put it there. And decide that this is the invalid object.
+
+Then nil check ("if obj then") would resolve to comparing to the nil object of the class. The advantage being that since it is an instanciated object, you can safely call anything you want on it without fear of memory violation.
+
+Of course, the compiler could not prevent you from using nil as if it was a real object (because, well, it is a real object), but you could yourself put nil checks where needed.
+
+Pros:
+- far less heavy than the previous systems
+
+Cons:
+- doesn't work for primitive types, although they could use the other tricks (NaN for double, struct wrap for integer, etc)
+- nothing prevents you to send messages to nil, and in fact, nothing will warn you if you do. It's your job to check the validity of your variables. The compiler only insures low-level safety.
+- barely more interesting than a hand-made system, and still a lot more work for the compiler (and the compiler writer). Feels slightly hacky.
+
+6. Conclusions
+
+- nil values for all types, we do need them
+- making standard types embed nil values forces to have all integer types increase in size, and forces nil-checks before every method calls
+- a system in which each type exists in nilable and non-nilable versions allows the problems in the previous line to be restricted to fewer user-selected variables. With a bunch of other advantages (including clearer prototypes for methods). At the cost of a bit more syntax, and forcing some initializations on the user.
+- I haven't found yet a good syntax for promoting nilable variables to non-nilable without generating runtime errors
