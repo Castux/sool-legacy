@@ -36,7 +36,7 @@ As for the others, well, booleans already take up a whole byte for only two valu
 
 3. What to do with them
 
-Whatever the implementation, the existence of nil values imply some additional handling.
+Whatever the implementation, the existence of nil values implies some additional handling.
 
 The first and foremost feature is to protect from NULL pointer dereference. Since we statically type and early bind (or use virtual tables), we need every object pointer to actually point at an object of the correct type. Since we have no pointer arithmetics, that is always the case, except... if the pointer is NULL.
 
@@ -48,7 +48,7 @@ The compiler can be clever and optimize a bit. If the user or the compiler alrea
 
 That sounds very complex. Interesting in terms of compiler theory, but also very complex.
 
-Another solution for objects is the nil-object. Every class MyClass automatically gets a children class MyClassNull, which overrides every method with either empty methods or error generating methods. Since it is a child class, everywhere where you'd expect a MyClass object, you can put a MyClassNull object. And thanks to inheritence and virtual methods, low-level instructions for method calls would always be valid. No need to check for nil-ness anymore! All pointers point to valid objects, but some of them act like idiots ("I'm nil, I can't do anything") at runtime.
+Another solution for objects is the nil-object. Every class MyClass automatically gets a child class MyClassNull, which overrides every method with either empty methods or error generating methods. Since it is a child class, everywhere where you'd expect a MyClass object, you can put a MyClassNull object. And thanks to inheritence and virtual methods, low-level instructions for method calls would always be valid. No need to check for nil-ness anymore! All pointers point to valid objects, but some of them act like idiots ("I'm nil, I can't do anything") at runtime.
 
 Where's the catch? The catch is in "which overrides every method". That implies making every method virtual, and every method call an access through the virtual table. Would that be an acceptable compromise? We decided earlier that "all virtual" was ok, because the compiler would detect what methods were not overridden, and would early bind them. If all methods of all objects are automatically overridden, they all become virtual, and every call is a virtual call. And that is slightly (or a lot) slower.
 
@@ -181,4 +181,4 @@ Cons:
 - nil values for all types, we do need them
 - making standard types embed nil values forces to have all integer types increase in size, and forces nil-checks before every method calls
 - a system in which each type exists in nilable and non-nilable versions allows the problems in the previous line to be restricted to fewer user-selected variables. With a bunch of other advantages (including clearer prototypes for methods). At the cost of a bit more syntax, and forcing some initializations on the user.
-- I haven't found yet a good syntax for promoting nilable variables to non-nilable without generating runtime errors
+- I haven't found yet a good syntax for promoting nilable variables to non-nilable without generating runtime errors and having redundant syntax (double checks)
