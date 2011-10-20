@@ -1,0 +1,86 @@
+Selflessness and collisions
+
+Class methods
+
+In the previous post I mentionned that foreign C functions would look like methods in classes. That's because it allows some kind of poor man's namespacing. As I do not want to have global functions, you'd have to go through the class to call them, hence suggesting that functions should be grouped by theme, for instance by wrapped API.
+
+These C functions calls are very similar to calling what I've been refering to as "selfless methods". Oftentimes we need plain simple functions, that generate objects, or act on several objects without one being more a "target" than another.
+So far, I decided that plain normal methods where enough. They just didn't need to use the self parameter, and they would be invoked "ClassName.method()". Semantically, that means instantiate a ClassName object, pass it message "method". Since that dummy object itself is not used and not saved, garbage collection takes care of it. That's semantically equivalent to calling a "class method", albeit less efficient. And the compiler could very well have an optimization pass that detects which methods are "selfless", and transform these calls to simple static calls that bypass the dummy object instantiation.
+
+Is that a ugly hack? Perhaps. My argument was that it worked the same as class methods, and looked the same as class methods. And if it quacks like a duck...
+
+Adding the C foreign functions to that makes me question the system. These functions would by design be selfless, giving us even more reasons to have proper class methods. Sure, we could also say "Wrapper.c_function()" means "instantiate dummy Wrapper object, call c_function() on it, and by GC collection mechanisms, discard dummy object". All of that simply to provoke static binding of a method seems definitely far fetched.
+
+The question is: should we have real class methods, and with what syntax?
+
+Assuming the answer to the first question is "yes", let's focus on syntax. So far, I said that object instantiation syntax is the class name followed by optional arguments, to follow method call syntax. That made sense because instantiation is, behind the scenes, allocation followed by call to init(). As init() may or may not have arguments, and since methods without argument can be called without parentheses, all was nice in the kingdom of coherent syntax.
+
+The ".name" syntax is, on the other hand, exclusively for method calls. Again, with or without explicit arguments, and since member access has been promoted to systematic method call, we can indeed state that ".name" is always a method call.
+
+So "ClassName.name" must, tragically, always be an instanciation followed by a method call. Using this syntax for something else (like selecting a selfless method in a class before calling it) is a clever hack at best, even when it is semantically correct.
+
+Assuming, again, that we do have proper class methods (and C functions), we have two choices: change the instantiation syntax, or find a new class method call syntax.
+
+Instantiation could simply force to use parentheses, even when passing no argument. The ambiguity would be lifted:
+
+ClassName().lol		-- make an object, call lol on it
+ClassName.lol		-- call the class method lol
+
+Instantiation could be done with the class name and a new operator, prefix or suffix, and leave argument parentheses optional:
+
+obj = Object!		-- cool use of punctuation, emphasizes creation
+obj = Object!(arg)	-- slightly odd
+obj = !Object		-- is prefix better?
+obj = !Object(arg)	-- slightly
+obj = new Object	-- hey, look, it's actually the C++ way!
+obj = new Object(arg)
+
+I'd rather not have a heavy syntax for that. The point was to avoid stuff like "Class.new" every time you need an object, which is like all the time. Let's also remember that we haven't really decided on the template specialization syntax, so that may give funky stuff like:
+
+obj = Object|type!(arg)
+obj = Object|(type1,type2)!(arg)
+obj = new Object<type>(arg)		-- oh hello, C++!
+
+Ahem. The simple naked class name, optionally followed by arguments was fairly nicer. So maybe it's better to find a specific class method call syntax. Any unused infix operator would work. '::' and '->' remind too much of C++, '#', '@' and '$' are fairly bulky. These could work:
+
+res = Class:method()
+res = Class~>method()
+
+The first one would be the opposite of Lua, though (Lua has '.' for normal member access, which is used for namespacing and therefore "class methods", while "obj:name(arg)" is a shortcut for "obj.name(obj,arg)", syntactic sugar for implementing object systems). The second one is rather cute but maybe we don't need to bring in digraphs while we still have single ASCII characters left..
+In any case, code withing a given class would not need to use that syntax at all, since the method name is in scope. In fact, it is actually better not to, because using the class name bypasses inheritence and virtualness. The self object might be from a child class of the current class, which happened to have overriden the class method. Similarly, calling it on instance objects other than self works fine too and uses virtual magic.
+
+This "Class:method" syntax is really meant to be used only for these special functions that do not concern any specific object, called from outside. And in that case, it really has the role of scope resolution for non global functions.
+
+Which brings us to:
+
+Namespaces
+
+So in some cases, we use classes and class methods mostly as a convenient way to group functions together, to avoid polluting global namespace (which is forbidden anyway). Keyword: "namespace". If we need them (or something that works the same) for functions, maybe we'll end up needed them for other things?
+
+In C++ and other C like languages, and Ruby, you can nest many things: classes, functions, structure definitions, they can all be local to other classes, and above all you can even have name spaces to enclose them. Or modules. Or things like that. All these declarations can be done pretty much anywhere, and scope is there to keep it tidy.
+
+In sool, there is only one scope for declaring classes: the global scope, and only one for declaring methods: inside classes. Do we need more flexibility?
+
+Namespaces have historically been developped to avoid prefixing class names with the name of the project, or the framework, or the initials of the author. As there was only the global scope, it was easy to pollute it and generate collisions. Most modern languages allow you to put all your stuff in namespaces, and it add enclosing scopes to symbol resolution: block(s) -> function(s) -> class(es) -> namespace(s).
+
+So what use are namespaces really? They allow less typing for accessing anything that is "close" in the namespace hierarchy (as in "in the same scope"), but force more typing for anything else (have to explicitly mention scope).
+
+I've used it in C++ on projects where I didn't decide, and I didn't mind. But I've also done without in others. I find that it should be fairly rare to have two different classes with the same name, if they don't do the same thing. Or said otherwise, they should have a different name if they are different. Objective-C still doesn't have namespaces. Frameworks use prefixes like "NS" for NeXTSTEP and its derivatives. People survive.
+
+I really don't want to bring more complexity to the language and compiler unless I deem it necessary. I think I can live without namespaces/modules.
+
+Class methods, bis repetita
+
+We more or less decided we wanted them, and got a syntax for calling them. What about declaring them? They look in all points similar to instance methods, so the syntax should be the same, with just a hint that there is no self. Class members were called "shared" and that made sense because the storage was shared between instances. But "shared method" doesn't mean anything. Or rather, every method is shared between instances, that's the whole point of a class in the first place.
+
+Going on with this idea, there shouldn't be a mention of "class". Our class members are really not members of the class, they are still members of the instances, except storage is shared. The class is not an in memory object (as in Ruby or Smalltalk), it's a model known only by the compiler, to build instances.
+
+Replace "meth" by something else. "selfless" is fun, it has some human side to it, and really means exactly what it is. A method without self. It's still a method, so can can send the relevant message to an object, and it can access the object's shared members, but the object itself won't be used. You can even call it without any object at all. But it's a long keyword.
+
+And quite simply, selfless methods are really just functions. Associated to classes, sure, but they're plain old functions. Maybe "func" would do it. And that would be coherent with "cfunc" for foreign C functions.
+
+It kindof goes against the idea that "everything is an object, and everything is a method call". And it hides a bit the fact that the function has access to the class' instances' shared members.
+
+If we don't mind typing a bit (or have keyword completion in our editors), "method", "selfless method" and "foreign" might do it. Then selfless is just an attribute of methods, like privacity.
+
+And if we keep with shorter keywords, "meth", "noself meth" and "cfunc" are just as good.
