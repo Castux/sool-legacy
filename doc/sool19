@@ -75,7 +75,7 @@ We more or less decided we wanted them, and got a syntax for calling them. What 
 
 Going on with this idea, there shouldn't be a mention of "class". Our class members are really not members of the class, they are still members of the instances, except storage is shared. The class is not an in memory object (as in Ruby or Smalltalk), it's a model known only by the compiler, to build instances.
 
-Replace "meth" by something else. "selfless" is fun, it has some human side to it, and really means exactly what it is. A method without self. It's still a method, so can can send the relevant message to an object, and it can access the object's shared members, but the object itself won't be used. You can even call it without any object at all. But it's a long keyword.
+Replace "meth" by something else. "selfless" is fun, it has some human side to it, and really means exactly what it is. A method without self. It's still a method, so you can send the relevant message to an object, and it can access the object's shared members, but the object itself won't be used. You can even call it without any object at all. But it's a long keyword.
 
 And quite simply, selfless methods are really just functions. Associated to classes, sure, but they're plain old functions. Maybe "func" would do it. And that would be coherent with "cfunc" for foreign C functions.
 
