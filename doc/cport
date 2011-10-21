@@ -20,7 +20,7 @@ Diagnostic:
 	SourcePos: where was that
 	knows how to pretty print itself
 
-DiagnosticHandler:
+Report:
 	holds diagnostics in order, and count each kind
 
 Lexing
