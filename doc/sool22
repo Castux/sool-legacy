@@ -1,0 +1,109 @@
+Design status
+=============
+
+There has been lots of talking lately, and very little doing. Since a few posts ago, I decided to stop trying implementing anything until I froze a preliminary design for the language. Otherwise I would just be running in circles.
+
+So, are we there yet? Probably not. Let's list the features I am supposedly happy with, and well, the others. Note that this concerns only the core of the language, I won't discuss syntax here.
+
+The fairly certain
+------------------
+
+Types:
+
+- primitive types: number, boolean
+- primitive types are always copied by value
+- as a general rule, the language is strongly typed: any single variable has a type associated, and can hold only values of this type. As we'll see later, "variable" means class member, shared class member, or local variable (including method arguments).
+- composite objects are instantiated from model classes
+- objects are always passed around by reference
+
+Classes:
+
+- only class names have global scope
+- classes have members, shared members, and methods
+- member definition reserves memory for storage in the object's layout, and creates associated getter and setter method in the class
+- shared members are members that share single storage for all instances
+- methods take in any number of arguments, and return any number of values
+- methods have a hidden argument "self", that refers to the message recipient
+- methods can be overloaded, that is in a same class, have the same name, but a different list of arguments
+- method names can be operators, for operator overloading
+- methods and members can be private, meaning they can be accessed on an object only by itself (in message terms, the sender and the receiver must be the same)
+
+Inheritance:
+
+- a class can define a parent class, in which case it inherits all members and methods from it, to which it adds its own, recursively
+- a child class member cannot shadow a parent member, shared member, and/or method
+- methods from the parent class can be "overridden" by a child class, that is, redefined with the same signature (return types, name, argument types)
+- this includes overriding setter and getters for parent class members
+- other than for overriding, child methods must not shadow parent members/methods (if it has the same name, then it must have the same signature and be in fact an override)
+- by inheriting shared members' accessors, shared members themselves are inherited. The storage itself is also unique, and shared among all instances of the parent class and the children classes
+- shared member may be overridden, in which case another storage is created, accessors are overridden, and are in turn shared with all the children instances
+- when message passing occurs, the receiving object **always** executes its own version of the method, that is, the one it inherited or overrode. That is entirely independent from the scope in which the written instruction happens. (In C++ terms, every method is "virtual")
+- as an only exception, when passing a message to an explicit "self", the method used is the one defined in the sender's class
+- similarly, a second hidden argument, "super", also refers to the same object, but interpreted as an instance of the class parent to the one of the sender
+
+Typecasting:
+
+- since a class and its children classes share a common interface, a child object may always be considered, and manipulated, as if it was an instance of the parent class. In other words, upcast is always allowed (even implicitly)
+- downcast, on the other hand, requires checking at runtime if the actual type of the object and the type required in code are compatible. Downcast syntax must be explicit
+
+Runtime:
+
+- virtual calls and runtime checks at downcast imply having real-time type information. All objects carry a reference to their class information with themselves. This must include the class itself, a way to check whether a class is a parent of another, and information on what implementation of a method should an object execute (most likely in the form of virtual tables)
+- all memory is garbage-collected. The code cannot explicitly free an object. As long as there is at least one reference to a given object, it survives. When there is none, the garbage collector is free to dispose of it as it sees fit
+
+The probable
+------------
+
+Types:
+
+- a dynamic array type, recursively built from any other type (primitives, objects, or other arrays). It contains its own length and performs boundary checks before any access. It can be resized at runtime
+- class templates, that is, classes that depend on one or more unspecified types, and are "instantiated" for each specific combination ever used. That allows for a whole set of containers written directly in sool and that respect the type system
+- a second composite type, the structure. Similar in many ways to classes, with the following differences:
+	- assignment by value (copy)
+	- passing as argument by value, except for the hidden "self", which is a reference
+	- return normally by value
+	- return by reference must be explicitly stated so. Any message passed to the the returned struct then applies to the original variable, and not a local copy. Returning a struct by reference is allowed if
+		- it is the only return value
+		- it applies to an object member or an element of an array (no locals)
+	- no inheritance
+
+Standard types, implemented in sool with the previous features:
+
+- growable array
+- hash table
+- mathematic vectors
+
+Selfless methods
+
+- classes can define methods that do not apply to a particular object, and therefore have no "self" parameter
+- they can be called directly using the class name instead of passing a message to an object. In that respect, they are really functions
+
+Foreign function interface:
+
+- interoperability with C, by declaring in sool the prototype of external C functions, that become callable directly, like selfless methods
+- foreign functions are limited to the native sool types, which makes all the gluing work happen in C
+- part of the sool runtime is exposed in a C API to let the glue code use garbage collection, allocate and manipulate sool arrays, etc.
+- an extra type "opaque" to represent any C pointer, that can be only stored as is in sool, or converted with runtime type check to a sool object
+
+The very unsure
+---------------
+
+These are things that are still problematic, either because I haven't found yet a satisfying way to design and implement them, or because the compromise between usefulness and complexity is unclear.
+
+Some of them are really just a matter of having the guts to say "no, sool doesn't need this". sool is (was?) meant to be general purpose, but simple. If the language is simpler, implementing some things in it will, fatally, be more complicated and/or less efficient. But as long as it is possible, then maybe it should be deemed to be acceptable.
+
+Types:
+
+- general purpose unsigned integer (indexing, counting), of size 32 or 64 bits
+- byte, for manipulation of arbitrary binary data
+- character type, specifically meant for text elements, in principle 32 bits, possibly 16 only if we limit to Unicode's BMP
+- strings, built in sool itself from arrays of characters, enhanced with a variety of subclasses, copy on write, delayed concatenation, etc.
+- strings as an opaque type that maps directly to a C implementation, in which case no need for a character type
+- similarly, an opaque "data" type instead of arrays of bytes, therefore implemented in C
+- an "atom" type, holding constant and unique identifiers, shared in the entire program at compilation. Similar to C enums or macros. They could be replaced by internized immutable strings, as in Lua, and retain some of their functionality
+
+Invalid value:
+
+- let each type have a special "nil" value meaning uninitialized, no argument, no return value or simply temporarily empty variable. This implies having nil checks before every method call, and increasing the size of all integer types (alternatively, reducing their value range by one)
+- as a compromise for this useful but expansive feature (and indispensable for objects), allow all types to have a "nilable" or "optional" version. Checks and size increase would occur only on these. The others would always have to hold a valid value or object
+- this previous possibility not only increases the complexity of the syntax and compiler, but leaves the unsolved problem of "optional" to "non optional" promotion. My best idea so far is to generate an uncatchable runtime error, which is not really acceptable
