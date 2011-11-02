@@ -1,99 +1,105 @@
 The struct conundrum
+====================
 
-I wrote before that it could be nice to have stuctures, which are basically "assigned and passed by-value" objects. They are meant for small compounds of values that are manipulated a lot and are small enough to benefit from being allocated on the stack instead of on the heap (where garbage collection will need to take care of them). As "values", they cannot be refered to and they don't even necessarily have memory storage (they can live in registers). They are basically a convenient way to manipulate a few related values under a single name. But syntactically and semantically, they are exactly like objects (appart from the copy assigning, and the copy passing, plus details like no inheritence).
+I wrote before that it could be nice to have structures, which are basically "assigned and passed by-value" objects. They are meant for small compounds of values that are manipulated a lot and are small enough to benefit from being allocated on the stack instead of on the heap (where garbage collection will need to take care of them). As "values", they cannot be referred to and they don't even necessarily have memory storage (they can live in registers). They are basically a convenient way to manipulate a few related values under a single name. But syntactically and semantically, they are exactly like objects (apart from the copy assigning, and the copy passing, plus details like no inheritance).
 
 My first use for these were arithmetic vectors and  key-value pairs inside tables, implemented in sool itself.
 
 It felt like a simple switch to set in the declaration: "by value" or "by reference", for the code generation. But is it so simple?
 
-1. The struct's ego
+The struct's ego
+----------------
 
 For convenience, we can define methods in structs, that would naturally act on them, define operators on them, etc. They would then require, like any other object's method, the hidden "self" function argument. However, structs are supposed to be passed by value, and therefore, the local "self" would be a copy of the one passed to the method. No method can modify the outer struct that was passed to it. And that would be true for member setters as well, since they are after all, just methods.
 
-Consequently, structs would be immutable. You could only construct them, and later on read from them. No "mystruct.mymember = 6" or "v.scale(4)". All they could do is return new structs that would be themselves assigned to new variables (or overwrite the previous ones).
+Consequently, structs would be immutable. You could only construct them, and later on read from them. No `mystruct.mymember = 6` or `v.scale(4)`. All they could do is return new structs that would be themselves assigned to new variables (or overwrite the previous ones).
 
 Not being able to modify a structure, which is basically just a way to assemble a few variables together, seems very harsh. Sure, it could have a nice theoretical aspect to it, but somewhat impractical.
 
 How to do it differently?
 
-2. The by reference self
+The by-reference self
+---------------------
 
-The obvious hack to be able to modify a structure from a method, is to actually have a reference to it. The hidden self argument could be a pointer, use transaprently like it's done for objects.
+The obvious hack to be able to modify a structure from a method, is to actually have a reference to it. The hidden self argument could be a pointer, use transparently like it's done for objects.
 
 But that is not memory safe. Indeed, structs are not allocated by garbage collection, they are either on the stack, in another object's member, or an element of an array.
 
 The stack ones are all right. The lifetime of a local variable necessarily encloses a method call to it. And the reference is never kept anywhere, since any other assignment is by copy. Same with the ones in other objects, by the virtues of conservative garbage collection. Even if within the method, you manage to lose all references to the containing object, the local variable in the calling function will outlive the method call.
 
-On the other hand, the ones in arrays, they might disapear before the end of the method execution. See, arrays get resized occasionally. That is normally not a big issue, because the only pointer to the actual data is inside the "array" object, and thefore the compiler can safely change its value when realloc-ing.
+On the other hand, the ones in arrays, they might disappear before the end of the method execution. See, arrays get resized occasionally. That is normally not a big issue, because the only pointer to the actual data is inside the "array" object, and therefore the compiler can safely change its value when realloc-ing.
 
 But if the resizing happens in a struct's method, the reference to the struct may become invalid, because the whole array storage will have been moved away. Then manipulating self would access invalid memory. Bad mojo.
 
-That array-resize-during-struct-method-call situation is clearly probably never going to happen in real-life. It's a worst case scenario deisgned exactly to break the system. But it proves it can be done.
+That array-resize-during-struct-method-call situation is clearly probably never going to happen in real-life. It's a worst case scenario designed exactly to break the system. But it proves it can be done.
 
-meth do_the_lols(Struct[] arr)
-	
-	-- assume arr contains the struct
-	-- for instance we called: arr[10].do_the_lulz(arr)
-	
-	arr.length = 0
-	self.member = "lol"
-	
-end
+	meth do_the_lols(Struct[] arr)
+		
+		-- assume arr contains the struct
+		-- for instance we called: arr[10].do_the_lulz(arr)
+		
+		arr.length = 0
+		self.member = "lol"
+		
+	end
 
-When resizing arr to 0, maybe the chunk of memory will be garbage collected, maybe not, so the system may or may not send a segfault signal. In any case, that memory is meant to be invalid, so we have no business setting member to "lol". The language must forbid this. This particular situation is the only one I could come up with, but there might be others that would provoke illegal access.
+When resizing arr to 0, maybe the chunk of memory will be garbage collected, maybe not, so the system may or may not send a segfault signal. In any case, that memory is meant to be invalid, so we have no business setting member to `"lol"`. The language must forbid this. This particular situation is the only one I could come up with, but there might be others that would provoke illegal access.
 
 No references to structs (even only for the self argument) shall be allowed. So it sure looks like methods cannot modify them. It's quite all right when you consider that they are only values, at the same level as primitive types. Passing a number or a boolean to a function, and not being able to modify the originating variable has never been an issue. In fact, there might even not be an explicit variable (it could be directly the return value from another function).
 
-So all "struct modifying" methods will need to return a new struct, and then you can reassign it to the same variable if you need. Which is exactly what you do with "a = a + 1". The assignment operators such as "+=" imply the use of references. And we're fine with not having that, since assignments and readings of variables might in fact be complex method calls.
+So all "struct modifying" methods will need to return a new struct, and then you can reassign it to the same variable if you need. Which is exactly what you do with `a = a + 1`. The assignment operators such as `+=` imply the use of references. And we're fine with not having that, since assignments and readings of variables might in fact be complex method calls.
 
 That effectively means that structs must be immutable. Except if we cheat with the member access!
 
-3. True members
+True members
+------------
 
 In objects we had this fancy concept that methods can override members (because sometimes it is necessary), which automatically implies that member access must be done through virtual methods.
 
-But structures have no inheritence, and therefore explicit member access is always simple raw basic old member access. And since member access is a simple instruction, compiler provided, there is no way it can modify an enclosing array of the struct.
+But structures have no inheritance, and therefore explicit member access is always simple raw basic old member access. And since member access is a simple instruction, compiler provided, there is no way it can modify an enclosing array of the struct.
 
 So we could allow setter methods on local structs:
 
-a = Struct
-a.mem1 = 1
-a.mem2 = 2
+	a = Struct
+	a.mem1 = 1
+	a.mem2 = 2
 
 Why only local? Well it's far more complicated for other structs. If they are contained in other objects or arrays, the getters that return them will, fatally, return a copy of them, a simple value. Doing this:
 
-object.struct.member = 1
+	object.struct.member = 1
 
 Would really be:
 
-temp = object.struct
-temp.member = 1
+	temp = object.struct
+	temp.member = 1
 
 which is probably not the intention. In C like languages, a left-value member access actually returns a pointer to the memory location of the member, so that can be used to "assign" (that is, modify the value at that memory location).
 
-Our objects return only values, not memory location of their members (which anyway might not be members at all, but argumentless method calls). So we cannot do that. And that is why C++ has a syntax to have a method return a reference instead of a value. It's like a pointer, but automatically dereferenced, so you can use it transparently as a right or left value.
+Our objects return only values, not memory location of their members (which anyway might not be members at all, but argument-less method calls). So we cannot do that. And that is why C++ has a syntax to have a method return a reference instead of a value. It's like a pointer, but automatically dereferenced, so you can use it transparently as a right or left value.
 
 Assigning to individual members of structs contained in something else is impossible. You have to read the whole struct, modify it, and reassign it all. That's what "by-value" implies. And "modify" implies that you can modify local structs, which I'm not ready to green light just yet, because even though it is convenient, it might be confusing when the expected behavior doesn't apply to non local structs.
 
 Let's think about what totally immutable structs mean.
 
-4. The intouchable struct
+The untouchable struct
+----------------------
 
-No member setting means: the only way is to make a new struct, using the struct constructor. And what is that? Well, we don't know. The usual way would be passing argument to an init() method. But heh, guess what. We just saw that methods cannot modify a struct. As soon as it is allocated with default values, the struct cannot be modified.
+No member setting means: the only way is to make a new struct, using the struct constructor. And what is that? Well, we don't know. The usual way would be passing argument to an `init()` method. But heh, guess what. We just saw that methods cannot modify a struct. As soon as it is allocated with default values, the struct cannot be modified.
 
-Now that is a useful struct.
+Now *that* is a useful struct.
 
 That might mean that we need a struct construction syntax, one that gives a struct its entire value, once and for all its struct life. Like a literal 5 can only ever be a five (even if the variable holding it will probably hold other values later). Assuming the syntax is the same as object initialization, it would give things like:
 
-a = Struct(1,2,"lol")
--- hey, i need to modify the second value
-b = Struct(a.mem1, 5, a.mem3)
+	a = Struct(1,2,"lol")
+	-- hey, i need to modify the second value
+	b = Struct(a.mem1, 5, a.mem3)
 
 Super blah.
 
-5. The possible solutions
+The possible solutions
+----------------------
 
-First solution, no struct at all. After all, functionally, objects are enough. Anything you could do with a struct, you can do with an object. But sometimes less efficiently. I'm thinking about vectors in particular, if they were objects. Any computation would imply bucketloads of temporary objects in the heap, lots of pointer dereferencing, lots of garbage collection. You are making geometry stuff, you have a list of 100 points? Well, they're all actually floating in memory, and all you have is pointers to them. That sounds aweful. But it would work, with no added effort. So that's always an option.
+First solution, no struct at all. After all, functionally, objects are enough. Anything you could do with a struct, you can do with an object. But sometimes less efficiently. I'm thinking about vectors in particular, if they were objects. Any computation would imply bucket loads of temporary objects in the heap, lots of pointer dereferencing, lots of garbage collection. You are making geometry stuff, you have a list of 100 points? Well, they're all actually floating in memory, and all you have is pointers to them. That sounds awful. But it would work, with no added effort. So that's always an option.
 
 Second solution, find a way to have safe mutable structs.
 
@@ -101,62 +107,63 @@ We saw that methods that modify self might generate an illegal access, because t
 
 A proper "reference" to a struct could be something more complex, that could be used as a proper left value. It would be a combination of the object itself, and how to access the struct in it (which member, for an object, and which index for a struct).
 
-The idea is to delay the computation of the address of the member/element. Instead of accessing it now, we delay and repeat the access everytime we'd use the object later. Typically, as self in a method.
+The idea is to delay the computation of the address of the member/element. Instead of accessing it now, we delay and repeat the access every time we'd use the object later. Typically, as self in a method.
 
 I realize now that it looks like delegates in D. They are a kind of method pointers, associated with a particular instance. Does it ring a bell? It's fairly different, but let's call that delegate for now.
 
 So let's see our fatal function:
 
-meth do_the_lulz(Struct[] arr)
-
-	-- we called arr[10].do_the_lulz(arr)
-	-- Indexing arr, instead of returning a value-struct,
-	-- returned a delegate. So self, here, is a delegate
+	meth do_the_lulz(Struct[] arr)
 	
-	-- the evil occurs here
-	arr.length = 0
-	
-	-- wait for it...
-	self.member = "lol"
-	
-	-- self is a delegate, an object that contains at runtime
-	-- a pointer to arr, and which method to apply with which arguments
-	
-	-- calling "member=()" on the delegate generates the instructions for,
-	-- in C terms,
-	-- (&arr[10]).member = "lol"
-	-- and we are safe
-end
+		-- we called arr[10].do_the_lulz(arr)
+		-- Indexing arr, instead of returning a value-struct,
+		-- returned a delegate. So self, here, is a delegate
+		
+		-- the evil occurs here
+		arr.length = 0
+		
+		-- wait for it...
+		self.member = "lol"
+		
+		-- self is a delegate, an object that contains at runtime
+		-- a pointer to arr, and which method to apply with which arguments
+		
+		-- calling "member=()" on the delegate generates the instructions for,
+		-- in C terms,
+		-- (&arr[10]).member = "lol"
+		-- and we are safe
+	end
 
 Same with the deep member changing:
 
-object.struct.member = 10
+	object.struct.member = 10
 
 is really:
 
-delegate = object.struct
-delegate.member = 10	-- which is "(&object.struct)->member = 10"
+	delegate = object.struct
+	delegate.member = 10	-- which is "(&object.struct)->member = 10"
 
-Of course in that case a simple transparent reference would have been enough, but these do not solve the do_the_lulz problem.
+Of course in that case a simple transparent reference would have been enough, but these do not solve the `do_the_lulz` problem.
 
-Now with transparency, any other operation on delegates would resolve to operations on the refered object, so it's impossible to store a delegate. We don't need a first order type "delegate", it can be hidden simply as an argument passing mechanism.
+Now with transparency, any other operation on delegates would resolve to operations on the referred object, so it's impossible to store a delegate. We don't need a first order type "delegate", it can be hidden simply as an argument passing mechanism.
 
 Sadly, that is all rather clumsy. It would be a half-assed attempt to conciliate the fact that sool has no pointers to values, with the fact that all member accesses are in fact method calls, so left values are always reduced to an expression on which we call one single setter method.
 
 We never ran into the issue before, because we had only objects, so the return value of the getting is always a pointer, and pointers can be used for setting. When you write:
 
-a.b.c.d.e.f = 5
+	a.b.c.d.e.f = 5
 
 it is really
 
-temp = a.b.c.d.e	-- these are getter methods!
-temp.f = 5			-- this is the only setter called
+	temp = a.b.c.d.e	-- these are getter methods!
+	temp.f = 5			-- this is the only setter called
 
-Left values in sool are always on the form "expr.setter", with "expr." being optional, and "setter" might be in fact a local. In C, "a.b.c.d.e.f" would be kept entirely as a left value, and each step would be "get the right pointer given the layout of the object and the name of the member we access". So it would really translate to "*addr = 5".
+Left values in sool are always of the form `expr.setter`, with `expr.` being optional, and `setter` might be in fact a local. In C, `a.b.c.d.e.f` would be kept entirely as a left value, and each step would be "get the right pointer given the layout of the object and the name of the member we access". So it would really translate to `*addr = 5`.
 
-We made the decision of having all accesses be method calls, because semantically, it is interesting. With the getters returning only values or object pointer, we have no way to modify a distant variable. With only objects it changes nothing. With structs it changes everything.
+We made the decision of having all accesses be method calls, because semantically, it is interesting. With the getters returning only values or object pointer, we have no way to modify a distant variable. With objects it changes nothing. With structs it changes everything.
 
-6. Conclusion
+Conclusion
+----------
 
 I do not know what to do. Structs would be nice, but to be any useful, they would need to be copied on assignment but passed by reference. Unfortunately, passing by reference objects that are not directly managed by the garbage collector can result in illegal memory access.
 

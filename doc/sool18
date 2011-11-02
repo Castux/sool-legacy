@@ -1,4 +1,5 @@
 FFI, or the joys of calling C
+=============================
 
 (if there was a pun to make here with "call in sick", I failed at finding it)
 
@@ -6,7 +7,8 @@ So suppose we have an awesome language, with a neat design and object system, an
 
 This supposes solving several problems.
 
-1. Type compatibility
+Type compatibility
+------------------
 
 Functions are conceptually "things" that take in values, do things with them (or not), and return values. Since we have a type system in both sool and C, we need to make sure they will agree on how to interpret the data passed back and forth.
 
@@ -18,33 +20,37 @@ In any case, we need to break the type mechanism. Since C is a lot more lenient 
 
 So, let's accept a "declarative casting" of C pointers to any sool object. And hope that the C function behind the call actually returns a valid pointer to a valid sool object. Otherwise you can also leave it opaque and just store it in sool.
 
-2. Arrays
+Arrays
+------
 
 C arrays and sool low-level arrays are almost the same. In fact, a sool array is simply a C array with its length stuck to it. Many C APIs use, manipulate, return arrays of values or pointers, and if we want to wrap C APIs for sool, we'll certainly need to be able to manipulate C arrays from sool.
 
 Assuming the contained type is sool compatible, we should give a way to pass arrays back and forth. However, a C array is really just a pointer, and the length information is sometimes a separate integer, sometimes an end marker, sometimes a static value, sometimes none of the above. There cannot be trivial automatic glue. My idea is therefore to allow only the passing of sool arrays back and forth, and the gluing to be done in C. Give a C API call to allocate sool-managed low-level arrays of every primitive type, and let the C part fill it with whatever is needed.
 
-Note that pointer manipulation is not possible in sool, and sool arrays are stand-alone data structures allocated through GC and probably other hidden mechanisms. So we cannot map directly a sool array to a C-allocated chunk of memory. Everything has to be copied. The opposite is true though, C can and will happily read/write to sool arrays. One more reason to let the C side do the glueing. And here too, sool will just have to hope that the C side is honest enough to create valid arrays, because it will blindly trust the array's length member.
+Note that pointer manipulation is not possible in sool, and sool arrays are stand-alone data structures allocated through GC and probably other hidden mechanisms. So we cannot map directly a sool array to a C-allocated chunk of memory. Everything has to be copied. The opposite is true though, C can and will happily read/write to sool arrays. One more reason to let the C side do the gluing. And here too, sool will just have to hope that the C side is honest enough to create valid arrays, because it will blindly trust the array's length member.
 
-3. Application Binary Interface
+Application Binary Interface
+----------------------------
 
 That's the description, among other things, of the low-level procedure to call functions, or "calling convention". In what order to put the arguments, whether to push them on the stack or put them in registers, and which, etc. C uses the "C calling convention", and if sool uses the same (at least when calling C functions), there shall be no problem. Except for one detail: structs.
 
 Not only calling conventions vary with platform, operating system, and compiler, but the standardized ones are not very clear on what to do with structs. When passing them by value to functions (or returning them), compilers can do pretty much what they want, therefore making compiled code incompatible with others. "Small" structs are usually split into individual variables, passed as different arguments. Bigger structs are normally passed by reference and copied to a local version at the beginning of the function. Some optimizations might even not copy it at all (if it is only read), and use directly the pointer to the original one. In any case, you cannot trust a C compiler and the sool compiler to use the same convention. So structs cannot be passed by value between C and sool. What about by reference?
 
-4. The dangers of unlawful assumptions
+The dangers of unlawful assumptions
+-----------------------------------
 
 It's even worse than that. You cannot even assume that memory layouts for C structs and sool struct will be the same. Except if I take the special care of making sure that sool structs are compiled down to exactly the same as what a C struct would be. But I do not know either if that is completely standardized. And if it is, it is probably hidden somewhere in the 552 pages of the C99 specification. Call me lazy, but...
 
 Empirically, for small structs, it should be fairly acceptable to assume that LLVM structures follow the same layout and alignment as C would. But that is not certain. So mapping sool and C structs is "at your own risk". Maybe it should be even forbidden. But in C, everything is allowed... What about objects? They are, after all, big structs with a prepended pointer to a virtual table, and a recursive embedding of the parent classes' layout. There too, it may sometimes be reproducible in C with a similarly built struct, but nothing is less certain.
 
-The only thing that should be always safe is functions that take and return only primitive types. What about the arrays? Can we assume that "struct { int len; type array[]; }" will be simple enough to be the same on both sides, or should we only define the type on one side, and provide elementary functions to create and access them from the other side? It seems a bit far fetched. My bet is, we'll see when the issue actually shows up.
+The only thing that should be always safe is functions that take and return only primitive types. What about the arrays? Can we assume that `struct { int len; type array[]; }` will be simple enough to be the same on both sides, or should we only define the type on one side, and provide elementary functions to create and access them from the other side? It seems a bit far fetched. My bet is, we'll see when the issue actually shows up.
 
-5. Syntax!
+Syntax!
+-------
 
 Again, like all things, core concepts are of no value if they are not exposed in a clean and usable manner to the user. sool does not have functions, only methods, which are related, but not exactly the same. Methods apply only to objects, and have a hidden "self" parameter. Even if "selfless" methods could be simplified by the compiler, the concept of a simple function does not exist.
 
-Furthermore, all sool methods are both declaration and implementation, while these "external" C functions would be only declaration. Further furthermore, only class names have global scope in sool, while functions are global in C (kindof).
+Furthermore, all sool methods are both declaration and implementation, while these "external" C functions would be only declaration. Further furthermore, only class names have global scope in sool, while functions are global in C (kind of).
 
 What I envision at the moment is to have external C functions declared where methods would be, inside classes. With a different keyword, like "cfun" but a similar prototype declaration: return type, name, arguments (without names). The semantic validation would make sure that these types are primitives and arrays only, and that there is only one return value. Then the code generator would turn these special "method" calls into low level function calls, without name mangling or self parameter, and all would be fine. All glue (type conversion, array filling, etc.) and safety checks to be done in C.
 

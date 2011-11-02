@@ -1,30 +1,31 @@
 The struct solution
+===================
 
 This struct problem really bugs me. I think it would be really nice to have one, but on the other hand it will imply some kind of additional core concepts.
 
 I want structs to be mutable. I want structs to be normally passed and returned by copy. This implies one thing:
 
-- The hidden self parameter must be a reference.
+> The hidden self parameter must be a reference.
 
-We said earlier that this could lead to memory corruption. Well no. It's true, we can trick the system into trying to modify a struct that does not exist anymore. But that is a logical bug, not a low level memory violation. Indeed, thanks to garbage collection, as long as we have a pointer to somewhere inside an object or array, this chunk or memory will survive. True, if an array has been reallocated, or if an object has been replaced by another in every other reference, well, our modification will occur on the previous copy, which will disapear very soon. But it's really the programer's fault and the situation is normally never a real-life one.
+We said earlier that this could lead to memory corruption. Well no. It's true, we can trick the system into trying to modify a struct that does not exist anymore. But that is a logical bug, not a low level memory violation. Indeed, thanks to garbage collection, as long as we have a pointer to somewhere inside an object or array, this chunk or memory will survive. True, if an array has been reallocated, or if an object has been replaced by another in every other reference, well, our modification will occur on the previous copy, which will disappear very soon. But it's really the programmer's fault and the situation is normally never a real-life one.
 
 In any case, since that does not lead to unsafe memory access, I decide to accept it.
 
-Now it could lead to saying that the self parameter is special, since all the other structs are passed by value, but well, no one said self was really a hidden parameter. self is the receiver of the message, and for struct or objects, it really means what it looks like. mystruct.dothing() does thing to mystruct, as expected.
+Now it could lead to saying that the self parameter is special, since all the other structs are passed by value, but well, no one said self was really a hidden parameter. self is the receiver of the message, and for struct or objects, it really means what it looks like. `mystruct.dothing()` does thing to `mystruct`, as expected.
 
-Second consequence, also mentionned previously, we cannot modify structs contained in other objects or arrays. object.struct.member = 6 modifies the temporary return value of the getter object.struct, and then forgets about it. If we want the classic and expected behavior, we also need to return structs by reference. Problem:
+Second consequence, also mentioned previously, we cannot modify structs contained in other objects or arrays. `object.struct.member = 6` modifies the temporary return value of the getter `object.struct`, and then forgets about it. If we want the classic and expected behavior, we also need to return structs by reference. Problem:
 
 - we cannot return all structs by reference, in particular local values cease to exist after the function returns.
 - we do not want to do it either. Sometimes, you really want to return a copy of the local value, be it a local, a member of self or an array element.
 
-So we need the choice between the two. Tadaa, new syntax, new core concept. For getter like methods, that return a single enclosed struct, and that wish to offer the functionality of making it modifyiable from the outside, return by reference. For all the rest, return simply the value.
+So we need the choice between the two. Tadaa, new syntax, new core concept. For getter like methods, that return a single enclosed struct, and that wish to offer the functionality of making it modifiable from the outside, return by reference. For all the rest, return simply the value.
 
-meth ref Blah blahmember()
-	return myblah	-- that works only if myblah is a member
-	
-	-- can also chain the return by reference:
-	return array[4]
-end
+	meth ref Blah blahmember()
+		return myblah	-- that works only if myblah is a member
+		
+		-- can also chain the return by reference:
+		return array[4]
+	end
 
 Of course, references to structs would still not be first order objects, and they would need to be used immediately: send a message, modify a member, or copy-assign to another variable.
 
@@ -32,8 +33,8 @@ Modulo an additional syntax for the methods, are all of our problems solved? Rem
 
 For out of the box C-like behavior, they would have to return by reference by default. In fact, the only real use we'd have for return by reference is member getters, and wrappers around deeper container structures, so basically fancy getters. And the only use we'd have for the returned values is setters, or methods that modify them in place.
 
-Would this be a nice case of much ado about not much? My simple language is getting less simple by the minute. The struct that was supposed to be trivial, brings many exceptions: self is by reference, other arguments by value, and both are available for return, although the return by reference corresponds to a very little portion of the explicit use-cases and all of the implicit ones.
+Would this be a nice case of much ado about not much? My simple language is getting less simple by the minute. The struct that was supposed to be trivial, brings many exceptions: self is by reference, other arguments by value, and both modes are available for return, although the return by reference corresponds to a very little portion of the explicit use-cases and all of the implicit ones. Some mouthful.
 
-But that enables us to write a significant part of the standard library in sool itself. And in general, it gives us more control on the efficency of the data structures that we manipulate.
+But that enables us to write a significant part of the standard library in sool itself. And in general, it gives us more control on the efficiency of the data structures that we manipulate.
 
 Like I wrote before, there is nothing a struct can do that an object can't, but at the price of memory use, efficiency, and occasionally syntax.
