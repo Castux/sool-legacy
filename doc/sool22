@@ -1,7 +1,7 @@
 Design status
 =============
 
-There has been lots of talking lately, and very little doing. Since a few posts ago, I decided to stop trying implementing anything until I froze a preliminary design for the language. Otherwise I would just be running in circles.
+Lots of talking lately, and very little doing. Since a few posts ago, I decided to stop trying implementing anything until I froze a preliminary design for the language. Otherwise I would just be running in circles.
 
 So, are we there yet? Probably not. Let's list the features I am supposedly happy with, and well, the others. Note that this concerns only the core of the language, I won't discuss syntax here.
 
@@ -14,11 +14,10 @@ Types:
 - primitive types are always copied by value
 - as a general rule, the language is strongly typed: any single variable has a type associated, and can hold only values of this type. As we'll see later, "variable" means class member, shared class member, or local variable (including method arguments).
 - composite objects are instantiated from model classes
-- objects are always passed around by reference
+- objects are always passed and assigned by reference
 
 Classes:
 
-- only class names have global scope
 - classes have members, shared members, and methods
 - member definition reserves memory for storage in the object's layout, and creates associated getter and setter method in the class
 - shared members are members that share single storage for all instances
@@ -27,19 +26,26 @@ Classes:
 - methods can be overloaded, that is in a same class, have the same name, but a different list of arguments
 - method names can be operators, for operator overloading
 - methods and members can be private, meaning they can be accessed on an object only by itself (in message terms, the sender and the receiver must be the same)
+- if a method "init" is defined, it is called automatically at object allocation (it is a regular method and can be called later manually)
 
 Inheritance:
 
 - a class can define a parent class, in which case it inherits all members and methods from it, to which it adds its own, recursively
-- a child class member cannot shadow a parent member, shared member, and/or method
+- a child class member cannot shadow a parent member, shared member, and/or method, that is, result in accessor methods that already exist
 - methods from the parent class can be "overridden" by a child class, that is, redefined with the same signature (return types, name, argument types)
 - this includes overriding setter and getters for parent class members
-- other than for overriding, child methods must not shadow parent members/methods (if it has the same name, then it must have the same signature and be in fact an override)
+- other than for overriding, child methods must not shadow parent members/methods (if it has the same name and arguments, then it must have the same return type and be in fact an override)
 - by inheriting shared members' accessors, shared members themselves are inherited. The storage itself is also unique, and shared among all instances of the parent class and the children classes
-- shared member may be overridden, in which case another storage is created, accessors are overridden, and are in turn shared with all the children instances
+- a shared member may be overridden, in which case another storage is created, accessors are overridden, and are in turn shared with all the children instances
 - when message passing occurs, the receiving object **always** executes its own version of the method, that is, the one it inherited or overrode. That is entirely independent from the scope in which the written instruction happens. (In C++ terms, every method is "virtual")
 - as an only exception, when passing a message to an explicit "self", the method used is the one defined in the sender's class
 - similarly, a second hidden argument, "super", also refers to the same object, but interpreted as an instance of the class parent to the one of the sender
+
+Scoping:
+
+- class names have global scope
+- static lexical scoping (each block inherits the outer block's scope and adds its own, resolved at compile time)
+- local variables cannot shadow outer locals, members or accessor-like methods with the same name
 
 Typecasting:
 
@@ -71,7 +77,7 @@ Standard types, implemented in sool with the previous features:
 
 - growable array
 - hash table
-- mathematic vectors
+- mathematic vectors, along with complex and quaternion operations
 
 Selfless methods
 
@@ -105,5 +111,15 @@ Types:
 Invalid value:
 
 - let each type have a special "nil" value meaning uninitialized, no argument, no return value or simply temporarily empty variable. This implies having nil checks before every method call, and increasing the size of all integer types (alternatively, reducing their value range by one)
-- as a compromise for this useful but expansive feature (and indispensable for objects), allow all types to have a "nilable" or "optional" version. Checks and size increase would occur only on these. The others would always have to hold a valid value or object
+- as a compromise for this useful but expensive feature (and indispensable for objects), allow all types to have a "nilable" or "optional" version. Checks and size increase would occur only on these. The others would always have to hold a valid value or object
 - this previous possibility not only increases the complexity of the syntax and compiler, but leaves the unsolved problem of "optional" to "non optional" promotion. My best idea so far is to generate an uncatchable runtime error, which is not really acceptable
+
+Object initialization:
+
+- members can have default values, and the assignment becomes part of a hidden init method. This is not necessary (could be done explicitely in an init method)
+- shared members as well, and the assignment becomes part of a hidden runtime setup function. That could be replaced by a form of "class init" selfless method, but that requires more syntax, or another reserved method name
+
+Conclusion
+----------
+
+There are still a few non trivial issues to get rid of, and therefore, implementation is still far away. But I like the shape that it is taking. I don't think there is a need for any more features, so from now on I'll mostly try to figure out the current issues, complete the feature list, and make a decision about syntax for them.
