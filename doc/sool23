@@ -1,0 +1,111 @@
+Solving problems, making decisions
+==================================
+
+In the last post, which was a kind of milestone, I discussed which features were very uncertain, and required decision making. No point in lingering any further, time for courage and determination!
+
+Types
+-----
+
+Our first unsolved issue was the primitive types. I wondered if I should have an integer type, a character type and a byte type, for sool-side implementation of strings and binary data.
+
+Well, I think not.
+
+I like the design decision in Lua to have only doubles as a general purpose number. Lua is definitely not meant to do binary input/output, and it's perfectly fine. It has clever string manipulation, and with its dynamism, it's a perfect tool for dealing with text based formats. And it proudly claims it as a core feature.
+
+I want to do the same with sool. Remember, at first, sool was meant to be a compiled object-oriented variation of Lua. Plus and all the things that I think was missing from it, and related to my personal preferences. Well, sool could be just that. Oriented towards efficient text manipulation, and having a generic abstract concept of number, which happens to be implemented as a double precision floating-point number, because that's big and it should be on any modern computer. Loops and indexing in Lua works fine with doubles, and it's even one of the fastest script languages around. It will be OK.
+
+Strings will be opaquely implemented in C and offer an interface to sool, just like Lua strings. Internally, it will use efficient tricks such as delayed concatenation, and substrings that share the data, etc. The character type will most likely be a uint16 to represent all Unicode codepoints in the Basic Multilingual Plane. Possibly the compiler could offer an option to make it a different type instead (simple byte, or `uint32` for complete Unicode coverage), but it would be nicer to have a standard.
+
+Binary data will be an opaque array of bytes, that will present to sool methods to read and write as integers of varying sizes, signedness and endianness, plus doubles and floats, at arbitrary indices. I'm thinking also about methods similar to `pack` and `unpack` in Ruby, to which you present a pattern, and it returns an array of numbers. That can be used to read and write binary formats. And also communicate with C APIs that expect particular structures, although gluing is probably easier to do in C itself.
+
+About the type names, I'm thinking "text" and "data". They are short and meaningful. Text is really meant for holding characters, while data is undetermined. Of course, conversion between the two is of paramount importance, and some encodings should be built-in (at least ASCII, UTF-8, maybe ISO-8859-15 ie. Latin-9).
+
+So our list of primitive types should now be:
+
+- number
+- boolean
+- text
+- data
+- opaque
+
+The only built-in composite type:
+
+- array
+
+And the rest is user-defined (or part of the standard library) and can be subject to templates:
+
+- structs
+- objects
+
+Lookin' good!
+
+There was also the question of the atom, these textual constants used in the source code. I'm thinking that since strings are going to be immutable, it would be very easy to have hard-coded strings in the machine code (which is necessary anyway) and remove duplicates at compilation. That way, all the hand-written litteral string assignment and comparisons in the code would use this internalized set of strings, and it would work transparently.
+
+The question is when we try to compare a dynamically built string with one of these compiler-provided strings. Either we need to internalize all strings at runtime, like Lua does, or we can have only a subset of runtime strings internalized (explicitely), which then enables the comparison with the other internalized strings. All other strings would need to be compared char by char at runtime. But that sounds like exceptions and special cases for the compiler. The easiest is to internalize every string, period. That's what Lua does, and it works fine.
+
+Having two different policies for strings means that internally, we actually have two different types. One for which comparison is by reference, one for which it is by content. And then all the conversions between the two, and the interactions between the two. I say, keep it simple, stupid, and have it all internalized.
+
+Then the literal strings written by the compiler fall into the normal case, and that is Good Thing (tm). We just need to fill the big string hash table with them at runtime initialization.
+
+The dreaded nil
+---------------
+
+Lua being dynamic in nature, implementing nil is cheap. Any variable can be nil, without additional cost. In sool, which is statically typed, having a similar nil for every variable means something heavier, as I lengthily discussed before.
+
+What about a compromise? Let's recall the interest of nil:
+
+- optional arguments and return values that signal error
+- temporarily unused variables (letting go of some objects)
+
+And the problems:
+
+- having nil for objects may result in memory violation if not for systematic nil-checks before message sending
+- out of coherency, we'd need nil-checks before every operation on numbers and booleans as well. Not because of memory violation, but for logical reasons (meaningless operation): operating on Not A Number results in another Not A Number. And a boolean nil would be very similar to a boolean false if not checked for specifically
+
+However, there is a difference between a meaningless operation and a dangerous operation. We could let the user to useless stuff, but definitely don't want to let them crash their program.
+
+And let's be honest, any C or C++ program that is written a bit safely does NULL checks all the time. Every time you receive an object as argument, you pretty much have to check if it's valid or not. Otherwise, segfault galore! And when you think about it, the Lua runtime, for every indexing or operation, has to check that the types are compatible, which includes (but is not limited to) a nil check! And, again, Lua is pretty fast. So I should probably stop worrying.
+
+The solution is fairly simple:
+
+- all types can hold nil
+- for the value-primitives (number and boolean), failure is silent, you should check yourself whether your value is valid or not
+- for the referenced types (text, data, objects), nil-checks are inserted by the compiler at message sending
+- nil structs are structs with, for instance, their first member set to nil, or anything else that the compiler wants. The language doesn't need to expose that
+
+About efficiency:
+
+- all types have unused values that we can use for nil (numbers have NaN, booleans that are bytes have 254 free values, all the rest are pointers and can use 0 as nil). No memory overhead is required
+- arithmetic operations on NaN result in NaN without processing overhead
+- boolean operations will assume nil is false, and depending on the actual implementation, that may be transparent too
+- all pointers will need an actual test instruction before use. That is definitely going to add processing overhead. Hopefully, within a same function, LLVM will be able to optimize (if the value didn't change, no need to test again)
+
+Alternatively, instead of inserting the nil-check in the calling function, it could very well be instead in the called function, that is, at the beginning of the method. In C terms, a simple:
+
+	if(!self)
+		error();
+
+automatically written by the compiler. For small methods that get inlined, optimizations can still happen. And it keeps the code easier to read on the calling side.
+
+I think it's alright. I worry to much about optimization, but I forget the first rule of programming:
+
+> Code first, optimize later, hopefully never
+
+And it's corollary:
+
+> Don't fix it if it ain't broken!
+
+Let's decide to do it simply. If it is indeed mind-blowingly slow, I'll think about doing better later.
+
+Hurray, we have nil!
+
+Good news everyone!
+-------------------
+
+It looks like the core concepts of the language are complete! All the points in "probable" in the previous post are indeed accepted. They are quite OK. And let's not forget that this is just our "sool zero" specification. It might change in later versions, if any. The thing about object and class initialization is not too important yet. I think it's mostly a syntax problem.
+
+I'm quite happy with what it looks like. It's still fairly simple, while having some powerful features that should make it an interesting toy to play with. To be confirmed. Compared to Lua, one thing that does seem missing is anonymous functions (or at least first order functions). But I believe that using class hierarchy and overriding, it can be simulated just as efficiently. Closures, however, are a more complex matter. They are really convenient in some cases, but hey, we did without in C and C++ for a while.
+
+This means that the next step is fixing the syntax. Most of it is there, but not all. I still left lots of things hanging on the way, saying "it's just detail that I can decide later". Sure. Procrastination.
+
+Interesting times lie ahead. I like playing with syntax.
