@@ -1,0 +1,310 @@
+Syntax and semantics: work in progress
+======================================
+
+Where I ramble more about the next level: form and meaning.
+
+The probable
+------------
+
+These I already have ideas about, and it's just a matter of picking, or settling.
+
+-	keywords for method declaration, selfless methods, and foreign functions (`meth`, `noself [meth]`, `cfunc` or `method`, `selfless [method]`, `foreign [selfless [method]]`)
+-	call to selfless method (`ClassName:method`)
+-	template declaration (`ClassName|ClassName` for single generic type, `Class|(T,U)` for more, with unused names for the generic types), and use (possibly the same, but of course with existing types). That should work with recursive types: `Array|Array|num` is unambiguous
+-	type declaration for low-level array (`type[]`, `#type`). A suffix has the problem of resulting in ambiguities when used with templates: is `Class|Type[]` the same as `(Class|Type)[]` or `Class|(Type[])`? To be verified, but prefix should be OK. And `#` reminds of cells in an array. Still is unambiguous with templates `Array|#Table|(num,#Array|text)`, albeit ridiculous. I will keep my compiler warning for "type declaration is too deep. This is MADNESS!"
+-	alias syntaxes for standard containers, that date back from the very beginning: `[type]` and `{key,value}`. Could these be a problem? They are properly recursive and shouldn't interact badly with arrays or templates, but I'm still considering whether they should exist at all or not
+-	table-like constructor for objects: `ClassName( member = value, member = value )`. The parser would see that they are not function arguments, but `=`-separated pairs. That wouldn't be LL(1), but since the parser will be hand written, that might not be a problem. A proper separation would be to use other symbols than parentheses, but now pretty much everything is taken. Or adding a symbol before or after the `(` to indicate "hey, special constructor, not argument list!". A `!` or `with` could work, and would ease up the parser's work, but would make the syntax heavier.
+	
+		obj = Computer with
+			ram = 4e6,
+			cpu = "amd64",
+			storage = 1e12
+		end
+	
+	Also the separator should be an `=` because it is really equivalent to doing assignments on individual members, which are in general method calls. And that makes it clearly different from table constructors, in which both sides of the `:` are expressions that get evaluated. Here, the members are single names that must match existing setter methods at compile time
+
+More about nil
+--------------
+
+How to use nil? Thanks to type inference, it should be enough to write `var = nil`, and `var` would be set to nil, whatever its type (every type has a nil value). Should I allow things like `if a == nil then`, or is `if not a then` enough? It's equivalent, except for booleans, for which evaluating to false can mean it was false or nil. There is a little semantic problem with the number's nil (not a number), because NaN is never equal to anything, not even another NaN. In fact it's even one way to check whether a number is NaN: `a != a`. So without further investigation, `if a == nil then` would always fail for numbers. Of course the compiler could detect comparison with literal nil and replace it with nil check, but that wouldn't solve things like `a = nil; if b == a`. If nil cannot be compared for numbers, maybe it shouldn't be for anything. Does it make any sense to compare to object references if they are both nil? nil is meant as an absence of value, therefore, you should not be allowed to do anything with it, except check if it's nil or not.
+
+In Lua, `nil == nil`. In sool, it's true also for objects and booleans, with a simple implementation. In Lua, arithmetics with nil result in error, while a simple NaN implementation would make nil arithmetic fail silently and produce nil. Once more, difficult to have natural, simple and consistent behaviors for all types.
+
+- if we want nil to be equal to nil, for numbers we would need to replace comparisons with a hidden:
+
+		a == b or (not a and not b)
+
+- if we want nil to be incomparable, then for booleans and all reference types, we need a hidden:
+	
+		a and b and a == b
+
+Knowing that all these lazy evaluated booleans result in branches, that might make generated code a tad heavy. On the other hand, we could make the evaluation not lazy, but then it's a lot of instructions (3 comparisons, 2 boolean tests) for a single explicit comparison.
+
+An easy solution is to state that comparison with nil is undefined. That explains the discrepancies between the types. The proper way to test for nil is to use the method `isnil` that is built-in for all types. For all types but boolean, it is equivalent to converting implicitly to a boolean and testing for false: `if not a then`. The only place we actually need `isnil` is for the boolean itself for which nil and false are different values.
+
+Remains the literal nil for the assignment (and the related argument to calls and return value). The keyword `nil` should be enough in most cases, thanks to type inference. But I can't help but imagine there has to be situations that type inference can't solve, and we need, somewhere, an explicit type information. For instance:
+
+	meth blah(Object obj) end
+	meth blah(Thingie obj) end
+	
+	meth foobar()
+		blah(nil)
+	end
+
+Sure, the compiler will complain that it couldn't infer the type of `nil`, and therefore finds the call to `blah` ambiguous and refuses to compile. But how would you do then? One ugly way would be:
+
+	meth foobar()
+		var = Thingie
+		var = nil
+		blah(var)
+	end
+
+That can always be summarized in `blah(Thingie and nil)`, but that still feels hackish, and involves instantiating a Thingie object just to give type to the expression. Classes could come with an automatic selfless method that returns nil:
+
+	blah(Thingie:nil)
+
+That's fine for sool-defined classes, but not for primitive types. In fact, so far, primitive types have no usable type name. We assumed that type could always be inferred from constructors. Types were used only for declarations in classes interfaces (members, and method signatures). I haven't felt the need for primitive types' class methods yet, but maybe we need these too! Think about mathematical constants, or functions like `atan2`, they are selfless in nature. I assumed we could rebase all standard functions to act on objects (or primitives), but is that so reasonable? Maybe type names should be usable just as class names, for instantiation and class method access.
+
+	tab = #str(50)			-- array with initial size
+	two_pi = num:pi * 2		-- quasi globals need to reside somewhere
+	not_a_number = num:nan	-- no one has to know that nil is nan!
+	rand = num:rand(100)	-- nicer than "rand = 100.rand"
+	angle = num:atan2(x,y)	-- although "<x,y>.angle" would be the same
+
+Booleans have only 2 values, so they are entitled to full fledged keywords:
+
+	true and false			-- instead of bool:true and bool:false
+
+Comparing to the Lua standard lib, pretty much everything else can logically be sent to a meaningful object as message. But even if only for typed nil, we should have all types be usable as class names.
+
+However, trouble arises when combining this with the shortcuts I have for the standard array and table:
+
+	a = [num]:nil		-- wait, [...] is also the array constructor
+	b = {text,num}:nil	-- and {...} the table constructor
+
+That makes the language that much harder to parse. But then again, hand written parser. All is allowed, all is forgiven.
+
+Having all types available like this allows also for a `type` selfless method, that returns an opaque pointer that can be compared at runtime. Not sure how useful that is, though.
+
+Last thought, we can't name the class method `nil`, because that conflicts with the keyword. If a class has a `nil` method, every time you write `nil`, you mean to call this method, and that gives a nil of the same type as `self`, which is not what you necessarily want. The method could be named instead `nilval` or `novalue` or something.
+
+As a general rule, methods cannot have keyword names. It's semantically challenging, and annoys the parser too.
+
+Operator precedence, my bad
+---------------------------
+
+I once wrote that operator precedence was arbitrary, and therefore a bad idea. I said, in sool all operators have the same precedence, and left associativity. And then I wrote:
+
+	while i < a*2 do
+
+and realized it meant `(i<a)*2`, which is multiplying a boolean by 2, which would fail. I checked code that I write naturally in any other language and realized I use the usual precedence without even thinking about it. I need to reconsider. But that's a bit annoying, it forces to add a step of unfolding expressions in the parser. Stupid, stupid infix notation and its ambiguities. Postfix (or even prefix) has always been highly superior (and far closer to the reality of the parse tree). But I'm definitely not ready to go that far:
+
+	while i a 2 * < do
+		meh = a b * c d * +
+	end
+
+Also, prefix is easier to parse (and LL(1) I think). Anyway.
+
+So we'll have the same as Lua:
+
+	or
+	and
+	< > <= >= ~= ==
+	+ -
+	* / %
+	not - (unary)
+	^
+
+There are a few funky ones that I want to add:
+
+	~ (concatenation)
+	<~ (insertion/appending)
+
+and I don't really know where to place them compared to the others. That's the problem I wanted to avoid: except mathematical ones, there's no obvious way to do it, so no way to remember it clearly. Lua places its concatenation (`..`) between comparisons and `+ -`. These operators may seem unlikely to appear in the same expressions, but automatic coercion between numbers and strings might make that statement untrue:
+
+	a = 200 + "45" ~ b		-- well, isn't that unclear...
+
+Class extension
+---------------
+
+Or reopening, as it might be called in other languages. Almost a trivial concept, allows to separate a class definition in several bits, possibly in different files. The analyzer would simply stick them back together before anything else. I'm hoping this is a trivial addition, and convenient. It also allows adding methods to standard classes.
+
+	extend ClassName
+		-- exactly like in a class definition
+	end
+
+The question is, should it be allowed also for structs, and while we're at it, primitive types? It might be good to be able to add methods to opaque types like text, for your own set of common operations on them. We know that otherwise, the best way to emulate global functions is selfless methods stored in a random class. But that's not ideal. And that's an ugly way to extend a class for which you actually have access to.
+
+Also, how to deal with templates? Can you add generic methods to a template, can you add methods to a specific instance? It should still be fairly trivial: the mere mention of an instantiated template creates it, so how hard could it be to add methods to it?
+
+Interesting question. The easiest thing to conceive for me, the compiler writer, is to allow only extending complete classes. But now that I think of it, extending a template should be just as easy:
+
+	extend Class|Blah
+		--
+	end
+
+If `Blah` does not exist and `Class` is a template, just complete the template. If `Blah` exists, complete `Class|Blah`. My fear is that implementation will be less trivial than I think.
+
+Using the word "just" in such an early stage might be my doom. The point of fixing the design is to be able to blindly implement later, without being impaired by the need to improve the design.
+
+But I kinda like the extend feature. Often in Lua I found myself adding functions to the `table` table, because I thought the standard library was sometimes lacking. I'd like to let any sool user do the same easily.
+
+However, adding methods to built-in types may turn out to be more difficult for the compiler. Depending on its architecture, built-in type may be represented by exactly the same data structures than sool-coded one, and then it would be trivial. The compiler planning phase will be interesting as well.
+
+Tiny note: Java uses the keyword `extends` as its inheritance thing. But I don't think I mind confusing Java readers. As if anyone was gonna use sool anyway!
+
+More template fun
+-----------------
+
+C++ allows you to give an explicit implementation for a certain instance of a template. For instance, `std::vector<bool>` works differently than the others, and packs the bits efficiently into chars. Do we need this? Do we want this?
+
+In a similar vein, can you derive from templates, can you derive from instantiated templates? Can you make a template derive from a normal class, a template, an instantiated template?
+
+My logical answer is "yes", all is possible. Instantiated templates are, in principle, exactly like other classes. It should be OK, but it's difficult to envision everything from here. Look at:
+
+	class Blah|T : Foo|T
+
+When instantiating Blah, T takes a value, so Foo|T is not a template anymore, it's a specific class.
+
+	class Blah|T : Foo|Bar
+
+If Bar exists, Foo|Bar is a normal class. No problem. If Bar doesn't exist, should it add a template parameter? Probably not. You can always do that explicitly:
+
+	class Blah|(T,Bar) : Foo|Bar
+
+If Bar doesn't exist, it becomes a template parameter, and Foo|Bar is instantiated. As expected.
+
+But specific implementations? Not so sure.
+
+	class Blah|Foo		-- must fail if Foo exists already, name is bound!
+						-- "Cannot use Foo as generic type name" or something,
+						-- it's the big "no shadowing" rule!
+
+Do instead:
+
+	class BlahOfFoo : Blah|Foo
+
+You can override all you want. However, you won't be able to modify the existing layout, only add members and methods, just as in any inheritance.
+
+Also, this can be used as poor man's `typedef`. If you override nothing, everything should be optimized nicely so that no runtime overhead is introduced:
+
+	class NumList : List|num end
+
+It does create a full blown class for the compiler though, and some memory overhead, as the new class will have its own virtual table. And direct class comparison will fail, although dynamic cast won't be a problem.
+
+Semantics of the array
+----------------------
+
+And by array, I mean the low-level one, `#type`. Like I wrote before, this array will hold its length with it, and automatic bound checking will be performed. The most sensitive question is resizing. I planned on having an accessor `size` to read and modify, as in:
+
+	arr = #num(50)
+	arr.size = arr.size * 2		-- it is now 100
+
+Of course, resizing copies the previous values, and fills the rest with nil. But what really happens with the memory chunks?
+
+A simple implementation would be to have the array be as follows:
+
+	struct array
+	{
+		int size;
+		type *data;
+	};
+
+When resizing, you get a new chunk of data of the right size, copy the previous, pad with nil if it's bigger, and set `data` to that new thing. Thanks to garbage collection, the previous one will eventually disappear. Excellent.
+
+But now, notice that there is a double indirection between the array variable and the data. To access index `i`, you do `arr->data[i]`, which is exactly like `*(array->data + i)`, which is finally `*((*array).data + i)`.
+
+Isn't that a bit far? Another implementation would be to have the length directly at the top of the array. In C terms that would be:
+
+	struct array
+	{
+		int size;
+		type data[];
+	};
+
+Where `data` (an array without size at the end of a struct) means "a pointer to whatever is next in memory after `size`. To use it, allocate `sizeof(int) + N * sizeof(data)`, and then, accessing `i` is reduced to:
+
+	*(array + sizeof(int) + i)
+
+Only one indirection, yay, faster! However, there's a catch! Whenever you resize, you need to reallocate the whole thing (`size` too), and you get a new pointer for your first level array. You would need to reassign it to your variable:
+
+	arr = arr.resize(arr.size * 2)
+
+And, well, the previous array would exist as long as there are still references to it. Which might be many sool variables:
+
+	arr = #num(50)
+	arr[20] = 100
+	arr2 = arr.resize(100)
+	arr2[20] = 3.14
+	
+	-- well, arr[20] is still 100!
+
+The funny part is that if you use `realloc`, or its friend `gc_realloc`, there's no guaranty that it will be a new chunk of memory. If you downsize, it will even try to keep it at the same place.
+
+To be sure to have a consistent behavior, we need to do the allocation and copy ourselves, and that is not an issue. The issue is to decide what semantics we want. They have the same functionality, but the second one might be faster, at the price of actually making the word `resize` confusing.
+
+Maybe we should write `resizecopy` instead to be clear.
+
+Another matter with the low-level array is: how much of an API should it have? For now we have indexing and `resizecopy`. Do we need anything else? Maybe:
+
+- subarrays. And should they be copied or referenced (or both)?
+- concatenation. Low level memory copy could be done more efficiently than with high-level loops (that are indexed with doubles!)
+
+Anything else would already be too high-level, and should be done by the growable Array. But having a few nice quick low-level operations might be useful.
+
+On the other hand, the array is a built-in templated type, and I don't know yet how annoying this will be in the compiler. Keeping the fun to a minimum might be a good idea.
+
+One generic memory copy function could be enough:
+
+	arr.assign(other, own_start_index, other_start_index, length)
+
+And bounds would be checked, of course. Start indices and length wouldn't even be necessary, if we allowed some kind of reference sub-array. But for these, the first implementation would be necessary, since the length and data would need to be separated. Double dereference... Not so cool.
+
+So what about an hybrid? We keep the first implementation, but instead of having a pointer to the structure, we use only copy by value. Meaning that assigning and passing an "array" is exactly equivalent to passing a length and a pointer to the data. That reduces one degree of indirection.
+
+However it does mean that there will be possibly lots of different references to the same data. Meaning that every assignment is in fact a reference sub-array. Resizing an array means that the data will be new, and the possible previous will remain untouched.
+
+It is, if I understood correctly, how it works in D.
+
+And we can even have a similar fancy syntax for the sub arrays and data copy:
+
+	b = a[10,29]		-- b refers to the same data
+	c[1,10] = b[2,12]	-- 10 elements are copied
+	c[] = a				-- nope, size mismatch
+
+As right value,
+
+	b == b[] == b[1,b.size]
+
+And thanks to overloading the `index=` function, all these work as expected:
+
+	a[1,10] = b[2,12]	-- index=(num low, num high, #type src): copy one by one
+	a[1,10] = 100		-- index=(num low, num high, type val): set 1-10 to 100
+	a[] = 100			-- index=(type val): set all to 100
+	a[10] = b			-- nope, type mismatch!
+	a = b				-- set a to refer to all of b. Previous a is lost.
+
+Well, well, isn't that all nice! I sure hope my internal template system will be able to cope. And of course all these fancy syntaxes will be the same in the growable array. But there, there will also be some insertion stuff.
+
+In any case, resizing must always imply a copy, so the name `resizecopy` might stick. Copying is equivalent to:
+
+	-- some other array src
+	dst = #type(src.size)
+	dst[] = src		-- same as dst[] = src[]
+
+But the array allocation/initialization normally sets all values to nil. That's a useless step if you're going to overwrite anyway:
+
+	dst = src.copy	-- aaah, much better!
+
+The copy-resize operation would be equivalent to:
+
+	dst = #type(newsize)
+	dst[] = src[1,min(src.size,dst.size)]
+
+There again, if downsizing, all nils are overwritten, and if upsizing, some nils are overwritten. A specific
+
+	dst = src.copyresize(newsize)
+
+would make sure to avoid useless work.
+
+OK, I think I like these arrays, and this concludes today's ramblings. There are probably things that I missed, but soon I'll be able to start thinking about the new compiler's implementation. Fun!
