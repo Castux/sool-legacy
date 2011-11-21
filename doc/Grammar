@@ -1,54 +1,126 @@
-chunk := 		block |
-				{ class }
-			
-class :=		'class' ClassName [ ':' ClassName ]
-				{ [ 'private' ] type Name }
-				[ 'methods' { method } ]
-				'end'
-				
-method :=		[ 'private' ] [ type { ',' type } ]
-				( Name [ '=' ] | 'op' Binop )
-				'(' [ type Name { ',' type Name } ] ')'
+-- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
+
+chunk :=	{ composite-def }
+
+composite-def :=	( 'struct' | 'class' | 'extend' )
+					class-name
+					[ ':' class-name ]
+					composite-body
+					'end'
+
+class-name :=	CName [ template ]
+
+template := 	'|'
+				( type | '(' list-type ')' )
+
+type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
+				class-name | type-low-array | type-array | type-table
+
+left-safe-type :=	'num' | 'bool' | 'text' | 'opaque' | 'data' |
+					class-name | type-low-array
+
+type-low-array :=	'#' type
+
+type-array :=		'[' type ']'
+
+type-table :=		'{' type ',' type '}'
+
+composite-body :=	{ member-def | method-def | foreign-def }
+
+member-def :=	[ 'shared' ] [ 'internal' ]
+				type
+				Name
+
+method-def :=	[ 'internal' ]
+				( 'method' | 'selfless' )
+				[ list-type ]
+				method-name
+				'(' [ list-arg-def ] ')'
 				block
 				'end'
 
-type :=			'num' | 'vec' | 'str' |
-				ClassName |
-				'[' type ']' |
-				'/' type '/' |
-				'{' { type  [ ',' ] } '}'
+foreign-def :=	[ 'internal' ] 'foreign'
+				[ type ]
+				Name
+				'(' [ list-arg-def ] ')'
 
-block :=		{ stat [ ';' ] }
-				[ break | continue | return [ listexp ] ]
+method-name :=	Name [ '=' ] |
+				free-binop | 
+				'[' ']' [ '=' ]
 
-stat :=			'do' block 'end' |
-				'while' exp 'dö́' block 'end' |
-				'if' exp 'then' block
-					{ 'elseif' exp 'then' block }
-					[ 'else' block ]
-				'end' |
-				'for' Name '=' exp ',' exp [ ',' exp ] 'do' block 'end' |
-				'for' Name { ',' Name } 'in' exp 'do' block 'end' |
-				exp |
-				listbasicexp '=' listexp
+free-binop :=	'+' | '-' | '*' | '/' | '%' |
+				'<' | '>' | '<=' | '>=' | '^' |
+				'~' | '<~'
 
-atomicexp :=	Name | Number | String | 'nil' | 'false' | 'true' | Symbol
+arg-def :=		type [ 'ref' ] Name
 
-constructor :=	'{' [ listbasicexp ] '}' |
-				'[' [ listbasicexp ] ']' |
-				'/' [ listbasicexp ] '/' |
-				'<' [ listbasicexp ] '>' |
-				ClassName [ '(' [ listexp ] ')' ]
+block :=		{ statement }
+				[ final-statement ]
 
-exptail :=		'.' Name |
-				'(' [ listexp ] ')' |
-				'[' exp ']'
+statement :=	do-stat |
+				while-stat |
+				for-stat |
+				if-stat |
+				assignment |
+				call-stat
 
-basicexp :=		( atomicexp | '(' exp ')' | constructor )
-				{ exptail }
+final-statement :=	'break' | 'continue' | 'return' [ list-exp ]
 
-exp := 			[ Unop ] basicexp { Binop [ Unop ] basicexp }
+do-stat :=		'do' block 'end'
 
-listexp :=		exp { ',' exp }
+while-stat :=	'while' exp [ 'as' Name ] 'do' block 'end'
 
-listbasicexp :=	basicexp { ',' basicexp }
+for-stat :=		'for' list-name 'in' list-exp 'do' block 'end'
+
+if-stat :=		'if' exp [ 'as' Name ] 'then' block
+				{ 'elseif' exp [ 'as' Name ] 'then' block }
+				[ 'else' block ]
+				'end'
+
+assignment :=	list-left-value '=' list-exp
+
+call-stat :=	left-safe-exp { exp-tail }
+
+exp :=			term { binop term }
+
+binop :=		free-binop | '==' | '~=' | 'and' | 'or'
+
+term :=			unary-op | typecast | basic-exp
+
+unary-op :=		( '-' | 'not' ) term
+
+typecast :=		basic-exp 'to' class-name
+
+basic-exp :=	( left-safe-exp | array-cons | table-cons |	'(' exp ')' )
+				{ exp-tail }
+
+left-safe-exp :=	atomic-exp | vec-cons | selfless-call | object-cons
+
+atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
+
+vec-cons :=		'<' list-basic-exp '>'
+
+array-cons :=	'[' [ list-exp ] ']'
+
+table-cons :=	'{' [ list-table-cons-pair ] '}'
+
+table-cons-pair :=	exp ':' exp
+
+object-cons :=	( class-name | type-low-array )
+				[ array-cons | table-cons | with-cons | call-arg ]
+
+with-cons :=	'with' list-with-cons-pair 'end'
+
+with-cons-pair :=	Name '=' exp
+
+call-arg	:=	'(' [ list-exp ] ')'
+
+exp-tail :=		indexing | method-call
+
+indexing :=		'[' list-exp ']'
+
+method-call := 	'.' Name [ call-arg ]
+
+left-value :=		left-safe-exp { exp-tail } ( indexing | '.' Name )
+
+selfless-call :=	left-safe-type ':' Name [ call-arg ]

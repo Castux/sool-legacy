@@ -1,0 +1,179 @@
+Object initialization syntax and grammar draft
+==============================================
+
+Constructor syntaxes
+--------------------
+
+Additionally to the `init` methods that object can define, I wanted to have a special way to simply attribute values to members directly at allocation. To avoid writing trivial `init`s, which take arguments and assign them directly to members, I though of this kind of syntax:
+
+	obj = Object with
+		member1 = value1,
+		member2 = value2,
+		-- ...
+		memberN = valueN
+	end
+
+That would be exactly equivalent to:
+
+	obj = Object
+	obj.member1 = value1
+	obj.member2 = value2
+	-- ...
+	obj.memberN = valueN
+
+Then I thought about array and table constructors. I always planned on having these two particular syntaxes to build these objects directly from code, and thus be able to use sool as a data description language:
+
+	arr = [1,3,4,5,67,2]
+	tab = { "blah" : 4, "foo" : 3, meh[3] : 25.sqrt }
+
+But two concerns arose:
+
+-	this forces to have syntax be plugged directly to specific classes, arbitrarily chosen by me (growable array and hash table). They will be standard, sure, but what if a user happens to prefer his very own containers instead? A whole part of the language will be useless to them
+-	if someone uses their own classes, since they wont have the special syntax, they will have to write all the static information as method calls:
+	
+		obj = MyContainer
+		obj.insert(a)
+		obj.insert(b)
+		obj.insert(c)
+	
+	and this looks far less nice for data description
+
+So what about making "generic" object constructors, that map to allocation followed by calls to setters, and that can therefore be used for any class? For instance:
+
+	obj = Class { a : b, c : d }	-- Class must answer to "[]="
+
+would be translated to:
+
+	obj = Class
+	obj[a] = b
+	obj[c] = d
+
+While
+
+	obj = Class [ a, b, c ]			-- Class must answer to "<~"
+
+would be in fact:
+
+	obj = Class
+	obj <~ a
+	obj <~ b
+	obj <~ c
+
+And the two standard objects would be a simple special case: `{...}` would default to the Table, and `[...]` to the array.
+
+Alternatively, we could forget about the special cases, and force the presence of a class name, therefore losing the shortcuts and the preference for my personal favorite containers.
+
+So, we have four ways to initialize an object:
+
+	-- automatic call to init()
+	obj = Class
+	obj = Class(...)
+	
+	-- automatic member setting
+	obj = Class with
+		member = value
+	end
+	
+	-- automatic call to index setter []=
+	obj = Class {
+		index : value
+	}
+	
+	-- automatic insertion of values with <~
+	obj = Class [ val, val, val ]
+
+Funny thing, we can also use the "table form" for arrays:
+
+	arr = Array|text { 1 = "one", 10 = "ten" }
+
+The growable array will automatically resize.
+
+Would merging the member and index ones be reasonable? They do look pretty much the same, but have different meanings. `member = ` is really a call to `member=`, while `index :` is a call to `[]=` with the argument `index`. Using a different syntax is important, to distinguish the meanings. But what about:
+
+	obj = Object {
+		member = meh,
+		[index] = blah
+	}
+
+That does look like `obj.member=` and `obj[index]=`, which are the actual meanings. But it does force to but brackets around all indices, which is fairly annoying, especially if there are only these. And will there be many (or any) cases where you'd need to mix the two? One is meant for object with named members, while the other is meant for containers. It's unlikely that an object will have the two. And if it does, well, it will take lines of explicit code to fill both.
+
+And *good news everyone*, having three different opening tokens (`with`, `[` and `{`) makes the thing LL(1) again. And that is always pretty nice. Make my job easier.
+
+Type inferring
+--------------
+
+One detail left is that the compiler will need to do type inferring, when the class name is not mentionned. Array and Table are templates only, so depending on the types of the values found in the constructor, the compiler will decide what `T` to use in `Array|T` and what `K` and `V` in `Table|(K,V)`.
+
+It's simple when there are directly values:
+
+	arr = [1,2,3]			-- Array|num
+	tab = { "meh" : 5 }		-- Table|(text,num)
+
+It gets more difficult when using the empty constructors for quick allocation:
+
+	arr = []
+	tab = {}
+
+in which case the type inferring will be delayed until the first assignment.
+
+	arr <~ "meh"	-- looks like a call to "<~(text)", must be Array|text
+	tab[4] = true	-- "[]=(num,bool)", that's certainly a Table|(num,bool)
+
+The difficulty will arrive when combining this with coercion and untyped `nil` literals. A new mission for capt'n semantics!
+
+Also, litteral arrays of compile-time known values can probably be optimized to be written directly in the machine code and copied directly into a growable array (instead of making a new array and calling `<~` many times). In fact, the growable array class will most likely have an `init(#type arr)`, to promote a simple array to growable. And it might have a "read only" flag to be sure not to write into these, and copy on write. But this is the domain of optimization. And we shall not think of this prematurely.
+
+The syntax strikes back
+-----------------------
+
+Here is a draft of the new grammar. Followed by random comments.
+
+	insert grammar
+
+I thought `private` could be replaced with `internal`. That way, there won't be confusion with the usual meaning (C++/Java) which is less restrictive, and "internal" is just as relevant: can be used only from within the object.
+
+For now, I keep `[type]` and `{type,type}` in the game. They cause a few problems regarding parsing, but I think they are important shortcuts. The problems are:
+	meth [num] blah() end
+	meth []=(num a) end
+
+`[]=` is the only case when removing `op` to introduce an operator overload is problematic. No other type starts like an operator. Since it's just a matter of looking one more token ahead, I'll keep it that way.
+
+	blah = [num](50)
+	blah = [a,b,c,d]
+
+We don't know if we start an array constructor, or an array class name. And since both are recursive, we need unbounded lookahead. That annoys me a bit more. That might require having trackback, that is parsing functions allowed to fail without blocking the whole process. That makes the parsing non linear, and therefore slower. Same with `{` at the beginning of an expression.
+
+In fact it's even worse. The grammar is ambiguous:
+
+	blah = [#num]
+
+Is this a high level array constructor filled with a single low-level array constructor? Or is it the Array|#num type, used to instantiate one of them? So it seems the shortcut types won't cut it for in-code use. Too bad.
+
+Also, another LL(1) conflict is a class name at the beginning of an expression:
+
+	blah = Object(...)
+	blah = Object:method
+
+But there too, a simple one token lookahead will differentiate between all four ways of initializing and an explicit selfless call.
+
+The classic (for me at least) conflict between assignment and lone method call is still present. A statement that starts with a `left-safe-exp` can be either. The hand written parser will silently left-factor the grammar and sort it out.
+
+This `left-safe-exp` is simply there to restrict what tokens can start a statement. Because of the table and array constructors that can follow object instantiations, this would be ambiguous:
+
+	blah = Object [meh] + 5
+
+Is it `Object[meh]`, to which we add 5, or is it `Object`, and next statement is the operation `[meh] + 5`? A similar conflict exists for simple indexing actually:
+
+	blah = meh [10] + 5
+
+To avoid this, a statement cannot start in `(`, `{` or `[`. Every other expression is "left safe".
+
+The `lvalue` rule is defined as a "first-follow" conflicting rule. But it basically means that it must end in a setter method (indexing or single name). In practice, the parser will use the same rule as the `call-stat`, and simply check whether the highest level node is an indexing or a member access, and reject as an invalid left-value otherwise.
+
+As it is now, the `with ... end` block is part of an expression, so that would be legal:
+
+	blah = Object with
+		meh = 5
+	end . lol + 5
+
+It does look wierd, but I don't see how it could be an issue.
