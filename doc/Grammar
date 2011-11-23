@@ -10,37 +10,36 @@ composite-def :=	( 'struct' | 'class' | 'extend' )
 
 class-name :=	CName [ template ]
 
-template := 	'|'
-				( type | '(' list-type ')' )
+template := 	'|' ( type | '(' list-type ')' )
 
 type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
-				class-name | type-low-array | type-array | type-table
-
-left-safe-type :=	'num' | 'bool' | 'text' | 'opaque' | 'data' |
-					class-name | type-low-array
+				class-name | type-low-array
 
 type-low-array :=	'#' type
 
-type-array :=		'[' type ']'
+type-decl :=		type | type-array-shortcut | type-table-shortcut
 
-type-table :=		'{' type ',' type '}'
+type-array-shortcut :=	'[' type ']'
+
+type-table-shortcut :=	'{' type ',' type '}'
 
 composite-body :=	{ member-def | method-def | foreign-def }
 
 member-def :=	[ 'shared' ] [ 'internal' ]
-				type
+				type-decl
 				Name
 
 method-def :=	[ 'internal' ]
 				( 'method' | 'selfless' )
-				[ list-type ]
+				[ list-type-decl ]
+				[ 'ref' ]
 				method-name
 				'(' [ list-arg-def ] ')'
 				block
 				'end'
 
 foreign-def :=	[ 'internal' ] 'foreign'
-				[ type ]
+				[ type-decl ]
 				Name
 				'(' [ list-arg-def ] ')'
 
@@ -52,7 +51,7 @@ free-binop :=	'+' | '-' | '*' | '/' | '%' |
 				'<' | '>' | '<=' | '>=' | '^' |
 				'~' | '<~'
 
-arg-def :=		type [ 'ref' ] Name
+arg-def :=		type-decl Name
 
 block :=		{ statement }
 				[ final-statement ]
@@ -79,7 +78,11 @@ if-stat :=		'if' exp [ 'as' Name ] 'then' block
 
 assignment :=	list-left-value '=' list-exp
 
-call-stat :=	left-safe-exp { exp-tail }
+left-value :=	[ type ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name ) ]
+
+call-stat :=	method-call { exp-tail }
+
+method-call :=	[ type ':' ] Name [ call-arg ]
 
 exp :=			term { binop term }
 
@@ -91,10 +94,9 @@ unary-op :=		( '-' | 'not' ) term
 
 typecast :=		basic-exp 'to' class-name
 
-basic-exp :=	( left-safe-exp | array-cons | table-cons |	'(' exp ')' )
+basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
+				table-cons | object-cons | '(' exp ')' )
 				{ exp-tail }
-
-left-safe-exp :=	atomic-exp | vec-cons | selfless-call | object-cons
 
 atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
 
@@ -113,14 +115,10 @@ with-cons :=	'with' list-with-cons-pair 'end'
 
 with-cons-pair :=	Name '=' exp
 
-call-arg	:=	'(' [ list-exp ] ')'
+call-arg	:=	'(' [ list-exp ] ')' | String
 
-exp-tail :=		indexing | method-call
+exp-tail :=		indexing | message-sending
 
 indexing :=		'[' list-exp ']'
 
-method-call := 	'.' Name [ call-arg ]
-
-left-value :=		left-safe-exp { exp-tail } ( indexing | '.' Name )
-
-selfless-call :=	left-safe-type ':' Name [ call-arg ]
+message-sending := 	'.' Name [ call-arg ]

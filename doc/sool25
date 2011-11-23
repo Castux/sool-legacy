@@ -121,14 +121,140 @@ in which case the type inferring will be delayed until the first assignment.
 
 The difficulty will arrive when combining this with coercion and untyped `nil` literals. A new mission for capt'n semantics!
 
-Also, litteral arrays of compile-time known values can probably be optimized to be written directly in the machine code and copied directly into a growable array (instead of making a new array and calling `<~` many times). In fact, the growable array class will most likely have an `init(#type arr)`, to promote a simple array to growable. And it might have a "read only" flag to be sure not to write into these, and copy on write. But this is the domain of optimization. And we shall not think of this prematurely.
+Also, literal arrays of compile-time known values can probably be optimized to be written directly in the machine code and copied directly into a growable array (instead of making a new array and calling `<~` many times). In fact, the growable array class will most likely have an `init(#type arr)`, to promote a simple array to growable. And it might have a "read only" flag to be sure not to write into these, and copy on write. But this is the domain of optimization. And we shall not think of this prematurely.
 
 The syntax strikes back
 -----------------------
 
 Here is a draft of the new grammar. Followed by random comments.
 
-	insert grammar
+	-- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
+	
+	chunk :=	{ composite-def }
+	
+	composite-def :=	( 'struct' | 'class' | 'extend' )
+						class-name
+						[ ':' class-name ]
+						composite-body
+						'end'
+	
+	class-name :=	CName [ template ]
+	
+	template := 	'|'
+					( type | '(' list-type ')' )
+	
+	type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
+					class-name | type-low-array | type-array | type-table
+	
+	left-safe-type :=	'num' | 'bool' | 'text' | 'opaque' | 'data' |
+						class-name | type-low-array
+	
+	type-low-array :=	'#' type
+	
+	type-array :=		'[' type ']'
+	
+	type-table :=		'{' type ',' type '}'
+	
+	composite-body :=	{ member-def | method-def | foreign-def }
+	
+	member-def :=	[ 'shared' ] [ 'internal' ]
+					type
+					Name
+	
+	method-def :=	[ 'internal' ]
+					( 'method' | 'selfless' )
+					[ list-type ]
+					method-name
+					'(' [ list-arg-def ] ')'
+					block
+					'end'
+	
+	foreign-def :=	[ 'internal' ] 'foreign'
+					[ type ]
+					Name
+					'(' [ list-arg-def ] ')'
+	
+	method-name :=	Name [ '=' ] |
+					free-binop | 
+					'[' ']' [ '=' ]
+	
+	free-binop :=	'+' | '-' | '*' | '/' | '%' |
+					'<' | '>' | '<=' | '>=' | '^' |
+					'~' | '<~'
+	
+	arg-def :=		type [ 'ref' ] Name
+	
+	block :=		{ statement }
+					[ final-statement ]
+	
+	statement :=	do-stat |
+					while-stat |
+					for-stat |
+					if-stat |
+					assignment |
+					call-stat
+	
+	final-statement :=	'break' | 'continue' | 'return' [ list-exp ]
+	
+	do-stat :=		'do' block 'end'
+	
+	while-stat :=	'while' exp [ 'as' Name ] 'do' block 'end'
+	
+	for-stat :=		'for' list-name 'in' list-exp 'do' block 'end'
+	
+	if-stat :=		'if' exp [ 'as' Name ] 'then' block
+					{ 'elseif' exp [ 'as' Name ] 'then' block }
+					[ 'else' block ]
+					'end'
+	
+	assignment :=	list-left-value '=' list-exp
+	
+	call-stat :=	left-safe-exp { exp-tail }
+	
+	exp :=			term { binop term }
+	
+	binop :=		free-binop | '==' | '~=' | 'and' | 'or'
+	
+	term :=			unary-op | typecast | basic-exp
+	
+	unary-op :=		( '-' | 'not' ) term
+	
+	typecast :=		basic-exp 'to' class-name
+	
+	basic-exp :=	( left-safe-exp | array-cons | table-cons |	'(' exp ')' )
+					{ exp-tail }
+	
+	left-safe-exp :=	atomic-exp | vec-cons | selfless-call | object-cons
+	
+	atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
+	
+	vec-cons :=		'<' list-basic-exp '>'
+	
+	array-cons :=	'[' [ list-exp ] ']'
+	
+	table-cons :=	'{' [ list-table-cons-pair ] '}'
+	
+	table-cons-pair :=	exp ':' exp
+	
+	object-cons :=	( class-name | type-low-array )
+					[ array-cons | table-cons | with-cons | call-arg ]
+	
+	with-cons :=	'with' list-with-cons-pair 'end'
+	
+	with-cons-pair :=	Name '=' exp
+	
+	call-arg	:=	'(' [ list-exp ] ')'
+	
+	exp-tail :=		indexing | method-call
+	
+	indexing :=		'[' list-exp ']'
+	
+	method-call := 	'.' Name [ call-arg ]
+	
+	left-value :=		left-safe-exp { exp-tail } ( indexing | '.' Name )
+	
+	selfless-call :=	left-safe-type ':' Name [ call-arg ]
+
 
 I thought `private` could be replaced with `internal`. That way, there won't be confusion with the usual meaning (C++/Java) which is less restrictive, and "internal" is just as relevant: can be used only from within the object.
 
@@ -176,4 +302,210 @@ As it is now, the `with ... end` block is part of an expression, so that would b
 		meh = 5
 	end . lol + 5
 
-It does look wierd, but I don't see how it could be an issue.
+It does look weird, but I don't see how it could be an issue.
+
+Syntax can be annoying
+----------------------
+
+As you see, I had to define a set of "left-safe" rules, and they all come back to the same issue, caused by two things:
+
+- an expression can end in an optional `(...)`, `[...]` or `{...}`, by means of optional arguments to a method call or optional arguments/initializer to object instantiation
+- a statement can end in a expression (right value or lone call)
+- a statement can begin in an expression (left value or lone call)
+- some expressions start in `(` `[` or `{`
+
+So we have a first-follow conflict (in LL(1) grammar terms), and even an ambiguity in the grammar, so my first thought was simply to restrict what expressions can start a statement (as left-value or lone expression).
+
+But it makes me sad, because it makes the grammar heavier and it looks like it's full of exceptions.
+
+C would solve this problem by forcing every statement to end in `;`. Similarly we could say that the new line is syntactic and ends statement, but I refuse. A few other solutions are:
+
+- make sure that `(` `[` and `{` cannot start expressions. That would mean having no "naked" table or array constructor. I had thought about that, and imagined that even the standard contained would need to be named before initializing them: `blah = Array|num[1,2,3,4]`. It sucks a bit, but why not. More harsh is the parentheses. They are used to group terms in expressions, and they have every right to appear anywhere. So we'd need an exception and say that a statement cannot begin with `(`.
+- make sure that expression cannot end in optional bracketed stuff. For the initializers, that would mean we need a token to introduce the initialization: `Class![1,2,3,4]` which is almost ok. For the parentheses, on the other hand, it's a whole different story, because that concerns the optional arguments to method calls. And this one is of paramount importance (access to members and call to methods **must** look the same, by the principle of hiding implementations). So no way it's going away. There too, the statement must be the one to fold, and can not start in a `(`.
+
+So in any case, we cannot make everything smooth. We have to choose one exception. For the sake of following what pretty much every other language has done before, we have to keep parentheses to enclose the list of arguments to a call, and for term grouping in an expression.
+
+Let's examine why these also start statements:
+
+	(a + b).print
+	[1,2,3,4].max.print
+	{"a": meh, "b": boo}.internize	-- assume that stores in a shared member
+
+They all consist in calling methods on temporary objects, which are lost right after the statement. That means that their only use is in the side effects of the method calls. Printing, storing internally, saving the world, whatever. It might be useful sometimes, but let's face it, you can always take one more step, and use a temporary local variable to do the same job.
+
+What do we really need or want as statement starter then? For left-values we need at least identifiers:
+
+	blah = meh
+	blah.lol = meh
+	blah[2].lol = meh
+
+and class names, for selfless methods:
+
+	Class:member = meh
+
+At some point I thought having string literals could be interesting, since a global function `print` cannot exist:
+
+	"some message".print
+
+but is that really necessary? Any serious output will use formating functions or file descriptors, or internal logging systems like:
+
+	out:write("some message")
+	errors <~ "Derp derp"
+
+In fact, checking any Lua or C or C++ source I ever wrote, I realize I've lived fairly well without having to start any expression-statement with anything else than a name. So maybe we could restrict to that. Left-values and lone calls must start in names (or class names for selfless calls).
+
+That frees up a lot of things that can be optional at the end of an expression. That solves our `[]` `()` `{}` problem, and opens the possibility for other fun stuff like the Lua-like shortcut:
+
+	blah.foo.bar "meh"		-- calling bar("meh")
+
+In fact, that could work for any atomic expression other than a Name (but these are not so clear):
+
+	foo 5
+	meh = a.bar true
+
+and crazier, the other Lua shortcut of taking a single table argument:
+
+	a.take_this_table { a:b, c:d }
+
+For the string and the table, it's fairly justified, because you'd otherwise end up with annoying double-brackets: `blah("meh")` or `foo({a:b})`. For the `[`, no choice, it can be mixed up with the indexing. No luck either for the vector literal, that starts like an operator (`<`).
+
+The one small inconsistency that would come with having parentheses-free call with single table argument is that
+
+	meh = ClassName { a : b }
+
+could potentially look like either use the special "table-like" initialization (that means call `meh[a] = b`), or use the `init()` call with a single argument `{ a : b }`. However, that shortcut in Lua is meant when using the language as data description, usually to build objects on the go, based on tables. This is better done with *actual* objects from specific classes (for with the table-like syntax will fill members) instead of passing a standard table, and using it to initialize the object.
+
+So I don't mind removing the single-table shortcut. The only one left is the literal string.
+
+One final thing is the type shortcuts for standard arrays and tables. Since they start like array and table constructors, they cannot appear where these would appear. That is at any non-statement starting expression. And that means bringing in lots of exceptions, and that annoys me.
+
+I have a choice: remove these shortcuts entirely (meh, I liked them), or restrict them to the only place where they won't bother anybody: in declarative places (members, and methods prototypes). Everywhere else (method name, parent method, in code instantiation, selfless method call), there must be complete normal types. Normally, these uses are few, thanks to type inferring, while type declarations are often. I'm satisfied.
+
+A final final thing about types, we still need the primitive ones in-code as well, for access to selfless methods (`text:nilval`).
+
+The result
+----------
+
+	-- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
+
+	chunk :=	{ composite-def }
+
+	composite-def :=	( 'struct' | 'class' | 'extend' )
+						class-name
+						[ ':' class-name ]
+						composite-body
+						'end'
+
+	class-name :=	CName [ template ]
+
+	template := 	'|' ( type | '(' list-type ')' )
+
+	type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
+					class-name | type-low-array
+
+	type-low-array :=	'#' type
+
+	type-decl :=		type | type-array-shortcut | type-table-shortcut
+
+	type-array-shortcut :=	'[' type ']'
+
+	type-table-shortcut :=	'{' type ',' type '}'
+
+	composite-body :=	{ member-def | method-def | foreign-def }
+
+	member-def :=	[ 'shared' ] [ 'internal' ]
+					type-decl
+					Name
+
+	method-def :=	[ 'internal' ]
+					( 'method' | 'selfless' )
+					[ list-type-decl ]
+					[ 'ref' ]
+					method-name
+					'(' [ list-arg-def ] ')'
+					block
+					'end'
+
+	foreign-def :=	[ 'internal' ] 'foreign'
+					[ type-decl ]
+					Name
+					'(' [ list-arg-def ] ')'
+
+	method-name :=	Name [ '=' ] |
+					binop | 
+					'[' ']' [ '=' ]
+
+	free-binop :=	'+' | '-' | '*' | '/' | '%' |
+					'<' | '>' | '<=' | '>=' | '^' |
+					'~' | '<~' | '==' | '~=' | 'and' | 'or'
+
+	arg-def :=		type-decl Name
+
+	block :=		{ statement }
+					[ final-statement ]
+
+	statement :=	do-stat |
+					while-stat |
+					for-stat |
+					if-stat |
+					assignment |
+					call-stat
+
+	final-statement :=	'break' | 'continue' | 'return' [ list-exp ]
+
+	do-stat :=		'do' block 'end'
+
+	while-stat :=	'while' exp [ 'as' Name ] 'do' block 'end'
+
+	for-stat :=		'for' list-name 'in' list-exp 'do' block 'end'
+
+	if-stat :=		'if' exp [ 'as' Name ] 'then' block
+					{ 'elseif' exp [ 'as' Name ] 'then' block }
+					[ 'else' block ]
+					'end'
+
+	call-stat :=	exp-start { exp-tail }
+
+	assignment :=	list-left-value '=' list-exp
+
+	left-value :=	exp-start { exp-tail } (and the last rule applied must not be call-arg)
+
+	exp-start :=	[ type ':' ] Name [ call-arg ]
+
+	exp :=			term { binop term }
+
+	term :=			unary-op | typecast | basic-exp
+
+	unary-op :=		( '-' | 'not' ) term
+
+	typecast :=		basic-exp 'to' class-name
+
+	basic-exp :=	( atomic-exp | exp-start | vec-cons | array-cons |
+					table-cons | object-cons | '(' exp ')' )
+					{ exp-tail }
+
+	atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
+
+	vec-cons :=		'<' list-basic-exp '>'
+
+	array-cons :=	'[' [ list-exp ] ']'
+
+	table-cons :=	'{' [ list-table-cons-pair ] '}'
+
+	table-cons-pair :=	exp ':' exp
+
+	object-cons :=	type [ array-cons | table-cons | with-cons | call-arg ]
+
+	with-cons :=	'with' list-with-cons-pair 'end'
+
+	with-cons-pair :=	Name '=' exp
+
+	call-arg	:=	'(' [ list-exp ] ')' | String
+
+	exp-tail :=		indexing | message-sending
+
+	indexing :=		'[' list-exp ']'
+
+	message-sending := 	'.' Name [ call-arg ]
+
+It might seem a bit long, because I try to name rules a lot, to give a hint of the semantics behind. Also the left-value rule is fairly annoying to write explicitly because it has to translate the idea that a left-value cannot end in a call argument, it has to be an indexing or a single Name (that will map to methods `[]=` and `Name=`). But in concept, it is quite simple. Anyway, like I mentioned earlier, the parser will have a unified function for both left-values and call-statements, distinguishing between the two only by "is the top-most node a call with arguments or not?". Likewise, there are a few hidden left-factorings to do, but that will be a parser implementation issue.
