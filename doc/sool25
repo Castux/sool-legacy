@@ -59,7 +59,7 @@ would be in fact:
 	obj <~ b
 	obj <~ c
 
-And the two standard objects would be a simple special case: `{...}` would default to the Table, and `[...]` to the array.
+And the two standard objects would be a simple special case: `{...}` would default to the Table, and `[...]` to the Array.
 
 Alternatively, we could forget about the special cases, and force the presence of a class name, therefore losing the shortcuts and the preference for my personal favorite containers.
 
@@ -102,7 +102,7 @@ And *good news everyone*, having three different opening tokens (`with`, `[` and
 Type inferring
 --------------
 
-One detail left is that the compiler will need to do type inferring, when the class name is not mentionned. Array and Table are templates only, so depending on the types of the values found in the constructor, the compiler will decide what `T` to use in `Array|T` and what `K` and `V` in `Table|(K,V)`.
+One detail left is that the compiler will need to do type inferring, when the class name is not mentioned. Array and Table are templates only, so depending on the types of the values found in the constructor, the compiler will decide what `T` to use in `Array|T` and what `K` and `V` in `Table|(K,V)`.
 
 It's simple when there are directly values:
 
@@ -314,7 +314,7 @@ As you see, I had to define a set of "left-safe" rules, and they all come back t
 - a statement can begin in an expression (left value or lone call)
 - some expressions start in `(` `[` or `{`
 
-So we have a first-follow conflict (in LL(1) grammar terms), and even an ambiguity in the grammar, so my first thought was simply to restrict what expressions can start a statement (as left-value or lone expression).
+So we have a first-follow conflict (in LL(1) grammar terms), and even an ambiguity in the grammar. So my first thought was simply to restrict what expressions can start a statement (as left-value or lone expression).
 
 But it makes me sad, because it makes the grammar heavier and it looks like it's full of exceptions.
 
@@ -391,17 +391,17 @@ The result
 	chunk :=	{ composite-def }
 
 	composite-def :=	( 'struct' | 'class' | 'extend' )
-						class-name
+						composite-name
 						[ ':' class-name ]
 						composite-body
 						'end'
 
-	class-name :=	CName [ template ]
+	composite-name :=	CName [ template ]
 
 	template := 	'|' ( type | '(' list-type ')' )
 
 	type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
-					class-name | type-low-array
+					composite-name | type-low-array
 
 	type-low-array :=	'#' type
 
@@ -435,7 +435,7 @@ The result
 					binop | 
 					'[' ']' [ '=' ]
 
-	free-binop :=	'+' | '-' | '*' | '/' | '%' |
+	binop :=		'+' | '-' | '*' | '/' | '%' |
 					'<' | '>' | '<=' | '>=' | '^' |
 					'~' | '<~' | '==' | '~=' | 'and' | 'or'
 
@@ -478,7 +478,7 @@ The result
 
 	unary-op :=		( '-' | 'not' ) term
 
-	typecast :=		basic-exp 'to' class-name
+	typecast :=		basic-exp 'to' composite-name
 
 	basic-exp :=	( atomic-exp | exp-start | vec-cons | array-cons |
 					table-cons | object-cons | '(' exp ')' )
