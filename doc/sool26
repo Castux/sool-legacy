@@ -1,0 +1,166 @@
+More semantic doubts
+====================
+
+Members' initial values
+-----------------------
+
+I hadn't decided, but I think it will be necessary to allow members to have a default or initial values. True, it could be replaced by setting them in the `init` method, but I think it is not enough.
+
+The point of mixing member and method definitions is to allow the coder to group them logically by functionality. The class can be divided in big sections that make the whole thing looks cleaner. But if we need to initialize all the members in a single method, that means breaking the unity, and separating the declaration of a member, and the information of its default value. Lots of going back and forth in the source, and risks of error. If the value is on the same line, it makes a lot more sense.
+
+That is even more important in the case of class extension. If you didn't write the original class, you shouldn't modify its `init` method, and therefore, you would have no proper way to initialize your members. With an inline initialization, the member entirely exists in its extension.
+
+Finally, the same goes for shared members, except that for them, we don't even have an `init` method yet, so an inline initial value would be required. That is actually my next question.
+
+As for syntax, a simple `= expression` might cause problems:
+
+	SomeClass mymember = SomeClass[1,2,3,4,5]
+	[num] mynumarray
+
+Woops... the array-like initialization of `SomeClass` is optional, and starts in a `[`, which may look like the opening of a type. Uncool. To do things right, we'd need a block delimiter such as parentheses:
+
+	num count (0)
+	[num] things ([1,2,3,4,5])
+	num blah (count + 2)
+
+That's a bit weird, but as usual we don't have many free tokens left, and since it's optional, it can't look like the beginning of a type. To make it look more like an assignment:
+
+	num count (= 0)
+	num blah (= count * 2)
+
+That's one useless token but it looks maybe clearer. And getting even crazier, why not:
+
+	[num] things (do
+		things = []
+		for i in 100 do
+			things[i] = i
+		end
+	end)
+
+Ahem. Not sure about this one, but it does bring back the thing with extensions. If they can't modify the normal `init`, they have no way to assign default values more complex than single expressions.
+
+In fact, even the ability to mention other variables implies that there has to be a well defined order in which these assignments are executed. And that is more complex than it seems, if we have extensions in different files.
+
+Re: `extend`
+------------
+
+Which brings me to: maybe extensions should not be able to declare new members. The idea was to avoid having fake global functions to act on objects from other libraries, and be able to send messages to the objects directly, as if the method was part of the original definition. And that applies to primitive types as well. But maybe we don't need new members then. `extend` could be restricted to methods. If new members are needed, it's more than just adding functionality, and a child class should be created. And since you can't inherit from built-in objects, that solves the problem of checking that.
+
+It's decided, extensions only add methods. Therefore there is no problem of member initialization in extensions. Member init is done in the main class definition, using single expressions. If something more complex is needed, the `init` method is there.
+
+Shared members can have the same. And if they need more than just an expression, well, you'll need to have a manual "class initialization" and make sure that it's called before anything else. As a general rule, I discourage keeping state in classes. Shared members should be kept for fairly simple concepts. If needed, there is always the possibility of the singleton pattern, with a single shared member to ensure unicity.
+
+Back to syntax
+--------------
+
+As for the syntax, I don't see anything better than `(expression)` so far. Without bracket, we need some kind of terminator. The most logical would be the same as the statement terminator, but I dislike having it mandatory just because of the standard types' shortcuts:
+
+	num a = 5;
+	[num] b = [];
+
+These shortcut are starting to be quite a bother. They were in statements, in expressions, now in member declarations. I'm just wondering if it wouldn't be even more of a bother to not have them:
+
+	Array|num b = []
+	Table|(text,num) = {}
+
+The only place left is in method arguments. But at that point it seems slightly odd to have to write the full type everywhere except there:
+
+	method Array|num dothelulz([num] yay)
+	-- vs
+	method Array|num dothelulz(Array|num yay)
+
+In fact, it is with great sadness that I have to let it go. It's always been more of a problem than anything else. I just hope I won't regret by having lots to type all the time. Maybe it will be a good reminder that they are fairly complex types, with a lot more overhead than the simple arrays. But sool always wanted to pretend to be a nice high-level language. I suppose we can't always have what we want.
+
+And they are still slightly privileged, because so far I don't see any reason to remove their in-code constructors. That plus type inferring still make them happy types.
+
+	a = [1,2,3]		-- hey look, no "Array|num"!
+
+In fact, I am in a big simplification phase. I want to have as little as possible in the core language, and therefore in the compiler. As much as possible must be data based (which is generally a good thing, withing reason). Which brings me to:
+
+sool declaration of primitives' interfaces
+------------------------------------------
+
+Imagine a world in which you could write
+
+	class num
+		method num +(num other) end
+		method num -(num other) end
+		method num *(num other) end
+		method num /(num other) end
+		
+		method num sin() end
+	end
+
+	class #T
+		method T [](num index) end
+		method []=(num index, T value) end
+	end
+	
+and so on. It could be parsed by the parser, and automagically I would have my primitive types as classes in my internal representation. Method lookup and others would be exactly the same as for user-written classes. The only difference would appear at code generation. Instead of using the bodies of the methods, the compiler would fill in its built-in instructions.
+
+And by the magic of syntax (restricting parent definition to `: composite-name`), it still means that they cannot be inherited from.
+
+The compiler would simply have these files somewhere and parse them before parsing the user's. And magic would occur. The real magic will occur later, at code generation, that the backend will be free to do as it sees fit. For now, only the language validation concerns me.
+
+By value, by reference, and immutable types
+-------------------------------------------
+
+A thought occurred to me (it happens) when pondering on the new and fresh low-level array. The one that is a struct and passed around by copy, but contains a pointer to a chunk of garbage-collected data in the heap.
+
+Can it be considered a value type? In a way yes, because all it contains is a number and a pointer, and these are definitely copied at assignment:
+
+	a = #num(500)
+	b = a
+
+The size in `b` is now independent from the one in `a`.
+
+Can it be considered a reference type? Well, the data it "contains" is definitely only referred to, and shared:
+
+	a = #num(500)
+	b = a
+	a[10] = 400
+	-- b[10] == 400 too!
+
+However, an important fact is that the length field hidden in the array is in fact immutable! And the pointer can be considered so as well, or at least, both values have to change together.
+
+	a = #num(500)
+	lol(a)
+	
+	-- [...]
+	
+	method lol(#num a)
+		-- hey, I can't change the original a from here
+		-- I can play with the content of the array, though 
+	end
+
+So what... Arrays are value types use to manipulate memory by reference. Ain't that confusing...
+
+And the same goes with strings, or "text" as I call it. Behind the scenes, they are a complex and convoluted type based on arrays of characters, trees of nodes to concatenate them, etc. At first glance, they are a reference type:
+
+	a = "mehmeh"
+	b = a
+	-- b physically points to the same thing than a
+
+But... strings are immutable, so I can't ever modify `a` and check if `b` changed as well! So in practice, they behave exactly like primitive by-value types!
+
+	a = "mehmeh" * 1000
+	b = a ~ "lol"
+	
+	dothething(a,b)
+	
+	-- a and b cannot have been modified by the method!
+	-- and yet obviously no data was copied, it was done "by reference" somehow
+
+We have the same kind of hybrid than the array. The first level "text" thing is a structure, assigned and passed by copy, but it only contains a reference to something else.
+
+That is very confusing... How to call them? As long as their use is clear, that shouldn't be a problem, but when I will need to write the documentation, I'm going to have some fun. "texts are references to immutable values so they look like values, and arrays are immutable references to mutable values". Ahem.
+
+The Lua manual describes strings as immutable values, period. I suppose it is only a matter of implementation whether you copy them around like crazy, or actually use pointers to stuff. It also describes tables and userdata (pointers to C allocated memory, with size along) as "not values, but objects", of which only references are manipulated.
+
+I suppose I can do the same. Texts are values and are immutable. Arrays are references to chunks of memory.
+
+I think the problem comes from the fact that "array" should normally mean "the chunk of memory", but we are trying to use the word for the variable, which is nothing more than a pointer and a length. A pointer is not the memory it points to, but out of the force of habit (even since C), we mix up array and pointer happily.
+
+So the "array variable" is a value (just as a pointer is a value), but the array itself (the memory) is an object, manipulated by reference.
+
+Semantics (of the English language, this time!) are interesting.
