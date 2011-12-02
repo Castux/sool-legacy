@@ -1,0 +1,184 @@
+The fascinating semantics of reference types
+============================================
+
+Whence trouble came
+-------------------
+
+I've always considered that the operators `or` and `and` were special and non-overloadable, because they relate to variable properties instead of object properties (being nil or not). Likewise, the equality operator `==` acts on the variables, not the objects: are these references equal?
+
+But is this such a good idea?
+
+As I started mentionning in the previous post, there is an interesting semantic complication for reference types that are transparently dereferenced. Indeed, an *object* is a chunk of memory to which we give some kind of layout. A *reference* is the address of another memory location. A *variable* is a name in the source code, associated with a specific chunk of memory containg some value.
+
+A variable that contains a reference is called a pointer. But by metonymy, we often call it a reference as well. Just as we say "a pint" when we actually mean its content, the beer.
+
+If you have a variable that refers to an object, but acting on that variable directly acts on the object, it really looks like the variable contains the object itself. So, one step more of confusion, you call the variable an "object" directly.
+
+Now see how the big semantic slide happens, for instance in Lua:
+
+	a = {}
+
+What is `a`? We're tempted to say "`a` is a table". Well no, `a` is a reference to a table. Well, again no, `a` is a variable that contains a reference to a table.
+
+This confusion has one step less in C, because there, pointers are explicit, and you can always manipulate either the pointer itself, or what it points to:
+
+	int i;
+	int *ptr = &i;
+	
+	*ptr = 5;	// using the pointed
+	ptr = 0;	// using the pointer
+
+A *pointer* is a variable containing a reference (an address). An address is itself a value, so in a way, in C, every type is a value type. However, some of them are used to refer to others. There is often a confusion when learning about pointer, because we end up saying that "a pointer is an address". But no, a pointer is a variable, a name in the source code. This variable has 4 or 8 bytes associated to it, and we happen to use these bytes to store the address of something else.
+
+In Lua or sool, all pointers are automatically dereferenced, for all operations except comparison and assignment:
+
+	a = {}
+	a[1] = 1	-- we modified the refered table
+	a = b		-- we modified the refering variable
+
+So natural and yet so far from trivial! Assignment acts on the content of the variable, while message sending acts on the pointed object.
+
+Isn't that fascinating?
+
+I think so.
+
+Value assignment and comparison for referenced types
+----------------------------------------------------
+
+This brings the question of where to put the limit between object operations and variable operations. If assignment and comparison are reserved as variable operations, it means we have to implement content copy and content comparison as methods, and do things like:
+
+	a.copy(b)
+	a.compare(b)
+
+where C could have done the content copy directly (even with big values like structs):
+
+	*a = *b
+
+Content comparison in C++, on the other hand, has to be written manually through overloading the `==` operator. Note that the assignment operator can also be overloaded in C++, if you need more confusion from it.
+
+However, in sool, since there will be no syntax to distinguish the reference from the object, we cannot allow this kind of overloading. As all methods act on the pointed objects, there would be no way whatsoever to recover the content of the variable itself, that is, the reference.
+
+But if values have a built-in comparison (with `==`), even big values like structs, why wouldn't the objects have one? They are, after all, nothing else that glorified structs!
+
+True, we couldn't use the same operators, but in principle, it's the same operation. Imagine we produce a new operator to shortcut the method call:
+
+	a <=> b
+
+the math symbol for equivalent. It's not the same object, but their contents are the same, so close enough. See what happens:
+
+	Struct a
+	Struct b
+	Object c
+	Object d
+	
+	a == b		-- value comparison
+	c == d		-- reference comparison
+	c <=> d		-- value comparison
+
+Oh, confusion. The same operator seems to be doing different things depending on whether it acts on struct or objects.
+
+But there is our semantic slide again! `c` and `d` are **not** objects! They are pointers. And pointers contain values! `c == d` is indeed a value comparison, where we compare addresses.
+
+If we truly wanted the dereferencing to be absolutely always there and transparent, `a = b` would be a copy of contents and `a == b` a comparison of contents. There would be no apparent difference between objects and values. The only difference would be that some would be in the stack or registers while others are in the heap. And that, the user doesn't care about it any bit at all.
+
+So yes, that's what I meant by "the limit between variable operations and object operations". If we want references to be any useful, they need to have assignment and comparison for themselves.
+
+This means two things :
+
+- documentation must be very clear. The type `SomeClass` is really "reference to a SomeClass object".
+- value operations on objects must be implemented as methods, and possibly as additional operators.
+
+Built-in value copy
+-------------------
+
+C has automatic copy of structs. It makes a lot of sense if they are composed only of primitive types. For instance our standard vector is just 2 numbers, and clearly we don't even want to write:
+
+	method copy(Vector b)
+		x = b.x
+		y = b.y
+	end
+
+The question arises when it also contains reference types. At first glance we could think that the copy of the struct would simply copy the references in it. No harm done, the new struct will have a field that points to the same object as the old struct.
+
+What if you have something more complex like a tree-like structure? Copying the root node would give you exactly the same root node, with all the same children. Maybe what you would like instead is to have an independent copy of the whole tree...
+
+Obviously that cannot be the default behavior: any cyclic references would lead to infinite recursion.
+
+Then it means the user should be able to provide its own copy method, where it would explicitely copy the objects that it needs instead of simply copying the references.
+
+Should this be an operator overload? For structs that would be totally OK. For objects, we already saw it would suck badly. So no.
+
+The compiler can provide a default "raw" copy. For structs it will be the normal assignment. For objects, it could be a default `copy` method, for instance. Then the user can override these and turn that into a "deep" copy if they need.
+
+Built-in value comparison
+-------------------------
+
+A fairly similar situation occurs for comparison. The compiler can provide a raw comparison (field by field) for both structs and objects.
+
+The structs would use it naturally with the `==` operator, while the objects would need a new method (or equivalently an new operator).
+
+But as soon as there are reference types in the fields, a simple reference comparison might not be enough, one might want to do a value comparison of the content of the object. There too, a trivial automatic comparison could lead to infinite recursion or sending message to nil. So it should be written by the user.
+
+Syntax-wise, overriding `==` could be alright for structs. But since it's not for objects, maybe we'd like to keep the `==` untouched, and force the use of that special new method/operator we mentionned.
+
+Then again, I've no real idea for a new operator, so maybe it's easier to just let the user define its own methods, such as `same`, `deepcompare` or whatever. Ditto for the assignments. Probably best to leave the original meaning to `=`, even for structs. Feel free to write your own `deepcopy` or `assign` stuff.
+
+Consequences
+------------
+
+For the language's semantics, and therefore the compiler, this all means that:
+
+- the assignment does always the same: copy the content of a variable into another. Including when this variable contains a structure ("big value") or a reference. That's not even an operator, it's a specific rule in the grammar.
+- `==` is a special operator that does *not* map to a method call. It is a built-in comparison of the contents of the variables. There too, even when the content is a structure or a reference.
+- the other special operators `not`, `or` and `and` also act on the variables' ontents: the direct values for some, the references for others.
+- the compiler provides raw comparison for value types (accessed with the `==` operator) and for objects (in the form of a method whose name is still to be defined, maybe operator `<=>`)
+- the compiler provides raw copy and assignment for objects, in the methods `copy`:
+	
+		method Object copy()		-- copies self into new one
+		method copy(Object other)	-- copies other into self
+
+- if the user defines his own `copy` and `<=>` methods, the compiler doesn't provide them
+- like any other operator, `<=>` can be defined for a struct as well
+
+Naturally, the by-reference built-in primitive types would provide the value comparison as well, in particular arrays:
+
+	method blah(#num a, #num b)
+		 if a == b then
+		 	-- they point at the same thing and have the same length
+		 end
+		 
+		 if a <=> b then
+		 	-- they might point at different areas of memory, but
+		 	-- they have the same length and content
+		 end
+	end
+
+No need to write big loops, the compiler will plug in a few `memcmp`.
+
+`data` type is basically like an array of bytes, so the same behavior is expected. `text` is a tad more interesting, because if we decide to internize it, then reference comparison and content comparison become equivalent!
+
+Indexing by reference or content
+--------------------------------
+
+Now that reference types have a clear distinction between reference comparison and content comparison, what happens with constructs such as the Table?
+
+Well simply put, we have the similar distinction between indexing by reference or by content. Indeed, a table, when adding a key-value pair, basically compares the new key with all previous keys. If it finds a match, it replaces the value with the new one. Otherwise, it adds the key-value pair. Same for retrieving: compare index with all keys, if it matches, return the value, else return nil.
+
+The keyword here is "compare". Since both are possible, maybe both kinds of tables should exist for object indices. From where I stand, I think the reference kind is more often used. If you choose to use objects instead of structs, it's usually because:
+
+- they will be unique anyway (recording information about individuals)
+- they are more memory efficient than big structs, but are meant as values. Then for efficient comparison, you should probably use internizing, in which case reference comparison is equivalent.
+
+This is not totally true. I'm thinking about things I need often in problems of the Projet Euler, like permutations, for instance. A trivial representation is an array of numbers. It could be put in a structure, if the size is known, but that would be very unpractical (field names instead of indices in an array). But they would be meant as values anyway. And they could be internized, but that requires having a full blow class, and a heavy mechanism for creating them, while a simple array of numbers seems enough.
+
+Using a table of these (for memoization of results, for instance), we would definitely need a value comparison and indexing.
+
+In Lua, I often use the trick that consists in indexing by a string uniquely representing the object. For a small array of numbers:
+
+	a = {1,4,23,5,7,8}
+	str = table.concat(a,',')
+	somehash[str] = whatever
+
+Even though it is elegant on a logical level, it is far from efficient. A direct indexing by value of objects would be necessary.
+
+So what? Two different Table classes? Or a unique one with a switch to select value or reference? Everything is possible. That lies in the domain of the standard library, and decisions can be made at that time.
