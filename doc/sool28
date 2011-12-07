@@ -1,0 +1,65 @@
+Value comparison, bis repetita
+==============================
+
+After the enlightening comment to my previous post, I realized I got it somewhat wrong. By maybe trying to mimic Lua too closely, I lost track of the fact that since my language was going to be, in fact, deeply different, I could introduce major differences.
+
+It seems that in Python, the `==` operator is *always* a value comparison, which naturally puts it in the same group as `>`, `<` and such. And, well, for complex objects, it doesn't *have* to be defined, just as not all objects can have a meaning full use for `<` and `>`.
+
+For equality by reference (meaning that the objects compared are in fact one and only object, the same chunk of memory), Python has the operator `is`.
+
+If a similar thing were to be in sool, I like the fact that this special operator (which is not mapped to method call) would be a keyword like `not` `and` and `or`, which are as well special operators that do not map to methods.
+
+On the other hand, the `==` operator would be definitely always a method call: built-in for primitives, and user-defined for structs and objects. Just as other comparisons `<`, `>`, `<=` and `>=`, which look very similar (using punctuation instead of words).
+
+Naturally, `is` would not be defined for value types. The remaining question is , should `==` be automatically filled in by the compiler for user-defined structs and objects.
+
+The same reasoning than I already produced still holds: if they contain only value types, there is no problem whatsoever in doing a field by field comparison (or directly a raw memory comparison). If they also contain reference types, it's a bit more complicated. Should these be compared by reference, or should the value comparison be applied recursively?
+
+	class Lulz
+		Lulz other
+	end
+	
+	a = Lulz
+	b = Lulz
+	
+	a.other = b
+	b.other = a
+	
+	if a == b then
+		-- inifite recursion!
+	end
+
+What seems to be the officer, problem? The problem is that we really would like the compiler to fill in automatically a value comparison for simple types made only of values (typical example: the vector). But for any object that may have cycle references, blah will occur.
+
+The easy solution is: the compiler provides a simple "raw memory" comparison, which means that values are compared the only way they know, and objects are compared by reference. That way, it never translates to a recursive call. If you need a complete comparison of the sub-objects, you have to write it yourself through overloading `==`. That's what is done in D. `==` is a "bit pattern" comparison, and the compiler must ensure that there is no problems related to object layouts (for instance by filling the padding with zeros).
+
+And then the convenient part is that you can even overload `==` to accept comparison with objects of other types, like a number and a user-defined big-number, or different subclasses of a same class.
+
+How did I not think of that before?
+
+As for syntax, no need to reinvent the wheel. `is` and `isnot` seem perfectly fine. And an interesting thing would be that if not otherwise provided, `~=` could map directly to the inverse of the result of `==`. It would seem silly to do anything else, but maybe in some cases, there are more efficient ways to test inequality than test for equality first. I don't know.
+
+The D language also has an `is` operator for reference comparison on objects, but it is a bit confusing because it also falls back to value comparison when used on value types, and it actually does a value comparison for arrays. Meh? I'd rather keep both neatly separate.
+
+An interesting consequence is that comparison with nil is properly defined with the `is` operator. Remember how I stated that since simple implementations of nil for different types would lead to different behaviors in comparison, then comparing with nil should be undefined? Well it's true for value comparison. But now for references, there is no problem comparing with the null pointer.
+
+	if myobj isnot nil then
+		-- yey
+	end
+
+Then again, that is still equivalent to `if myobj then`.
+
+Picking names
+-------------
+
+I don't like having to fix too many method names in the language itself. If there is a way to use syntax instead, I'd rather do that. I already feel bad giving the `init` method a special meaning. Now `copy` can be filled automatically by the compiler if not provided. There is also the `isnil` method, necessary for booleans, to distinguish nil from false.
+
+The arbitrary choice of names has always bothered me. Keywords are OK, because they really shape the language at its core, but standard methods? Not so much.
+
+That's also why I like the idea of having the standard library coded in sool itself. If you don't like it, you don't even need to link it. In fact, maybe it won't even deserve the name "standard". It could just be a personal collection of classes released as extra along the compiler.
+
+Actually, I was thinking about the `init` method(s). C++ cleverly removes the need for a special keyword or name by using the class name itself for the constructor. Ruby has `this`, the same keyword as the self-referential pointer.
+
+Then again, it was nice to have an actual method, so you could re-initialize objects without need to re-allocate them. But then-again-again, the garbage collector is supposed to be clever and keep free-lists specifically to be able to quickly allocate an object of the same size as a previously freed object.
+
+So what then? `init` methods are exactly like other methods. Maybe it's OK to have just this one special name. Other languages use `__init__` (ugh, Python), `init` (Objective-C), `new` (Objective-C, Perl)...
