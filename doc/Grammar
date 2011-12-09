@@ -17,21 +17,15 @@ type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
 
 type-low-array :=	'#' type
 
-type-decl :=		type | type-array-shortcut | type-table-shortcut
-
-type-array-shortcut :=	'[' type ']'
-
-type-table-shortcut :=	'{' type ',' type '}'
-
 composite-body :=	{ member-def | method-def | foreign-def }
 
 member-def :=	[ 'shared' ] [ 'internal' ]
-				type-decl
-				Name
+				type Name
+				[ '=' exp ]
 
 method-def :=	[ 'internal' ]
 				( 'method' | 'selfless' )
-				[ list-type-decl ]
+				[ list-type ]
 				[ 'ref' ]
 				method-name
 				'(' [ list-arg-def ] ')'
@@ -39,19 +33,20 @@ method-def :=	[ 'internal' ]
 				'end'
 
 foreign-def :=	[ 'internal' ] 'foreign'
-				[ type-decl ]
+				[ type ]
 				Name
 				'(' [ list-arg-def ] ')'
 
 method-name :=	Name [ '=' ] |
-				free-binop | 
+				binop | 
 				'[' ']' [ '=' ]
 
-free-binop :=	'+' | '-' | '*' | '/' | '%' |
+binop :=		'+' | '-' | '*' | '/' | '%' |
 				'<' | '>' | '<=' | '>=' | '^' |
-				'~' | '<~'
+				'~' | '<~' | '==' | '~=' | 'and' |
+				'or' | 'is' | 'isnot'
 
-arg-def :=		type-decl Name
+arg-def :=		type Name
 
 block :=		{ statement }
 				[ final-statement ]
@@ -86,8 +81,6 @@ method-call :=	[ type ':' ] Name [ call-arg ]
 
 exp :=			term { binop term }
 
-binop :=		free-binop | '==' | '~=' | 'and' | 'or'
-
 term :=			unary-op | typecast | basic-exp
 
 unary-op :=		( '-' | 'not' ) term
@@ -98,7 +91,7 @@ basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
 				table-cons | object-cons | '(' exp ')' )
 				{ exp-tail }
 
-atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
+atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil' | 'nan'
 
 vec-cons :=		'<' list-basic-exp '>'
 
