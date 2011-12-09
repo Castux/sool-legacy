@@ -1,0 +1,69 @@
+Second thoughts about nil
+=========================
+
+I wanted every type to have a nil value, to represent an absence of value, or a reference to nothing. Many useful applications, so that is definitely necessary. However, it brought more problems than it solved.
+
+The implementation of nil is different in each type, and that leads to different behaviors for each type:
+
+- operations on nil numbers are allowed, they just all return nil. Also, `nil ~= nil` for numbers
+- for booleans there is the annoyance of nil evaluating to false, but being a different value than false. There, `nil == nil`.
+- for reference types, sending messages to nil will cause a memory violation, so nil-checks have to be inserted. There, `nil == nil` is illegal, but `nil is nil` is ok and true.
+
+I dislike discrepancies. Stuff that has the same name should work the same. Since sool is not a dynamically typed language like Lua, where nil is the only value of the *type* Nil, we cannot have the same semantics. It would have been nice, but it turns out to be more a hassle than a blessing.
+
+So we can reserve nil for objects. nil is "invalid reference". Period. For numbers, NaN is all we need, and it makes much more sense, because then it has the exact meaning of NaN in standardized doubles: the result of division by zero, square root of negative numbers, etc. And it is well known that `NaN != NaN`. In fact we could even have a keyword for it, or at the very least a selfless method to get it:
+
+	a = nan
+	a = num:nan
+
+Since it's meant as a convenient way to say "no valid number", I think a keyword is good, the number counterpart of nil. And in boolean conversion, it would evaluate to false.
+
+What about booleans? We could have a "not a boolean" value, and a `nab` keyword for it. Maybe it's overkill. And with the issue of it evaluating to false when converted to a boolean, that sounds stupid. Are there really situations where an optional boolean is needed? Could be. A method that checks validity of something can return true or false, or fail and need to report error. But then again, maybe status numbers or strings might be more adapted in that situation, or an additional boolean for status. I think we can do without the "not a boolean".
+
+What about texts? They are objects in implementation, but internalized and immutable, which makes them values, semantically. And as such, I decided to present them as values, like in Lua. Using nil, which means "invalid reference" would be wrong. There we might need a "not a text" value. Using a special value, such as the empty text, or "__INVALID" is not a good idea, it always comes back to bite you in the ass. Maybe a nice keyword to go with it:
+
+	str = nat	-- not a text!
+	if str then
+		-- never
+	end
+	if str == nat then
+		-- yep!
+	end
+	
+	str.print	-- runtime error!
+
+Since inside, it is in fact a reference type, the implementation will do NULL checks naturally, so having an invalid text shouldn't add too much of a problem. I'm not sure about the `nat` keyword though.
+
+The other primitive types (data, opaque, array) are reference types. `nil` is just fine for them. `nil` for objects is obviously fine. We're left with structs, which were always a bit of a hassle, because they are user-defined values, so they can be anything, and it's hard to propose general rules for them. But even with vectors or other things, I'd like to be able to ask:
+
+	if v then
+		v.angle.print
+	end
+
+And for instance in the Table implementation, there will be a sparse array of structs (which are pairs of hashed key and value). We will need to know then if a pair is present or not.
+
+For structs, maybe the boolean evaluation will simply be to call the `tobool` method. If it doesn't exist, whine. The compiler could provide a standard one that would for instance return the logical and of the boolean evaluation of all members. If every member is "false", whatever their type is, then the whole struct is.
+
+Of course that would work only for structs. Objects can have all the `tobool` methods they want, their boolean evaluation will always be a nil-check. If you want to have a notion of validity for the content of an object, a `valid` method would be the way to go.
+
+About the keywords again, what about `nonum`, `notext` and `nil`? That's a bit weird. Or selfless methods `num:nan`, `text:none`, `Class:nilref`. Meh, nothing is satisfying. A `nan` keyword was ok because the number is the base type of the whole language.
+
+I could go slightly crazy and make the fact that text is a reference type public. Then we could use `nil` for it as well. The comparison through `is` and `==` would be the same, because of internalization. It's not a bad idea to let users be aware of internals, when they are important.
+
+So we have value types:
+
+- number -> `nan` keyword, call to `isnan` for boolean evaluation
+- boolean -> no keyword, check `== true` for boolean evaluation (surprise...)
+- structs -> no keyword, call to `tobool` for boolean evaluation
+
+And all the reference types use the `nil` keyword with a bit of type inference for, and nil-check for boolean evaluation:
+
+- text
+- data
+- opaque
+- array
+- object
+
+So when we think about it, it's really just `nil` for reference types. And as a bonus, we provide a syntactic shortcut `nan` to represent invalid numbers.
+
+Sigh. One more change on what I thought was ready.
