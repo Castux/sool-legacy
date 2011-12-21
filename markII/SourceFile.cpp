@@ -28,7 +28,7 @@ bool SourceFile::Load(std::string path)
 	
 	int begin = 0;
 	
-	for(int i = 0 ; i < text.size() ; i++)
+	for(uint i = 0 ; i < text.size() ; i++)
 	{
 		if(text[i] == '\n')
 		{
@@ -45,11 +45,11 @@ bool SourceFile::Load(std::string path)
 	return true;
 }
 
-LineCol SourceFile::ToLineCol(int offset)
+LineCol SourceFile::ToLineCol(uint offset)
 {
 	LineCol tmp = {0,0};
 	
-	for(int i = 0 ; i < lines.size() ; i++)
+	for(uint i = 0 ; i < lines.size() ; i++)
 	{
 		if(offset <= lines[i].end)
 		{

@@ -61,13 +61,13 @@ std::string Diagnostic::ToString()
 	
 	if(position.file)
 	{
-		for(int l = beg.line ; l <= end.line ; l++)
+		for(uint l = beg.line ; l <= end.line ; l++)
 		{
 			std::string line = position.file->lines[l-1].Text();
 			
 			// Compute limits for marks
 			
-			int mstart, mend;
+			uint mstart, mend;
 			
 			if(l == beg.line)
 				mstart = beg.col;
@@ -83,7 +83,7 @@ std::string Diagnostic::ToString()
 			// Replace chars by spaces or marks, but leave tabs as tabs
 			
 			std::string marks;
-			for(int i = 0 ; i < line.size()-1 ; i++ )
+			for(uint i = 0 ; i < line.size()-1 ; i++ )
 			{
 				if(i+1 >= mstart && i+1 <= mend)
 				{
@@ -105,14 +105,14 @@ std::string Diagnostic::ToString()
 	return tmp.str();
 }
 
-std::string Diagnostic::C(std::string s, int col, int begin, int end)
+std::string Diagnostic::C(std::string s, uint col, uint begin, uint end)
 {
-	if(end == -1)
+	if(end == 0)
 		end = s.size();
 
 	std::stringstream tmp;
 	
-	for(int i = 0 ; i < s.size() ; i++)
+	for(uint i = 0 ; i < s.size() ; i++)
 	{
 		if(i+1 == begin)
 			tmp << "\x1b[1;" << 30 + col << "m";
@@ -126,14 +126,14 @@ std::string Diagnostic::C(std::string s, int col, int begin, int end)
 	return tmp.str();
 }
 
-std::string Diagnostic::Cd(std::string s, int col, int begin, int end)
+std::string Diagnostic::Cd(std::string s, uint col, uint begin, uint end)
 {
-	if(end == -1)
+	if(end == 0)
 		end = s.size();
 
 	std::stringstream tmp;
 	
-	for(int i = 0 ; i < s.size() ; i++)
+	for(uint i = 0 ; i < s.size() ; i++)
 	{
 		if(i+1 == begin)
 			tmp << "\x1b[" << 30 + col << "m";

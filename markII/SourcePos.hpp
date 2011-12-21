@@ -1,6 +1,8 @@
 #ifndef SOURCEPOS_HPP
 #define SOURCEPOS_HPP
 
+#include "common.hpp"
+
 namespace sool
 {
 	class SourceFile;
@@ -11,8 +13,8 @@ namespace sool
 		public:
 		
 		SourceFile *file;
-		int begin;
-		int end;
+		uint begin;
+		uint end;
 		
 		SourcePos();
 		SourcePos To(SourcePos other);

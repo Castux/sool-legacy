@@ -17,6 +17,7 @@ namespace sool
 		} Kind;
 		
 		static const char *GetTokenName(Kind k);
+		static const char *GetTokenString(Kind k);
 	};
 }
 

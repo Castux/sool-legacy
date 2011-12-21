@@ -4,6 +4,7 @@
 #include <string>
 #include <ostream>
 
+#include "common.hpp"
 #include "SourcePos.hpp"
 
 namespace sool
@@ -34,8 +35,8 @@ namespace sool
 		// Colorize with ANSI escapes, from column begin to end
 		// Defaults to the whole string
 		// Cd is for the dark colors
-		static std::string C(std::string s, int color, int begin = 1, int end = -1);
-		static std::string Cd(std::string s, int color, int begin = 1, int end = -1);
+		static std::string C(std::string s, uint color, uint begin = 1, uint end = 0);
+		static std::string Cd(std::string s, uint color, uint begin = 1, uint end = 0);
 	};
 	
 }

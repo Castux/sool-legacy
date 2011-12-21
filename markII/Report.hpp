@@ -16,7 +16,7 @@ namespace sool
 		
 		public:
 		
-		int numinfo,numwarning,numerror;
+		uint numinfo,numwarning,numerror;
 		
 		Report();
 		void Add(Diagnostic d);

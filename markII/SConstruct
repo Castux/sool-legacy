@@ -1,3 +1,3 @@
 sources = Glob("*.cpp")
 
-Program( target = "test", source = sources )
+Program( target = "test", source = sources, CCFLAGS = ['-Wall'] )

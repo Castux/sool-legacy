@@ -27,6 +27,6 @@ void Report::Add(Diagnostic d)
 
 void Report::Print()
 {
-	for(int i = 0 ; i < diags.size() ; i++)
+	for(uint i = 0 ; i < diags.size() ; i++)
 		std::cout << diags[i].ToString();
 }

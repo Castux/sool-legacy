@@ -22,7 +22,7 @@ int main()
 	std::cout << file.name << std::endl;
 	std::cout << file.text;
 	
-	for(int i = 0; i < file.lines.size(); i++)
+	for(uint i = 0; i < file.lines.size(); i++)
 	{
 		std::cout << i << ": " << file.lines[i].begin << ","
 			<< file.lines[i].end << "\t\t"
