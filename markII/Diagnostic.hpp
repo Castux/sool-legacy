@@ -26,6 +26,7 @@ namespace sool
 		
 		Diagnostic(std::string e, Severity s, std::string m, SourcePos p = SourcePos());
 		
+		// Pretty print the diagnostic with colors and all!
 		std::string ToString();
 		
 		private:

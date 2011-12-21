@@ -3,6 +3,7 @@
 #include "error.hpp"
 #include "SourceFile.hpp"
 #include "Diagnostic.hpp"
+#include "Report.hpp"
 
 using namespace sool;
 
@@ -30,12 +31,15 @@ int main()
 	LineCol lc = file.ToLineCol(375);
 	std::cout << lc.line << "," << lc.col << ": " << file.text[375] << std::endl;
 	
-	Diagnostic diag("test", Diagnostic::Warning, "lololol");
+	Diagnostic diag("test", Diagnostic::Error, "lololol");
 	diag.position.file = &file;
 	diag.position.begin = 700;
-	diag.position.end = 797;
+	diag.position.end = 713;
 	
-	std::cout << diag.ToString();
+	Report r;
+	r.Add(diag);
+	
+	r.Print();
 	
 	return 0;
 }

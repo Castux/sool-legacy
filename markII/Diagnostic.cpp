@@ -22,15 +22,15 @@ std::string Diagnostic::ToString()
 	
 	switch(severity)
 	{
-		case Diagnostic::Info:
+		case Info:
 			sev = "info";
 			col = 4;
 			break;
-		case Diagnostic::Warning:
+		case Warning:
 			sev = "warning";
 			col = 3;
 			break;
-		case Diagnostic::Error:
+		case Error:
 			sev = "error";
 			col = 1;
 			break;
