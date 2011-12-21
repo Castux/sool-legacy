@@ -4,6 +4,7 @@
 #include "SourceFile.hpp"
 #include "Diagnostic.hpp"
 #include "Report.hpp"
+#include "Token.hpp"
 
 using namespace sool;
 
@@ -40,6 +41,8 @@ int main()
 	r.Add(diag);
 	
 	r.Print();
+	
+	std::cout << Token::GetTokenName(Token::t_lessequal) << std::endl;
 	
 	return 0;
 }
