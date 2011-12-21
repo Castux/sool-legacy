@@ -64,9 +64,7 @@ Parser:
 	eg: types are directly internized and have no parse tree equivalent (position is kept by enclosing member/argument declaration if needed), binary operations are derivated from method call directly
 
 Type
-	ValueType (enum num, bool, byte, char, vec, tri, quad)
-	ArrayType
-	TableType
+	ValueType (enum num, bool, text, data, opaque)
 	ObjectType
 	MultiType
 	VoidType
@@ -111,8 +109,3 @@ Arguments derive from Local Variables, and are stuck directly into the methods' 
 Classes point at their parent, but inheritence is done only by lookup via Scope methods (no gathering of members and methods). At analysis, overriding methods and shared members get flags set.
 
 For tree modification, all analysis functions are outside the object, so it's enough to pass a reference to the pointer to the node, to be able to delete the old one and replace it by a new built.
-
-Start with a subset of the language, go horizontal:
-	- numbers, booleans
-	- arrays
-	- print method for them only

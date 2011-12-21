@@ -1,0 +1,3 @@
+sources = Glob("*.cpp")
+
+Program( target = "test", source = sources )
