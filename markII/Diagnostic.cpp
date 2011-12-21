@@ -17,33 +17,42 @@ std::string Diagnostic::ToString()
 	
 	tmp << emitter << " ";
 	
+	int col;
+	std::string sev;
+	
 	switch(severity)
 	{
 		case Diagnostic::Info:
-			tmp << "info";
+			sev = "info";
+			col = 4;
 			break;
 		case Diagnostic::Warning:
-			tmp << "warning";
+			sev = "warning";
+			col = 3;
 			break;
 		case Diagnostic::Error:
-			tmp << "error";
+			sev = "error";
+			col = 1;
 			break;
 	}
 	
-	tmp << ": ";
+	tmp << C(sev,col) << ": ";
 	
 	LineCol beg,end;
 	if(position.file)
 	{
 		position.ToLineCol(&beg,&end);
 		
-		tmp << position.file->name << ":";
-		if(beg.line == end.line)
-			tmp << beg.line;
-		else
-			tmp << beg.line << "-" << end.line;
+		tmp << Cd(position.file->name,5) << ":";
 		
-		tmp << ": ";
+		std::stringstream nums;
+		if(beg.line == end.line)
+			nums << beg.line;
+		else
+			nums << beg.line << "-" << end.line;
+		
+		
+		tmp << Cd(nums.str(),2) << ": ";
 	}
 	
 	tmp << message << std::endl;
@@ -56,10 +65,7 @@ std::string Diagnostic::ToString()
 		{
 			std::string line = position.file->lines[l-1].Text();
 			
-			// Text itself
-			tmp << line;
-			
-			// Marks
+			// Compute limits for marks
 			
 			int mstart, mend;
 			
@@ -73,22 +79,70 @@ std::string Diagnostic::ToString()
 			else
 				mend = line.size();
 			
+			// Create mark line
+			// Replace chars by spaces or marks, but leave tabs as tabs
+			
+			std::string marks;
 			for(int i = 0 ; i < line.size()-1 ; i++ )
 			{
 				if(i+1 >= mstart && i+1 <= mend)
 				{
-					tmp << (line[i] == '\t' ? '\t' : '^');
+					marks += (line[i] == '\t' ? '\t' : '^');
 				}
 				else
 				{
-					tmp << (line[i] == '\t' ? '\t' : ' ');
+					marks += (line[i] == '\t' ? '\t' : ' ');
 				}
 			}
 			
-			tmp << std::endl;
+			// Print them with color
+			
+			tmp << C(line,col,mstart,mend);
+			tmp << C(marks,col,mstart,mend) << std::endl;
 		}
 	}
 	
 	return tmp.str();
 }
 
+std::string Diagnostic::C(std::string s, int col, int begin, int end)
+{
+	if(end == -1)
+		end = s.size();
+
+	std::stringstream tmp;
+	
+	for(int i = 0 ; i < s.size() ; i++)
+	{
+		if(i+1 == begin)
+			tmp << "\x1b[1;" << 30 + col << "m";
+		
+		tmp << s[i];
+		
+		if(i+1 == end || i+1 == s.size())
+			tmp << "\x1b[0m";
+	}
+	
+	return tmp.str();
+}
+
+std::string Diagnostic::Cd(std::string s, int col, int begin, int end)
+{
+	if(end == -1)
+		end = s.size();
+
+	std::stringstream tmp;
+	
+	for(int i = 0 ; i < s.size() ; i++)
+	{
+		if(i+1 == begin)
+			tmp << "\x1b[" << 30 + col << "m";
+		
+		tmp << s[i];
+		
+		if(i+1 == end || i+1 == s.size())
+			tmp << "\x1b[0m";
+	}
+	
+	return tmp.str();
+}

@@ -27,6 +27,14 @@ namespace sool
 		Diagnostic(std::string e, Severity s, std::string m, SourcePos p = SourcePos());
 		
 		std::string ToString();
+		
+		private:
+		
+		// Colorize with ANSI escapes, from column begin to end
+		// Defaults to the whole string
+		// Cd is for the dark colors
+		static std::string C(std::string s, int color, int begin = 1, int end = -1);
+		static std::string Cd(std::string s, int color, int begin = 1, int end = -1);
 	};
 	
 }

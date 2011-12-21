@@ -32,8 +32,8 @@ int main()
 	
 	Diagnostic diag("test", Diagnostic::Warning, "lololol");
 	diag.position.file = &file;
-	diag.position.begin = 198;
-	diag.position.end = 249;
+	diag.position.begin = 700;
+	diag.position.end = 797;
 	
 	std::cout << diag.ToString();
 	
