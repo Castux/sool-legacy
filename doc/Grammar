@@ -92,6 +92,7 @@ basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
 				{ exp-tail }
 
 atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil' | 'nan'
+				'self' | 'super'
 
 vec-cons :=		'<' list-basic-exp '>'
 

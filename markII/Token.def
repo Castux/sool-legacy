@@ -49,6 +49,8 @@ KEYWORD(true)
 KEYWORD(false)
 KEYWORD(nil)
 KEYWORD(nan)
+KEYWORD(self)
+KEYWORD(super)
 
 // Miscellaneous
 KEYWORD(with)

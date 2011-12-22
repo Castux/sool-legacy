@@ -1,0 +1,56 @@
+#include "InterfaceAST.hpp"
+
+using namespace sool;
+
+TypeDecl::TypeDecl(Kind k, std::string n) : kind(k), name(n)
+{
+}
+
+TypeDecl::~TypeDecl()
+{
+	for(uint i = 0 ; i < params.size() ; i++)
+		delete params[i];
+}
+
+Member::Member() : shared(false), internal(false), type(NULL)
+{
+}
+
+Member::~Member()
+{
+	delete(type);
+}
+
+Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false)
+{
+}
+
+Method::~Method()
+{
+	for(uint i = 0 ; i < rtypes.size() ; i++)
+		delete rtypes[i];
+		
+	for(uint i = 0 ; i < args.size() ; i++)
+		delete args[i].type;
+}
+
+Class::~Class()
+{
+	delete type;
+	delete ptype;
+	
+	for(uint i = 0 ; i < members.size() ; i++)
+		delete members[i];
+		
+	for(uint i = 0 ; i < methods.size() ; i++)
+		delete methods[i];
+}
+
+Context::~Context()
+{
+	for(uint i = 0 ; i < classes.size() ; i++)
+		delete classes[i];
+		
+	for(uint i = 0 ; i < templates.size() ; i++)
+		delete templates[i];
+}

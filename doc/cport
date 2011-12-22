@@ -61,51 +61,65 @@ Parser:
 	
 	Parser is an external object that builds ast components from the outside and assembles them together. AST objects have only introspection stuff mostly. They lose most of the concrete syntax, retain only SourcePos'es for diagnostics.
 	AST objects are as simple as possible. Avoid data replication, prefer algorithmic lookup instead (optimise later).
-	eg: types are directly internized and have no parse tree equivalent (position is kept by enclosing member/argument declaration if needed), binary operations are derivated from method call directly
 
+During parsing, types are kept as direct equivalent of the syntax:
+
+TypeDecl
+	enum num, bool, text, data, opaque, named
+	"named" is for classes and structs
+	Also has a list of typedecls for template parameters, if any
+
+This object can be used to represent the name of a class and indexing (thanks to a "to string" method)
+
+Then at analysis, they are resolved and replaced by internized objects that point directly at the right classes
+	
 Type
-	ValueType (enum num, bool, text, data, opaque)
-	ObjectType
-	MultiType
+	ClassType (points to class, possibly instance of template or built-in)
+	MultiType (to deal with expr-list logics)
 	VoidType
+
+And a Class can be in fact the instanciation of a class template. A template is just a class with the information "generic types" filled with the names. When there is none, it's an actual class.
+
+Templates are stored in another place. Instantiated templates are however stored with the real classes. Whenever we encounter a templated type in code, we build the instantiation and add it to the list of classes (and run validation on it).
+At analysis, the instanciated classes wrap the functionality of the template they point to, replacing the parameters by actual types on the fly. Somehow. In templates, the parameter types stay as TypeDecl. Only in instances, they become actual types.
+
+Class
+	TemplateInstance (points at template and at the specialised types. really only shares interface with Class, implementation is very different)
 
 Expression is anything that has a type
 
 Expression
 	Cast
-	MethodCall
-		Explicit
+	Message
+		Explicit (including single 'Name', that can be replaced by LocalAccess)
 		Indexing
 		BinOp
 		UnOp
-	VariableAccess ( 'Name' | '.' 'Name' ) (points to an out of tree Variable. If analysis find that is is in fact an argumentless method call, replace)
+		(this might be an enum in a single MethodCall object)
 	Constant
 	Constructor
 	MultiExpression (keep it a single object to avoid duplicating the list logic. Used for assignment RHS, call arguments, return values)
 	ExpressionSelect (points at a multityped expression and has an index to chose which element. Used to wrap right side in assignments. Selecting in a MultiExpression should always return the smallest inner expression possible: "unfolding")
 
-Variable (Something you can read/write. Created with declarations, pointed at by accesses and assignments)
-	InstanceMember (has an object/expression, and points at Member)
-	Local
-		Argument
+Local
 
 Statement
 	(control structures)
 	Expression
-	MultiAssignment (the one we parse, then specialises into VariableAssignments and MethodCall's (for setter methods))
-	VariableAssignment (points at separate Variable)
+	MultiAssignment (the one we parse, then specialises into LocalAssignments and MethodCall's (for setter methods))
+	LocalAssignment (points at separate Local)
 
 A multiassignment is split into individual assignments (variable or setter call). The right-hand side is split using individual expressions, or ExpressionSelect to split return values of method calls. Each sub assignment is self sufficient.
 Method
-Member
-Scope
-	Class
-	Block
+Member (just a small struct in Class)
+Block
 
-Scopes have lists of variables and can look them up. Scopes point at outer scope for recursive lookup
+Blocks have lists of locals and can look them up. Scopes point at outer scope for recursive lookup
 
 Arguments derive from Local Variables, and are stuck directly into the methods' bodies. Only their types are gathered at method level for interface building. The "self" local is added automatically.
 
-Classes point at their parent, but inheritence is done only by lookup via Scope methods (no gathering of members and methods). At analysis, overriding methods and shared members get flags set.
+Classes point at their parent, but inheritence is done only by recursive lookup (no gathering of members and methods). At analysis, overriding methods and shared members get flags set.
 
 For tree modification, all analysis functions are outside the object, so it's enough to pass a reference to the pointer to the node, to be able to delete the old one and replace it by a new built.
+
+Context is the enclosing object for the internal representation of a program. It contains a list of classes, a list of templates

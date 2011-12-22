@@ -34,6 +34,8 @@ std::string Diagnostic::ToString()
 			sev = "error";
 			col = 1;
 			break;
+		default:
+			error("Diagnostic::ToString() - unknown severity");
 	}
 	
 	tmp << C(sev,col) << ": ";
