@@ -8,6 +8,10 @@ SourcePos::SourcePos() : file(NULL), begin(0), end(0)
 {
 }
 
+SourcePos::SourcePos(SourceFile *f, uint b, uint e) : file(f), begin(b), end(e)
+{
+}
+
 SourcePos SourcePos::To(SourcePos other)
 {
 	SourcePos temp;

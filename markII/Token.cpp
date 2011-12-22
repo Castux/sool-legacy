@@ -1,19 +1,19 @@
-#include "Token.hpp"
 #include "common.hpp"
+#include "Token.hpp"
 
 using namespace sool;
 
 static const char *tokenNames[] =
 {
 	#define TOKEN(x,y) #x,
-	#include "tokenkinds.def"
+	#include "Token.def"
 	#undef TOKEN
 };
 
 static const char *tokenStrings[] =
 {
 	#define TOKEN(x,y) y,
-	#include "tokenkinds.def"
+	#include "Token.def"
 	#undef TOKEN
 };
 

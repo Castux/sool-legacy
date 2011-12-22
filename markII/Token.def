@@ -1,0 +1,101 @@
+#define KEYWORD(x)		TOKEN(x,#x)
+
+// Coumpounds
+KEYWORD(class)
+KEYWORD(struct)
+KEYWORD(extend)
+
+// Member/method attributes
+KEYWORD(shared)
+KEYWORD(internal)
+
+// Methods
+KEYWORD(method)
+KEYWORD(selfless)
+KEYWORD(foreign)
+
+// Types
+KEYWORD(num)
+KEYWORD(bool)
+KEYWORD(text)
+KEYWORD(data)
+KEYWORD(opaque)
+KEYWORD(ref)
+
+// Final statements
+KEYWORD(break)
+KEYWORD(continue)
+KEYWORD(return)
+
+// Control structures
+KEYWORD(do)
+KEYWORD(while)
+KEYWORD(if)
+KEYWORD(then)
+KEYWORD(elseif)
+KEYWORD(else)
+KEYWORD(as)
+
+// Special operators
+KEYWORD(not)
+KEYWORD(to)
+KEYWORD(and)
+KEYWORD(or)
+KEYWORD(is)
+KEYWORD(isnot)
+
+// Atomic expressions
+KEYWORD(true)
+KEYWORD(false)
+KEYWORD(nil)
+KEYWORD(nan)
+
+// Miscellaneous
+KEYWORD(with)
+KEYWORD(end)
+
+// Punctuation
+// Digraphs first to help the the lexer
+
+#define PUNCT(x,y)		TOKEN(x,y)
+
+// Binary operators
+
+PUNCT(lessequal,		"<=")
+PUNCT(arrow,			"<~")
+PUNCT(moreequal,		">=")
+PUNCT(tildeequal,		"~=")
+PUNCT(equalequal,		"==")
+
+PUNCT(plus,				"+")
+PUNCT(minus,			"-")
+PUNCT(star,				"*")
+PUNCT(slash,			"/")
+PUNCT(percent,			"%")
+PUNCT(less,				"<")
+PUNCT(more,				">")
+PUNCT(caret,			"^")
+PUNCT(tilde,			"~")
+
+// Other punctuation
+PUNCT(colon,			":")
+PUNCT(semicolon,		";")
+PUNCT(pipe,				"|")
+PUNCT(lparens,			"(")
+PUNCT(rparens,			")")
+PUNCT(lbracket,			"[")
+PUNCT(rbracket,			"]")
+PUNCT(lcurly,			"{")
+PUNCT(rcurly,			"}")
+PUNCT(hash,				"#")
+PUNCT(equal,			"=")
+PUNCT(dot,				".")
+
+// Tokens with variable content, recognized programatically by the lexer
+#define VARTOKEN(x)		TOKEN(x,"")
+
+VARTOKEN(name)
+VARTOKEN(cname)
+VARTOKEN(number)
+VARTOKEN(string)
+VARTOKEN(unknown)

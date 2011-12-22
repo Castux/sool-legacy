@@ -17,6 +17,7 @@ namespace sool
 		uint end;
 		
 		SourcePos();
+		SourcePos(SourceFile *f, uint b, uint e);
 		SourcePos To(SourcePos other);
 		std::string Text();
 		

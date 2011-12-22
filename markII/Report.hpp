@@ -20,6 +20,7 @@ namespace sool
 		
 		Report();
 		void Add(Diagnostic d);
+		void Add(std::string e, Diagnostic::Severity s, std::string m, SourcePos p = SourcePos());
 		void Print();
 	};
 }

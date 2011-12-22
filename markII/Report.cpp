@@ -25,6 +25,11 @@ void Report::Add(Diagnostic d)
 	diags.push_back(d);
 }
 
+void Report::Add(std::string e, Diagnostic::Severity s, std::string m, SourcePos p)
+{
+	Add(Diagnostic(e,s,m,p));
+}
+
 void Report::Print()
 {
 	for(uint i = 0 ; i < diags.size() ; i++)

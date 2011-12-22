@@ -51,7 +51,7 @@ LineCol SourceFile::ToLineCol(uint offset)
 	
 	for(uint i = 0 ; i < lines.size() ; i++)
 	{
-		if(offset <= lines[i].end)
+		if(offset >= lines[i].begin && offset <= lines[i].end)
 		{
 			tmp.line = i + 1;
 			tmp.col = offset - lines[i].begin + 1;
