@@ -78,6 +78,7 @@ PUNCT(caret,			"^")
 PUNCT(tilde,			"~")
 
 // Other punctuation
+PUNCT(comma,			",")
 PUNCT(colon,			":")
 PUNCT(semicolon,		";")
 PUNCT(pipe,				"|")

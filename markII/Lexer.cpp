@@ -55,8 +55,7 @@ bool Lexer::LexOne()
 	else if(c == '"' || c == '\'')
 		return LexString();
 	
-	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
-	return false;
+	return LexPunctuation();
 }
 
 bool Lexer::LexName()
@@ -260,6 +259,49 @@ bool Lexer::LexString()
 	head = end;
 	
 	return true;
+}
+
+bool Lexer::LexPunctuation()
+{
+	// Try digraphs
+	for(uint i = Token::t_lessequal; i <= Token::t_equalequal; i++)
+	{
+		const char *toks = Token::GetTokenString((Token::Kind) i);
+		if(head[0] == toks[0] && head[1] == toks[1])
+		{
+			// Found it!
+			Token tok;
+			tok.kind = (Token::Kind) i;
+			tok.pos = SourcePos(file, head-bufstart, head+1-bufstart);
+			
+			tokens->push_back(tok);
+			head += 2;
+			
+			return true;
+		}
+	}
+	
+	// Not a digraph, try single punctionation signs
+	for(uint i = Token::t_plus; i <= Token::t_dot; i++)
+	{
+		const char *toks = Token::GetTokenString((Token::Kind) i);
+		if(head[0] == toks[0])
+		{
+			// Found it!
+			Token tok;
+			tok.kind = (Token::Kind) i;
+			tok.pos = SourcePos(file, head-bufstart, head-bufstart);
+			
+			tokens->push_back(tok);
+			head += 1;
+			
+			return true;
+		}
+	}
+	
+	// Le fail
+	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
+	return false;
 }
 
 void Lexer::AddError(std::string message, SourcePos position)

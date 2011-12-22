@@ -30,6 +30,7 @@ namespace sool
 		bool LexName();		// Name, CName and keywords
 		bool LexNumber();
 		bool LexString();
+		bool LexPunctuation();
 		
 		void AddError(std::string message, SourcePos position);
 	};
