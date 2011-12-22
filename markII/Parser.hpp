@@ -27,9 +27,11 @@ namespace sool
 		Class* ParseClass();
 		TypeDecl* ParseType();
 		TypeDecl* ParseClassName();
+		Method* ParseMethod();
 		
 		bool Expect(Token::Kind k);
 		bool Accept(Token::Kind k);
+		bool IsBinop(Token::Kind k);
 		
 		void AddError(std::string message, SourcePos position = SourcePos());
 		void AddInfo(std::string message, SourcePos position = SourcePos(), bool stop = false);

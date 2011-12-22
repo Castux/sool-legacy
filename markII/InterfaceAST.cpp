@@ -21,7 +21,7 @@ Member::~Member()
 	delete(type);
 }
 
-Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false)
+Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false), setter(false)
 {
 }
 
@@ -36,13 +36,13 @@ Method::~Method()
 
 bool Class::IsTemplate()
 {
-	return(parameters.size() > 0);
+	return(params.size() > 0);
 }
 
 Class::~Class()
 {
-	for(uint i = 0 ; i < parameters.size() ; i++)
-		delete parameters[i];
+	for(uint i = 0 ; i < params.size() ; i++)
+		delete params[i];
 	
 	delete ptype;
 	

@@ -76,6 +76,7 @@ namespace sool
 		{
 			TypeDecl *type;		// owned
 			std::string name;
+			SourcePos pos;
 		};
 		
 		// Interface
@@ -88,6 +89,7 @@ namespace sool
 		bool					rbyref;
 		
 		std::string				name;
+		bool					setter;
 		
 		std::vector<Argument>	args;
 		
@@ -116,7 +118,7 @@ namespace sool
 		bool	extend;
 		
 		std::string				name;
-		std::vector<TypeDecl*>	parameters;	// Optional template parameters, owned
+		std::vector<TypeDecl*>	params;		// Optional template parameters, owned
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
 		
