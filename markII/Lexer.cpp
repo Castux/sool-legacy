@@ -49,13 +49,11 @@ bool Lexer::LexOne()
 	char c = *head;
 	
 	if(isalpha(c) || c == '_')
-	{
 		return LexName();
-	}
 	else if(isdigit(c))
-	{
 		return LexNumber();
-	}
+	else if(c == '"' || c == '\'')
+		return LexString();
 	
 	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
 	return false;
@@ -160,9 +158,108 @@ bool Lexer::LexNumber()
 	return true;
 }
 
-bool Lexer::LexNumber()
+bool Lexer::LexString()
 {
+	char delim = *head;
+	const char *end = head + 1;
 	
+	std::string value;
+	
+	while(*end != delim)
+	{
+		// Complain at end of file
+		if(*end == 0)
+		{
+			AddError("unfinished litteral string started here:", SourcePos(file, head-bufstart, head-bufstart));
+				return false;
+		}
+		
+		// Deal with escapes
+		if(*end == '\\')
+		{
+			// Hex escape
+			if(end[1] == 'x')
+			{
+				std::string str(end+2, 2);
+				char *endptr;
+				char c = strtoul(str.c_str(), &endptr, 16);
+				
+				if(*endptr != 0)
+				{
+					AddError("malformed hexadecimal escape", SourcePos(file, end-bufstart, end+3-bufstart));
+					return false;
+				}
+				
+				value += c;
+				end += 4;
+			}
+			// Other escapes
+			else
+			{
+				switch(end[1])
+				{
+					case '0':
+						value += (char) 0;
+						break;
+					case 'a':
+						value += '\a';
+						break;
+					case 'b':
+						value += '\b';
+						break;
+					case 'e':
+						value += '\x1b';
+						break;
+					case 'f':
+						value += '\f';
+						break;
+					case 'n':
+						value += '\n';
+						break;
+					case 't':
+						value += '\t';
+						break;
+					case 'v':
+						value += '\v';
+						break;
+					case '\\':
+						value += '\\';
+						break;
+					case '"':
+						value += '"';
+						break;
+					case '\'':
+						value += '\'';
+						break;
+					default:
+						AddError("unknown escape", SourcePos(file, end-bufstart, end+1-bufstart));
+						return false;
+				}
+				
+				end += 2;
+			}
+		}
+		
+		// Other characters are added directly
+		value += *end;
+		end++;
+	}
+	
+	end++; // Eat the closing quote
+	
+	// Success, build token
+	Token tok;
+	tok.kind = Token::t_string;
+	tok.pos = SourcePos(file, head-bufstart, end-1-bufstart);
+	tok.string = value;
+	
+	// Memorise token
+	tokens->push_back(tok);
+	
+	// Finally, advance head
+	head = end;
+	
+	return true;
 }
 
 void Lexer::AddError(std::string message, SourcePos position)

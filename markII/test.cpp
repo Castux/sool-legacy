@@ -30,6 +30,8 @@ int main()
 		std::cout << diag.ToString();
 		if(t->kind == Token::t_number)
 			std::cout << t->number << std::endl;
+		else if(t->kind == Token::t_string)
+			std::cout << t->string << std::endl;
 	}
 	
 	lex.report.Print();
