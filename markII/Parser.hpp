@@ -28,6 +28,7 @@ namespace sool
 		TypeDecl* ParseType();
 		TypeDecl* ParseClassName();
 		Method* ParseMethod();
+		Member* ParseMember();
 		
 		bool Expect(Token::Kind k);
 		bool Accept(Token::Kind k);

@@ -92,12 +92,17 @@ Class* Parser::ParseClass()
 				delete c;
 				return NULL;
 			}
+			c->methods.push_back(m);
 		}
 		else
 		{
-			AddError("malformed class: expected member or method definition", head->pos);
-			delete c;
-			return NULL;
+			Member *m = ParseMember();
+			if(!m)
+			{
+				delete c;
+				return NULL;
+			}
+			c->members.push_back(m);
 		}
 	}
 	
@@ -436,6 +441,46 @@ Method* Parser::ParseMethod()
 		delete m;
 		return NULL;
 	}
+	
+	m->pos = start.To(head[-1].pos);
+	
+	return m;
+}
+
+Member* Parser::ParseMember()
+{
+	Member *m = new Member;
+	SourcePos start = head->pos;
+	
+	if(Accept(Token::t_shared))
+	{
+		m->shared = true;
+		m->shared_pos = head[-1].pos;
+	}
+	
+	if(Accept(Token::t_internal))
+	{
+		m->internal = true;
+		m->internal_pos = head[-1].pos;
+	}
+	
+	TypeDecl *t = ParseType();
+	if(!t)
+	{
+		AddInfo("in member definition");
+		delete m;
+		return NULL;
+	}
+	m->type = t;
+	
+	if(!Expect(Token::t_name))
+	{
+		AddInfo("in member definition started here:", start);
+		delete m;
+		return NULL;
+	}
+	m->name = head[-1].string;
+	m->name_pos = head[-1].pos;
 	
 	m->pos = start.To(head[-1].pos);
 	
