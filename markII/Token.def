@@ -95,10 +95,11 @@ PUNCT(equal,			"=")
 PUNCT(dot,				".")
 
 // Tokens with variable content, recognized programatically by the lexer
-#define VARTOKEN(x)		TOKEN(x,"")
+#define VARTOKEN(x,y)		TOKEN(x,y)
 
-VARTOKEN(name)
-VARTOKEN(cname)
-VARTOKEN(number)
-VARTOKEN(string)
-VARTOKEN(unknown)
+VARTOKEN(name,			"name")
+VARTOKEN(cname,			"class name")
+VARTOKEN(number,		"number")
+VARTOKEN(string,		"string litteral")
+VARTOKEN(unknown,		"unknown")
+VARTOKEN(eof,			"end of file")

@@ -32,3 +32,19 @@ const char *Token::GetTokenString(Kind k)
 	
 	return tokenStrings[k];
 }
+
+std::string Token::GetFancyName(Kind k)
+{
+	if(k >= NUM_TOKENS)
+		error("Token::GetTokenString() - unknown token kind");
+	
+	if(k >= t_name && k <= t_eof)
+		return tokenStrings[k];
+	else
+		return std::string("'") + tokenStrings[k] + "'";
+}
+
+std::string Token::FancyName()
+{
+	return GetFancyName(kind);
+}

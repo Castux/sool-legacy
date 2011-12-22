@@ -18,7 +18,7 @@ namespace sool
 		// Lexing context
 		const char			*bufstart;
 		const char			*head;
-		std::vector<Token>	*tokens;
+		std::vector<Token>	*tokens;	// not owned, will be passed to parser
 		
 		public:
 		Lexer(SourceFile *f);

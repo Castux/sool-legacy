@@ -31,7 +31,8 @@ namespace sool
 			t_text,
 			t_data,
 			t_opaque,
-			t_named
+			t_named,
+			t_unknown
 		} Kind;
 		
 		Kind					kind;
@@ -41,7 +42,7 @@ namespace sool
 		// Useful source code positions
 		SourcePos	name_pos;
 		
-		TypeDecl(Kind k, std::string n = "");
+		TypeDecl();
 		~TypeDecl();
 	};
 	
@@ -106,6 +107,7 @@ namespace sool
 		~Method();
 	};
 	
+	// Unified node for classes, structures and extensions
 	class Class : public AST
 	{
 		public:
@@ -113,7 +115,9 @@ namespace sool
 		bool	structure;
 		bool	extend;
 		
-		TypeDecl	*type;		// Own name as is parsed, owned
+		std::string				name;
+		std::vector<TypeDecl*>	parameters;	// Optional template parameters, owned
+		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
 		
 		std::vector<Member*> members;	//owned
@@ -123,12 +127,13 @@ namespace sool
 		SourcePos	name_pos;
 		SourcePos	pname_pos;
 		
+		bool IsTemplate();
 		~Class();
 	};
 	
 	
 	// Context is the top level object, it basically holds the global
-	// scope, that is, classes and templates
+	// scope. That is, classes and templates.
 	
 	class Context
 	{

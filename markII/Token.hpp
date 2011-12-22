@@ -21,6 +21,7 @@ namespace sool
 		
 		static const char *GetTokenName(Kind k);
 		static const char *GetTokenString(Kind k);
+		static std::string GetFancyName(Kind k);		// Formated for printed output (quotes around litteral ones)
 		
 		public:
 		
@@ -28,6 +29,8 @@ namespace sool
 		std::string		string;		// Only used in name, cname and string tokens
 		num				number;		// Only used in number tokens
 		SourcePos		pos;
+		
+		std::string FancyName();
 	};
 }
 

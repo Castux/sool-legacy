@@ -2,7 +2,7 @@
 
 using namespace sool;
 
-TypeDecl::TypeDecl(Kind k, std::string n) : kind(k), name(n)
+TypeDecl::TypeDecl() : kind(t_unknown)
 {
 }
 
@@ -34,9 +34,16 @@ Method::~Method()
 		delete args[i].type;
 }
 
+bool Class::IsTemplate()
+{
+	return(parameters.size() > 0);
+}
+
 Class::~Class()
 {
-	delete type;
+	for(uint i = 0 ; i < parameters.size() ; i++)
+		delete parameters[i];
+	
 	delete ptype;
 	
 	for(uint i = 0 ; i < members.size() ; i++)
