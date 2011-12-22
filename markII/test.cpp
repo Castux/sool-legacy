@@ -28,6 +28,8 @@ int main()
 		Token *t = &lex.tokens->at(i);
 		Diagnostic diag("test", Diagnostic::Info, Token::GetTokenName(t->kind), t->pos);
 		std::cout << diag.ToString();
+		if(t->kind == Token::t_number)
+			std::cout << t->number << std::endl;
 	}
 	
 	lex.report.Print();

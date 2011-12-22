@@ -1,3 +1,4 @@
+#include <sstream>
 #include "Lexer.hpp"
 
 using namespace sool;
@@ -36,7 +37,6 @@ bool Lexer::Lex()
 		bool success = LexOne();
 		if(!success)
 		{
-			AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
 			return false;
 		}
 	}
@@ -50,17 +50,18 @@ bool Lexer::LexOne()
 	
 	if(isalpha(c) || c == '_')
 	{
-		return LexNameOrKeyword();
+		return LexName();
 	}
 	else if(isdigit(c))
 	{
 		return LexNumber();
 	}
 	
+	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
 	return false;
 }
 
-bool Lexer::LexNameOrKeyword()
+bool Lexer::LexName()
 {
 	Token tok;
 	tok.kind = Token::t_unknown;
@@ -115,7 +116,53 @@ bool Lexer::LexNameOrKeyword()
 
 bool Lexer::LexNumber()
 {
-	return false;
+	const char *end = head;
+	num value;
+	
+	while(isalnum(*end))
+		end++;
+	
+	SourcePos pos(file, head-bufstart, end-1-bufstart);
+	
+	std::string str(head, end-head);
+	
+	// Try an integer
+	char *endptr;
+	unsigned long int i = strtoul(str.c_str(), &endptr, 0);
+	value = i;
+	
+	if(*endptr != 0)
+	{
+		// Failed, try double
+		double d = strtod(str.c_str(), &endptr);
+		value = d;
+		
+		if(*endptr != 0)
+		{
+			// Super failed, report
+			AddError("malformed number", pos);
+			return false;
+		}
+	}
+	
+	// Success, build token
+	Token tok;
+	tok.kind = Token::t_number;
+	tok.pos = pos;
+	tok.number = value;
+	
+	// Memorise token
+	tokens->push_back(tok);
+	
+	// Finally, advance head
+	head = end;
+	
+	return true;
+}
+
+bool Lexer::LexNumber()
+{
+	
 }
 
 void Lexer::AddError(std::string message, SourcePos position)

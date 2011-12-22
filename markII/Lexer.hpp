@@ -27,8 +27,9 @@ namespace sool
 		
 		private:
 		bool LexOne();
-		bool LexNameOrKeyword();
+		bool LexName();		// Name, CName and keywords
 		bool LexNumber();
+		bool LexString();
 		
 		void AddError(std::string message, SourcePos position);
 	};
