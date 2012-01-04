@@ -25,10 +25,10 @@ int main()
 	Lexer lex(&file);
 	lex.Lex();
 	
-    /*
+    
 	for(uint i = 0 ; i < lex.tokens->size() ; i++)
 	{
-		Token *t = &lex.tokens->at(i);
+		Token *t = &(*lex.tokens)[i];
 		Diagnostic diag("test", Diagnostic::Info, Token::GetTokenName(t->kind), t->pos);
 		std::cout << diag.ToString();
 		if(t->kind == Token::t_number)
@@ -36,7 +36,7 @@ int main()
 		else if(t->kind == Token::t_string)
 			std::cout << t->string << std::endl;
 	}
-	*/
+	
 	
 	lex.report.Print();
 	

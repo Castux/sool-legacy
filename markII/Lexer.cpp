@@ -41,10 +41,9 @@ bool Lexer::Lex()
 		}
 	}
 	
-	// Once we're done, add the EOF token
+	// Once we're done, add the EOF token, with no position
 	Token tok;
 	tok.kind = Token::t_eof;
-	tok.pos = SourcePos(file, head-bufstart, head-bufstart);
 	tokens->push_back(tok);
 	
 	return true;
