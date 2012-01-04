@@ -30,6 +30,7 @@ bool Lexer::Lex()
 			while(*head != '\n')
 				head++;
 			
+			head++;
 			continue;
 		}
 		
@@ -121,29 +122,52 @@ bool Lexer::LexNumber()
 	const char *end = head;
 	num value;
 	
-	while(isalnum(*end))
+	while(isalnum(*end) || *end == '.')
 		end++;
+	
+	if((end[-1] == 'E' || end[-1] == 'e') && (*end == '+' || *end == '-'))
+	{
+		end++;
+		while(isalnum(*end) || *end == '.')
+			end++;
+	}
 	
 	SourcePos pos(file, head-bufstart, end-1-bufstart);
 	
 	std::string str(head, end-head);
 	
-	// Try an integer
-	char *endptr;
-	unsigned long int i = strtoul(str.c_str(), &endptr, 0);
-	value = i;
-	
-	if(*endptr != 0)
+	// Try hexa number
+	if(str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
 	{
-		// Failed, try double
-		double d = strtod(str.c_str(), &endptr);
-		value = d;
+		char *endptr;
+		unsigned long int i = strtoul(str.c_str() + 2, &endptr, 16);
+		value = i;
 		
 		if(*endptr != 0)
 		{
-			// Super failed, report
-			AddError("malformed number", pos);
+			AddError("malformed hexadecimal number", pos);
 			return false;
+		}
+	}
+	else
+	{
+		// Try a decimal integer
+		char *endptr;
+		unsigned long int i = strtoul(str.c_str(), &endptr, 10);
+		value = i;
+		
+		if(*endptr != 0)
+		{
+			// Failed, try double
+			double d = strtod(str.c_str(), &endptr);
+			value = d;
+			
+			if(*endptr != 0)
+			{
+				// Super failed, report
+				AddError("malformed number", pos);
+				return false;
+			}
 		}
 	}
 	
