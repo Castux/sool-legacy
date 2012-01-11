@@ -7,7 +7,7 @@
 #include "Token.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
-
+#include "Validator.hpp"
 
 using namespace sool;
 
@@ -25,7 +25,7 @@ int main()
 	Lexer lex(&file);
 	lex.Lex();
 	
-    
+    /*
 	for(uint i = 0 ; i < lex.tokens->size() ; i++)
 	{
 		Token *t = &(*lex.tokens)[i];
@@ -36,7 +36,7 @@ int main()
 		else if(t->kind == Token::t_string)
 			std::cout << t->string << std::endl;
 	}
-	
+	*/
 	
 	lex.report.Print();
 	
@@ -47,6 +47,14 @@ int main()
 	parser.Parse();
 	
 	parser.report.Print();
+	
+	if(parser.report.numerror > 0)
+		return 1;
+	
+	Validator validator(parser.context);
+	validator.Validate();
+	
+	validator.report.Print();
 	
 	return 0;
 }

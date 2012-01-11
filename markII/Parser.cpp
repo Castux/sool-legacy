@@ -36,7 +36,7 @@ Class* Parser::ParseClass()
 			c->structure = true;
 			break;
 		case Token::t_extend:
-			c->extend = true;
+			c->extension = true;
 			break;
 		default:
 			error(std::string("Parser::ParseClass() - wrong class token: ") + head->FancyName());
@@ -54,7 +54,22 @@ Class* Parser::ParseClass()
 		return NULL;
 	}
 	
+	// Check that all template parameters are single names
+	
+	for(uint i = 0; i < t->params.size(); i++)
+	{
+		TypeDecl *par = t->params[i];
+		if(par->kind != TypeDecl::t_named || par->params.size() != 0)
+		{
+			AddError("invalid template parameter", par->pos);
+			delete c;
+			return NULL;
+		}
+	}
+	
 	c->name = t->name;
+	c->name_pos = t->name_pos;
+	c->fullname_pos = t->pos;
 	c->params = t->params;
 	t->params.clear();
 	delete t;

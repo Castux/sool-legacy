@@ -2,6 +2,7 @@
 #define INTERFACEAST_HPP
 
 #include <vector>
+#include <map>
 
 #include "common.hpp"
 #include "SourcePos.hpp"
@@ -37,7 +38,7 @@ namespace sool
 		
 		Kind					kind;
 		std::string				name;		// For t_named only. Use "#" for arrays
-		std::vector<TypeDecl*>	params;		// For template parameters, owned
+		std::vector<TypeDecl*>	params;		// For template parameters, owned. Only with t_named
 		
 		// Useful source code positions
 		SourcePos	name_pos;
@@ -109,16 +110,20 @@ namespace sool
 		~Method();
 	};
 	
+	class Type;
+	typedef std::map<std::string,Type*> TypeMap;
+	
 	// Unified node for classes, structures and extensions
 	class Class : public AST
 	{
 		public:
 		
 		bool	structure;
-		bool	extend;
+		bool	extension;
 		
-		std::string				name;
-		std::vector<TypeDecl*>	params;		// Optional template parameters, owned
+		std::string					name;
+		std::vector<TypeDecl*>		params;		// For templates only: template parameters, owned
+		TypeMap						instmap;	// For instances only: map to types
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
 		
@@ -127,15 +132,24 @@ namespace sool
 		
 		// Useful source code positions
 		SourcePos	name_pos;
+		SourcePos	fullname_pos;
 		SourcePos	pname_pos;
 		
-		bool IsTemplate();
+		
+		Class();
 		~Class();
+		
+		bool IsTemplate();
+		bool IsInstance();
+		
+		std::string Kind();
 	};
 	
 	
 	// Context is the top level object, it basically holds the global
 	// scope. That is, classes and templates.
+	
+	typedef std::map<std::string,Class*> ClassMap;
 	
 	class Context
 	{
@@ -143,6 +157,12 @@ namespace sool
 		
 		std::vector<Class*> classes;	// owned
 		std::vector<Class*> templates;	// owned
+		std::vector<Class*> extensions;	// owned
+		
+		ClassMap cmap;				// An indexing of classes and templates by name
+		
+		Class* Get(std::string);	// Find class or template by name
+		Class *Instantiate(Class *templ, std::vector<Type*> params);
 		
 		~Context();
 	};
