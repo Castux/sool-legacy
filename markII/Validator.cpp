@@ -180,11 +180,8 @@ Validator::~Validator()
 
 bool Validator::Validate()
 {
-	return ValidateInterfaces();
-}
-
-bool Validator::ValidateInterfaces()
-{
+	// Global stuff: check names, sort templates and extensions
+	
 	SortOutExtensions();
 	
 	if(!CheckClassNames())
@@ -192,18 +189,33 @@ bool Validator::ValidateInterfaces()
 	
 	SortOutTemplates();
 	
-	if(!CheckParentClasses())
+	if(!CheckTemplateParameters())
 		return false;
 	
-	AddInfo("classes");
+	// Deal with inheritence, in particular check circles
 	
-	for(uint i = 0; i < context->classes.size() ; i++)
-		AddInfo(context->classes[i]->name);
+	for(uint i = 0 ; i < context->classes.size() ; i++)
+	{
+		if(!CheckParentClass(context->classes[i]))
+			return false;
+	}
 	
-	AddInfo("templates");
+	// Validate interfaces
 	
-	for(uint i = 0; i < context->templates.size() ; i++)
-		AddInfo(context->templates[i]->name);
+	for(uint i = 0 ; i < context->classes.size() ; i++)
+	{
+		if(!ValidateInterface(context->classes[i]))
+			break;
+	}
+	
+	
+	// DEBUG
+	
+	for(uint i = 0 ; i < context->classes.size() ; i++)
+	{
+		Class *c = context->classes[i];
+		AddInfo(c->name + (c->pclass ? " : " + c->pclass->name : ""));
+	}
 	
 	return true;
 }
@@ -274,37 +286,111 @@ void Validator::SortOutTemplates()
 	context->classes = classes;
 }
 
-bool Validator::CheckParentClasses()
+bool Validator::CheckTemplateParameters()
 {
 	bool success = true;
 	
-	for(uint i = 0; i < context->classes.size(); i++)
+	for(uint i = 0 ; i < context->templates.size() ; i++)
 	{
-		Class *c = context->classes[i];
+		Class *t = context->templates[i];
 		
-		if(!c->ptype)
-			continue;
-		
-		// Deal with structs
-		if(c->structure)
+		for(uint j = 0 ; j < t->params.size() ; j++)
 		{
-			AddError("structures do not support inheritance", c->ptype->pos);
-			success = false;
-			continue;
+			TypeDecl *param = t->params[j];
+			
+			Class *other = context->Get(param->name);
+			if(other)
+			{
+				AddError("template parameter " + param->name + " shadows " + other->Kind() + " with the same name", param->pos);
+				AddInfo("declared here:", other->name_pos);
+				success = false;
+				continue;
+			}
 		}
-		
-		// Get an actual type from declaration
-		Type *t = Type::Get(c->ptype, &c->instmap);
-		
-		/*
-		// Check it is indeed a class (not a struct)
-		if(t->GetClass()->structure)
-		{
-			//
-		}*/
 	}
 	
 	return success;
+}
+
+bool Validator::ValidateInterface(Class *c)
+{
+	
+	// Don't do the work twice!
+	if(c->valid_interface)
+		return true;
+	
+	// Check for circular inheritance
+	if(c->validating_interface)
+	{
+		AddError("circular inheritance detected for class " + c->name, c->pname_pos);
+		
+		std::string tmp = c->name + ":";
+		Class *ptr = c->pclass;
+		
+		while(ptr != c)
+		{
+			tmp += ptr->name + ":";
+			ptr = ptr->pclass;
+		}
+		
+		tmp += c->name;
+		
+		AddInfo(tmp);
+		
+		return false;
+	}
+	
+	c->validating_interface = true;
+	
+	// If we have a parent, it should be validated before us, for inheritance
+	if(c->pclass)
+		ValidateInterface(c->pclass);
+	
+	// The rest
+	
+	c->valid_interface = true;
+	c->validating_interface = false;
+	return true;
+}
+
+bool Validator::CheckParentClass(Class *c)
+{
+	// This may create new classes by template instantiation
+	// but they're added at the end of the vector, and I use the
+	// dynamic "index + check size" kind of loop, so it's ok.
+	
+	// No parent!
+	if(!c->ptype)
+		return true;
+	
+	// Deal with structs
+	if(c->structure)
+	{
+		AddError("structures cannot inherit", c->ptype->pos);
+		AddInfo(c->name + " declared a structure here:", c->pos.To(c->name_pos));
+		return false;
+	}
+	
+	// Get an actual type from declaration
+	Type *t = Type::Get(c->ptype, &c->instmap);
+	if(!t)
+	{	AddError("something went awry");
+		return false;
+	}
+	
+	// Check it is indeed a class (not a struct)
+	Class *pc = t->GetClass();
+	if(pc->structure)
+	{
+		AddError("cannot inherit from a structure", c->ptype->pos);
+		AddInfo(t->signature + " declared a structure here:", pc->pos.To(pc->name_pos));
+		return false;
+	}
+	
+	// And save for future reference
+	c->pclass = pc;
+	
+	return true;
 }
 
 void Validator::AddError(std::string message, SourcePos position)

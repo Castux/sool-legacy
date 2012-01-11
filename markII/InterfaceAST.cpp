@@ -35,7 +35,8 @@ Method::~Method()
 		delete args[i].type;
 }
 
-Class::Class() : structure(false), extension(false), ptype(NULL)
+Class::Class() :	structure(false), extension(false), ptype(NULL), pclass(NULL), validating_interface(false),
+					valid_interface(false), valid_code(false)
 {
 }
 

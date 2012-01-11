@@ -81,13 +81,15 @@ namespace sool
 		
 		private:
 		
-		// First level validation: classes, method signatures and members
-		bool ValidateInterfaces();
-		
+		// Global work before doing individual classes
 		void SortOutExtensions();
 		bool CheckClassNames();		// Check unicity, and index by name
 		void SortOutTemplates();
-		bool CheckParentClasses();	// Check existence of parent class, and resolve type
+		bool CheckTemplateParameters();
+		
+		// Work on individual classes
+		bool ValidateInterface(Class *c);
+		bool CheckParentClass(Class *c);	// Check existence of parent class, and resolve type
 		
 		// Shortcuts
 		void AddError(std::string message, SourcePos position = SourcePos());

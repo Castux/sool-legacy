@@ -126,6 +126,7 @@ namespace sool
 		TypeMap						instmap;	// For instances only: map to types
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
+		Class		*pclass;	// Parent class, resolved, not owned
 		
 		std::vector<Member*> members;	//owned
 		std::vector<Method*> methods;	//owned
@@ -135,6 +136,10 @@ namespace sool
 		SourcePos	fullname_pos;
 		SourcePos	pname_pos;
 		
+		// Validation steps
+		bool validating_interface;		// circular inheritance guard
+		bool valid_interface;
+		bool valid_code;
 		
 		Class();
 		~Class();
