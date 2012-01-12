@@ -14,23 +14,23 @@ TypeDecl::~TypeDecl()
 		delete params[i];
 }
 
-Member::Member() : shared(false), internal(false), type(NULL)
+Member::Member() : shared(false), internal(false), tdecl(NULL), type(NULL)
 {
 }
 
 Member::~Member()
 {
-	delete(type);
+	delete(tdecl);
 }
 
-Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false), setter(false)
+Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false), setter(false), member(NULL)
 {
 }
 
 Method::~Method()
 {
-	for(uint i = 0 ; i < rtypes.size() ; i++)
-		delete rtypes[i];
+	for(uint i = 0 ; i < ret_decls.size() ; i++)
+		delete ret_decls[i];
 		
 	for(uint i = 0 ; i < args.size() ; i++)
 		delete args[i].type;
@@ -39,6 +39,15 @@ Method::~Method()
 Class::Class() :	structure(false), extension(false), ptype(NULL), pclass(NULL), validating_interface(false),
 					valid_interface(false), valid_code(false)
 {
+}
+
+Member *Class::GetMember(std::string name)
+{
+	MemberMap::iterator it = mem_map.find(name);
+	if(it != mem_map.end())
+		return it->second;
+	
+	return NULL;
 }
 
 Class::~Class()

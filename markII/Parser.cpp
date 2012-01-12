@@ -327,7 +327,7 @@ Method* Parser::ParseMethod()
 			delete m;
 			return NULL;
 		}
-		m->rtypes.push_back(t);
+		m->ret_decls.push_back(t);
 		
 		while(Accept(Token::t_comma))
 		{
@@ -338,7 +338,7 @@ Method* Parser::ParseMethod()
 				delete m;
 				return NULL;
 			}
-			m->rtypes.push_back(t);
+			m->ret_decls.push_back(t);
 		}
 	}
 	
@@ -491,7 +491,7 @@ Member* Parser::ParseMember()
 		delete m;
 		return NULL;
 	}
-	m->type = t;
+	m->tdecl = t;
 	
 	if(!Expect(Token::t_name))
 	{

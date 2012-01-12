@@ -25,14 +25,6 @@ bool Validator::Validate()
 	if(!CheckTemplateParameters())
 		return false;
 	
-	// Deal with inheritence, in particular check circles
-	
-	for(uint i = 0 ; i < context->classes.size() ; i++)
-	{
-		if(!CheckParentClass(context->classes[i]))
-			return false;
-	}
-	
 	// Validate interfaces
 	
 	for(uint i = 0 ; i < context->classes.size() ; i++)
@@ -49,6 +41,9 @@ bool Validator::Validate()
 		Class *c = context->classes[i];
 		AddInfo(c->name + (c->pclass ? " : " + c->pclass->name : ""));
 	}
+	
+	//for(TypeMap::iterator it = tforge.tmap.begin(); it != tforge.tmap.end(); it++)
+	//	AddInfo(it->second->signature);
 	
 	return true;
 }
@@ -147,7 +142,6 @@ bool Validator::CheckTemplateParameters()
 
 bool Validator::ValidateInterface(Class *c)
 {
-	
 	// Don't do the work twice!
 	if(c->valid_interface)
 		return true;
@@ -175,11 +169,21 @@ bool Validator::ValidateInterface(Class *c)
 	
 	c->validating_interface = true;
 	
+	// The validation
+	
+	if(!CheckParentClass(c))
+		return false;
+	
 	// If we have a parent, it should be validated before us, for inheritance
 	if(c->pclass)
 		ValidateInterface(c->pclass);
 	
-	// The rest
+	// Then members
+	
+	if(!TreatMembers(c))
+		return false;
+	
+	// Update the guards
 	
 	c->valid_interface = true;
 	c->validating_interface = false;
@@ -220,6 +224,59 @@ bool Validator::CheckParentClass(Class *c)
 	
 	// And save for future reference
 	c->pclass = pc;
+	
+	return true;
+}
+
+bool Validator::TreatMembers(Class *c)
+{
+	for(uint i = 0 ; i < c->members.size() ; i++)
+	{
+		Member *m = c->members[i];
+		
+		// Resolve type
+		m->type = tforge.Get(m->tdecl, &c->instmap);
+		if(!m->type)
+			return false;
+		
+		// Check name collision
+		Member *other = c->GetMember(m->name);
+		if(other)
+		{
+			AddError(std::string("member ") + m->name + " was already defined", m->name_pos);
+			AddInfo("here:", other->name_pos);
+			return false;
+		}
+		
+		// Fine, index it by name
+		c->mem_map[m->name] = m;
+		
+		// Add the accessor methods. FIXME! Must invent void type
+		
+		Method *setter = new Method;
+		
+		setter->internal = m->internal;
+		setter->selfless = m->shared;
+		setter->rtype = m->type;
+		setter->name = m->name;
+		setter->setter = true;
+		setter->member = m;
+		setter->signature = setter->name + ":";
+		
+		c->meth_map[setter->signature] = setter;
+		
+		Method *getter = new Method;
+		
+		getter->internal = m->internal;
+		getter->selfless = m->shared;
+		getter->rtype = m->type;
+		getter->name = m->name;
+		getter->setter = true;
+		getter->member = m;
+		getter->signature = setter->name + ":";
+		
+		c->meth_map[setter->signature] = setter;
+	}
 	
 	return true;
 }

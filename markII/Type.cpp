@@ -90,7 +90,7 @@ Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 	Class *c = v->context->Get(decl->name);
 	if(!c)
 	{
-		v->AddError("unknown template class " + decl->name, decl->name_pos);
+		v->AddError("unknown template " + decl->name, decl->name_pos);
 		return NULL;
 	}
 	
@@ -132,9 +132,7 @@ Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 	{
 		Type *t = Get(decl->params[i], instmap);
 		if(!t)
-		{
 			return NULL;
-		}
 		
 		params.push_back(t);
 	}

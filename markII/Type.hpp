@@ -39,6 +39,8 @@ namespace sool
 	
 	class TypeForge
 	{
+		friend class Validator;
+		
 		private:
 		
 		TypeMap tmap;				// Owned types, indexed by signature
@@ -54,7 +56,7 @@ namespace sool
 		// Return internized type from declaration or signature.
 		// Type resolution depends on which class we are in. Some "types" might just be
 		// template parameters. In an instance class, we need the instmap, which 
-		// maps these simple names to to types.
+		// maps these simple names to types.
 		
 		Type* Get(TypeDecl* decl, TypeMap *instmap);
 		Type* Get(std::string sig, TypeMap *instmap);

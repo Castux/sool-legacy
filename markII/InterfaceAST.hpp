@@ -55,7 +55,8 @@ namespace sool
 		bool		shared;
 		bool		internal;
 		
-		TypeDecl	*type;		// owned
+		TypeDecl	*tdecl;		// owned, type as parsed
+		Type		*type;		// shortcut to resolved type
 		std::string	name;
 		
 		// Initialization
@@ -87,13 +88,19 @@ namespace sool
 		bool					selfless;
 		bool					foreign;
 		
-		std::vector<TypeDecl*>	rtypes;		//owned
+		std::vector<TypeDecl*>	ret_decls;		//owned
+		Type					*rtype;
 		bool					rbyref;
 		
 		std::string				name;
 		bool					setter;
 		
 		std::vector<Argument>	args;
+		
+		std::string				signature;
+		
+		// In case it's automaticaly built from a member
+		Member					*member;
 		
 		// Body
 		// Block *body;
@@ -111,7 +118,15 @@ namespace sool
 		~Method();
 	};
 	
+	typedef std::map<std::string,Member*> MemberMap;
+	typedef std::map<std::string,Method*> MethodMap;
+	
 	// Unified node for classes, structures and extensions
+	// It serves for:
+	// - normal classes/structures
+	// - templates (in which case the 'params' vector is filled with TypeDecl's)
+	// - template instances (in which case 'params' is empty, and 'instmap' maps names to types)
+	
 	class Class : public AST
 	{
 		public:
@@ -119,15 +134,19 @@ namespace sool
 		bool	structure;
 		bool	extension;
 		
-		std::string					name;
+		std::string					name;		// In instances, this is the full name
 		std::vector<TypeDecl*>		params;		// For templates only: template parameters, owned
 		TypeMap						instmap;	// For instances only: map to types
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
 		Class		*pclass;	// Parent class, resolved, not owned
 		
-		std::vector<Member*> members;	//owned
-		std::vector<Method*> methods;	//owned
+		std::vector<Member*> members;	// owned
+		std::vector<Method*> methods;	// owned
+		
+		// Indexing by name or signature
+		MemberMap mem_map;
+		MethodMap meth_map;
 		
 		// Useful source code positions
 		SourcePos	name_pos;
@@ -137,6 +156,9 @@ namespace sool
 		bool validating_interface;		// circular inheritance guard
 		bool valid_interface;
 		bool valid_code;
+		
+		// Lookup
+		Member *GetMember(std::string name);
 		
 		Class();
 		~Class();
