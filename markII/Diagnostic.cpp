@@ -17,7 +17,7 @@ std::string Diagnostic::ToString()
 	
 	tmp << emitter << " ";
 	
-	int col;
+	int col = 0;
 	std::string sev;
 	
 	switch(severity)

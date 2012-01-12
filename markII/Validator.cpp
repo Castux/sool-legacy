@@ -15,6 +15,14 @@ Type::Type()
 {
 }
 
+void Type::Cleanup()
+{
+	TypeMap::iterator it;
+	
+	for(it = tmap.begin(); it != tmap.end(); it++)
+		delete it->second;
+}
+
 Type* Type::Get(std::string sig, TypeMap *instmap)
 {
 	TypeMap::iterator it = tmap.find(sig);
@@ -176,6 +184,7 @@ Validator::Validator(Context *c) : context(c)
 
 Validator::~Validator()
 {
+	Type::Cleanup();
 }
 
 bool Validator::Validate()
@@ -322,14 +331,14 @@ bool Validator::ValidateInterface(Class *c)
 	// Check for circular inheritance
 	if(c->validating_interface)
 	{
-		AddError("circular inheritance detected for class " + c->name, c->pname_pos);
+		AddError("circular inheritance detected for class " + c->name, c->ptype->pos);
 		
-		std::string tmp = c->name + ":";
+		std::string tmp = c->name + " child of ";
 		Class *ptr = c->pclass;
 		
 		while(ptr != c)
 		{
-			tmp += ptr->name + ":";
+			tmp += ptr->name + " child of ";
 			ptr = ptr->pclass;
 		}
 		

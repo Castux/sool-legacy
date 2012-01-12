@@ -20,6 +20,8 @@ namespace sool
 		Context				*context;	//not owned, will be passed to analyzer
 		
 		Parser(std::vector<Token> *t);
+		~Parser();
+		
 		bool Parse();
 		
 		private:

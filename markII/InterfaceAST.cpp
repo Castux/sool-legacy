@@ -161,4 +161,7 @@ Context::~Context()
 		
 	for(uint i = 0 ; i < templates.size() ; i++)
 		delete templates[i];
+		
+	for(uint i = 0 ; i < extensions.size() ; i++)
+		delete extensions[i];
 }

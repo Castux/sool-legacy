@@ -56,5 +56,9 @@ int main()
 	
 	validator.report.Print();
 	
+	// For now
+	
+	delete validator.context;
+	
 	return 0;
 }

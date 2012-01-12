@@ -7,6 +7,11 @@ Parser::Parser(std::vector<Token> *t) : tokens(t), noinfo(false)
 	head = &tokens->front();
 }
 
+Parser::~Parser()
+{
+	delete tokens;
+}
+
 bool Parser::Parse()
 {
 	context = new Context;

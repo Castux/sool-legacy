@@ -134,7 +134,6 @@ namespace sool
 		// Useful source code positions
 		SourcePos	name_pos;
 		SourcePos	fullname_pos;
-		SourcePos	pname_pos;
 		
 		// Validation steps
 		bool validating_interface;		// circular inheritance guard

@@ -1,3 +1,18 @@
+env = Environment()
+
+env['CXX'] = 'g++'
+env.Append(CXXFLAGS = '-Wall')
+
+btype = ARGUMENTS.get('build','debug')  # Defaults to debug
+
+if btype == 'debug':
+	env.Append(CXXFLAGS = '-g')
+elif btype == 'release':
+	env.Append(CXXFLAGS = ['-O3','-flto'])
+	env.Append(LINKFLAGS = ['-flto','-fuse-linker-plugin'])
+
+print("Build type: " + btype)
+
 sources = Glob("*.cpp")
 
-Program( target = "test", source = sources, CCFLAGS = ['-Wall', '-g'] )
+env.Program(target = 'test', source = sources)

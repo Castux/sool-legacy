@@ -24,6 +24,8 @@ namespace sool
 		
 		static Type *Internize(Type *t);	// The passed object is deleted if one with same signature is already there
 		
+		static void Cleanup();				// Free types at program end, called by Validator destructor
+		
 		public:
 		
 		// Return internized type from declaration or signature.
