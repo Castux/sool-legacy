@@ -6,6 +6,7 @@
 
 #include "common.hpp"
 #include "SourcePos.hpp"
+#include "Type.hpp"
 
 // Here we define the AST objects for the interfaces
 
@@ -109,9 +110,6 @@ namespace sool
 		Method();
 		~Method();
 	};
-	
-	class Type;
-	typedef std::map<std::string,Type*> TypeMap;
 	
 	// Unified node for classes, structures and extensions
 	class Class : public AST

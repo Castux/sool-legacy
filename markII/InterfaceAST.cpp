@@ -1,5 +1,6 @@
 #include "InterfaceAST.hpp"
 #include "Validator.hpp"
+#include "Type.hpp"
 
 using namespace sool;
 
