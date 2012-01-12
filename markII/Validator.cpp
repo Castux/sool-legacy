@@ -3,15 +3,12 @@
 
 using namespace sool;
 
-Validator::Validator(Context *c) : context(c)
+Validator::Validator(Context *c) : tforge(this), context(c)
 {
-	// Give handle to type system
-	Type::v = this;
 }
 
 Validator::~Validator()
 {
-	Type::Cleanup();
 }
 
 bool Validator::Validate()
@@ -208,11 +205,9 @@ bool Validator::CheckParentClass(Class *c)
 	}
 	
 	// Get an actual type from declaration
-	Type *t = Type::Get(c->ptype, &c->instmap);
+	Type *t = tforge.Get(c->ptype, &c->instmap);
 	if(!t)
-	{	AddError("something went awry");
 		return false;
-	}
 	
 	// Check it is indeed a class (not a struct)
 	Class *pc = t->GetClass();

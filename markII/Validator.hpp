@@ -4,6 +4,7 @@
 #include "common.hpp"
 #include "InterfaceAST.hpp"
 #include "Report.hpp"
+#include "Type.hpp"
 
 namespace sool
 {
@@ -13,11 +14,12 @@ namespace sool
 	
 	class Validator
 	{
-		friend class Type;
+		friend class TypeForge;
 		
 		public:
 		
 		Report report;
+		TypeForge tforge;
 		Context *context;	// not owned, will be passed to codegen
 		
 		Validator(Context *c);

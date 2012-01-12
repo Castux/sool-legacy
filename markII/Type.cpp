@@ -6,14 +6,21 @@
 
 using namespace sool;
 
-TypeMap Type::tmap;
-Validator *Type::v;
+Type::Type(Class* cl) : c(cl)
+{
+	signature = c->name;
+}
 
-Type::Type()
+Class *Type::GetClass()
+{
+	return c;
+}
+
+TypeForge::TypeForge(Validator *validator) : v(validator)
 {
 }
 
-void Type::Cleanup()
+TypeForge::~TypeForge()
 {
 	TypeMap::iterator it;
 	
@@ -21,7 +28,7 @@ void Type::Cleanup()
 		delete it->second;
 }
 
-Type* Type::Get(std::string sig, TypeMap *instmap)
+Type* TypeForge::Get(std::string sig, TypeMap *instmap)
 {
 	TypeMap::iterator it = tmap.find(sig);
 	
@@ -37,7 +44,7 @@ Type* Type::Get(std::string sig, TypeMap *instmap)
 	return NULL;
 }
 
-Type* Type::Get(TypeDecl* decl, TypeMap *instmap)
+Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 {
 	// Simple case: not a template, just get the class
 	
@@ -70,7 +77,7 @@ Type* Type::Get(TypeDecl* decl, TypeMap *instmap)
 		}
 		
 		// Otherwise, ok. Build type.
-		Type *t = new ClassType(c);
+		Type *t = new Type(c);
 		Type *intern = Internize(t);
 		
 		return intern;
@@ -138,13 +145,13 @@ Type* Type::Get(TypeDecl* decl, TypeMap *instmap)
 	
 	// Finally build the type
 	
-	Type *t = new ClassType(inst);
+	Type *t = new Type(inst);
 	Type *intern = Internize(t);
 	
 	return intern;
 }
 
-Type *Type::Internize(Type *t)
+Type *TypeForge::Internize(Type *t)
 {
 	TypeMap::iterator it = tmap.find(t->signature);
 	
@@ -158,14 +165,4 @@ Type *Type::Internize(Type *t)
 		delete t;
 		return it->second;
 	}
-}
-
-ClassType::ClassType(Class* c) : cl(c)
-{
-	signature = c->name;
-}
-
-Class *ClassType::GetClass()
-{
-	return cl;
 }
