@@ -1,0 +1,311 @@
+In The Compiler We Trust
+========================
+
+My implementation is going well. The lexer was easy, the hand-written descent recursive parser is OK so far, and I even started the semantic analyser for the classes' interfaces. Even using C++ has been somewhat pleasant. I suppose that the force of habit smoothes the rough edges even in a hate-hate relationship.
+
+Meanwhile, I'm thinking of the runtime and how the code generator will plug it in, and some potential performance issues. In particular, the fact that the only number is a floating-point double.
+
+Array access using doubles
+--------------------------
+
+All number are doubles. However, it is clear that arrays can only be accessed using integers. Therefore, somewhere on the way, a conversion will occur:
+
+	T *access(Array *a, double i)
+	{
+		int i2 = i;
+		return a[i2];
+	}
+
+Naturally, on modern machines, it comes down to a single processor instruction. For instance on a x86-64 (or an x86 with SSE2 instruction set):
+
+	cvttsd2si %xmm0,%eax
+
+That is: "ConVerT Scalar Double to Signed Integer", and it takes the double from a float register, and saves it to an integer register. Easy enough.
+
+But is it so simple? What if the double does not represent an integer? What happens to:
+
+	blah = bloh[4.5]
+
+Should the number silently rounded, or should a test happen? And if it does reveal to be non-integer, should it result in a runtime error, or a simple nil value? Now we know that sool will be a memory safe language (that's the plan anyway), so there will be boundary checking as well, and likewise, should it fail silently and return an invalid value, or result in error?
+
+Rounding, testing integer-ness (integrism?), testing boundaries, all these add additional instructions and branches. How slow will that be?
+
+In particular, what happens in loops?
+
+	for i = 1,arr.length do
+		arr[i].print
+	end
+
+Eek... Not only incrementating and loop-testing a double is slower than for an integer, but the access `arr[i]` at each step might end up being hellishly slow. Well, not *hellishly*, after all, that's pretty much what happens in Lua, but still. It wouldn't compare to C/C++.
+
+Enters... The generic `for`!
+----------------------------
+
+Inspired on Lua (and pretty much any high level language), the generic `for` is based on an object implementing a certain interface, that allows the compiler to directly write code to iterate over it.
+
+Here is more or less what I mean:
+
+	for elem in expr do
+		-- meh
+	end
+
+is equivalent to:
+
+	do
+		obj = expr	-- evaluate it only once
+		iter,elem = obj.next(nil)
+		while iter do
+			-- meh
+			iter,elem = obj.next(iter)
+		end
+	end
+
+Initialize the iteration by passing `nil` to a `next` method (it could be any name). It returns the first "index" (whatever that means for this container) and the first element. Then subsequent calls to `next` pass the current index, and expect the next one and the next element. Once there is no more, `next` returns `nil`, and the loop exits.
+
+Lua works a bit more fancily by using closures and coroutines, so it actually returns an iterating function, instead of using a method of the object, but the idea is the same. Ruby would even go one step further, and you'd write the body of the loop itself as an anonymous function, and pass it to the object which would then apply it to each of its elements.
+
+But keeping it simple, here the object is responsible for being able, given an iterator, to return the next one. That iterator can be anything. A simple index for an array, a pointer to a node for a linked list or a tree, or even a reference to some internal system that keeps track of iterations, if need be.
+
+For an array of Things, the `next` method could look essentially like this:
+
+	method num,Thing next(num it)
+		if not it then
+			it = 1
+		else
+			it = it + 1
+		end
+		
+		if it <= length and it > 0 then
+			return it,elements[it]
+		else
+			return nil,nil
+		end
+	end
+
+It's all there: the initialization (set to 1) or the increment (add 1), and the boundary check (return the element and the iterator if we're still in, or `nil` otherwise).
+
+Now wow, this is called once at the beginning, and once at the end of each iteration of the loop. Isn't that a *lot* heavier than:
+
+	for(i = 1; i <= length; i++)
+	{
+		elem = elements[i]
+		// meh
+	}
+
+Well yes and no. Yes, because it's one function call, and two branches based on two comparisons, and that once per loop, instead of one comparison and one branch. No, because compilers are awesome.
+
+Compilers optimize. They inline small functions such as `next`, they make use of hard coded values as in `next(nil)`, they rearrange instructions to avoid testing the same thing twice, etc.
+
+At the end, the code generated is slightly longer for the `next` version, but it executes only very slightly slower. As long as we enable optimisations (possibly even at link time, to include the standard runtime), the compiler will bless us with its awesomeness.
+
+And the very big advantage is that the user doesn't need to know the internals of the container to successfully iterate on it. You have to assume that for most things (except arrays), random access will be slow, and therefore a numeric loop will be the worst idea.
+
+Encouraging the use of the generic loop is good. Let the container worry about how it works. Anything that implements `next` will be usable in such a loop. It doesn't even have to be a container: data streams could work the same way.
+
+Opacity is good for you
+-----------------------
+
+Now I mentionned that using doubles as iterators might add to the slowness, but who says we need them? The arrays will be implemented either in C, or directly in LLVM data structures by the compiler. The `iter` variable returned by `next` will be hidden in the loop anyway. It could very well be an opaque.
+
+The opaque type is meant to hold pointers to things outside sool (most likely allocated by a C library). But pointers and integers are just exactly the same thing, especially once compiled to machine code. So, there's our integer index! The array will be built-in as such:
+
+	method opaque,Elem next(opaque)
+
+and the user will see nothing. The `next` implementation I wrote earlier would be fairly similar, but using integers instead of doubles. And all this will go through the magic spiral of optimized compilation, to give loops that work almost as well as C loops. But with the magic of lighter syntax, and of course, built-in boundary checks:
+		
+	for elem in array do
+		-- meh
+	end
+	
+	for(int i = 1 ; i <= array.length ; i++)
+	{
+		Elem elem = array.data[i];
+		/* meh */
+	}
+
+And the added bonus of unified syntax and general simplicity for all kind of containers and objects.
+
+Note that in these examples, I never used the index itself. This is why objects can define several `next` methods, that can return different numbers of things:
+
+	for i,elem in array do
+		-- elem is array[i]
+	end
+
+Of course in that case, `i` will be of type `num`, so there will be conversion to double and the associated instructions if using it to set elements in the array or access it. But hey, better than nothing! I many cases, containers are used in a "add-stuff, iterate over all" manner. And anyway, we shouldn't get too psychotic about doubles being slow. They are *slower* than integers. Most of the time, we probably cannot note the difference, as the bodies of the loops are far preponderant compared to the loop logic itself.
+
+Multiple iterators
+------------------
+
+So far, I assumed that objects implemented the `next` method themselves, as "the normal way" to iterate over them. But that doesn't prevent anyone to build a separate iterator object, that would do things diferently:
+
+	for elem in array.reverse do
+	
+	end
+
+If `array.reverse` returns an object that answers to `next`, all is fine, we will iterate over *that* object, and it will glue us to the array.
+	
+	class #T
+		method ArrayReverseIterator|T reverse()
+			return ArrayReverseIterator|T with
+				array = self
+			end
+		end
+	end
+	
+	struct ArrayReverseIterator|T
+		
+		#T array
+		
+		method num,elem next(num it)
+			if not it then
+				it = array.size
+			else
+				it = it - 1
+			end
+			
+			if it > 0 and it <= array.size then
+				return it,array[it]
+			else
+				return nil,nil
+			end
+		end
+	end
+
+Thar she blows! A reverse iterator over an array. Now, you say, that *can't* possibly compete in term of speed with:
+
+	for(i = array.length; i >= 1; i--)
+		/* array.data[i] */
+	end
+
+Well... It's a struct, so it's really just the one variable in it, which happens to be the same as the array we are interested in. And, well, appart from the call to `reverse`, which happens once, and really just does almost nothing (and will therefore be inlined), the rest is exactly similar to what we've seen earlier. All of this should get happily inlined and optimized.
+
+In fact, this is so pleasant, that I wonder if a container should have itself a `next` method. Maybe all iterations should be done through external objects. Remember how I once wrote that it was evil? Well, it does make sense too. An "iterator" iterates over a collection.
+
+Then if a collection does indeed implement a `next` method, it could be only to select the most likely iterator, so that we don't have to write:
+
+	for elem in array.forward do
+
+However, it does bring the issue of implementation hiding: if a complex container wants to keep its internals private, and be accessed only through its methods, it cannot have external iterators. Otherwise we'd need some kind of friendship system like in C++, but that gets largely over the limit of acceptable features for sool.
+
+Likewise, I said we'd need to allow other methods like `next2`, `next3`, to have different possibilities for return values (element, index + element, key + value + something else, who knows...), and be chosen depending on the number of names before the `in`, so that we don't have to use intermediate structs or objects:
+
+	for pair in hashtable do
+		-- pair.key
+		-- pair.value
+	end
+
+That could totally be achieved by external iterators (and default iterators) as well:
+
+	for k in hash.keys do
+	for v in hash.values do
+	for k,v in hash do
+
+Numeric for, goodbye?
+---------------------
+
+Now we know that generic for loops can be just as efficient as numeric ones. Do we still need them, then? Obviously we need to loop around with numbers, since that's the absolute base of computers. But we could very well use a generic for, on numbers...
+
+	for i in 100 do				-- is it clear that 'i' will go from 1 to 100?
+	for n in 99.to(456) do		-- not very pretty, but clear
+	for m in 100.down do		-- down to 1 or 0, or -infinity?
+								-- also note that at the moment, the lexer
+								-- cannot handle a dot after a number...
+
+I honestly never really use other steps than 1 or -1, but you could have another argument to `to`. And the direction would be trivially deduced from the values themselves.
+
+The alternative would be to allow more than one value on the right. If there are two, we assume it's numeric, and we try to call the operator `+` with the argument `1` until there is equality. It would be a "generic numeric", since any class `T` that answers to `+:num` and `==` (with the type of the second) could use it.
+
+	for n in 130,250 do
+	for wha in te,ver do
+
+If there are three values, we call `+` with the third one as argument (the "step"), until there is equality with the second one. There, it all depends on the types of the objects. but if the first one has the right methods, why not...
+
+On the one hand, I'd like to simplify as much as possible. So only one kind of for loop would be nice. Plus, combined with the iterator style of programming, the whole thing is rather elegant.
+
+On the other hand, it forces numbers to have methods for iterators, which looks a bit ugly (like Ruby), so, that's a bit less elegant. But actually more clear than just comma separated values, come to think of it.
+
+And we can also build specialised classes and struct for complex iterations over numbers, if need be: ranges, sets, etc.
+
+I think that's decided. The generic for shall prevail!
+
+Opaque, the fake integer?
+-------------------------
+
+Ha. The previous thing about using opaque to hide an unsigned int manipulated by a C library made me think. I've been rambling a *lot* about the fact that, like its mentor Lua, sool would have only a double type for numbers. And the fact that fatally, that would make some things slower. But that this wasn't too bad, because the most sensitive things (like array iteration) could be done in low level, exposing integers as opaques.
+
+Opaques, we can't do anything to them, that's the whole point. They were created because of the existence of the foreign function interface, to interact with C in a safe manner (storing pointers in anything else than a pointer is a bad idea).
+
+You can't call methods on opaques, and since that's pretty much the only thing you can do *to* objects, that's fairly limited. What you can to *with* them however, is compare them, store them, and pass them around. And occasionally, cast them to sool objects, with lots of built-in checks before.
+
+But... well... Opaques are values (we refuse to consider that there might be an object at the other end). Values are safe to play with. We could easily convert them to numbers, print them. Increment them?
+
+Well, that's the thing. They're called "opaque" exactly because we're not supposed to know what's in them. We're only supposed to keep them warm before giving them back to a C function. If we decide to acknowledge that they are, in fact, integers, then suddenly fan hits poop. Give them one or two methods, and all the others will come running:
+
+If we give them pointer arithmetics (addition and substraction), because after all, they're meant to be pointers, why not give the rest of the arithmetics (multiplication, integral division, modulo)?
+
+And if we can test them for equality, well, why not give them also the full range of comparisons (`<, >, <=, >=`)?
+
+And well, before we know it, we actually have a full integer type in sool. And since we do, ha, let's give it bitwise operations as well.
+
+Now, the real question is "would it be so bad"? After all, it's barely much more work (just plug in a few more code generation routines). My dilemma is more conceptual. If we have a real integer type, then there's no reason to use it for, say, indexing in arrays and loops.
+
+What about number literals? Should they be integers, or doubles by default?
+
+	method youpi()
+		a = 5		-- what type is a?
+		b = a/2		-- is b equal to 2.5 or 2?
+	end
+
+And since we have now two ways to represent round numbers, which one is advisable? If I'm counting sheep, I really don't need fractions of them. If I'm counting pixels, well, they should be integral and positive, but well, it's also a unit of length in screen space, and it wouldn't actually hurt to have speeds in pixels per second, and distances between arbitrary points end up being irrational anyway (hello Pythagoras and square roots).
+
+Actually the biggest thing I'm worried about is that by definition, opaques are of the size of a pointer of the platform. That varies mostly between 32 and 64 bits. Which means that a program behavior will change depending on the platform, if relying on opaques for math. When counting objects or indexing them in an array, the difference should never really appear. The smallest object on which issues would arise would be to have a chunk of more than 4 GB of data in memory, which is quite unlikely. On the other hand, math computations that go over 2^32 are quite common.
+
+Therefore, these integers would really not be meant for holding arbitrary numbers. They would be meant for:
+
+- holding pointers
+- counting elements in collections
+- indexing in collections
+- counting iterations in loops
+
+And as such, they shouldn't be advertised as numbers. A bit like the `size_t` type in C. The question of the name follows. "Opaque" meant "something that you shouldn't worry about". "Index" is a bit restrictive. "Count" as well. "Integer" doesn't carry the fact that it could be pointers, but that would be a concern only when dealing with the FFI, which implies knowing what you're doing anyway.
+
+I'd like to call it something random, like a `gizmo` or a `blob`. But then I'd always have to say, "well, a blob is really an integer, but it can also be a pointer, so I couldn't call it either".
+
+On the other hand, Wiktionary says "A shapeless or amorphous mass; a vague shape or amount, especially of a liquid or semisolid substance; a clump, group or collection that lacks definite shape."
+
+It says "shapeless", that's for opacity (we don't know what's pointed to), "a vague amount", that's for count, and it also talks of "collection". That could work. I like that it's a rather strange word, it forces second thoughts about it. If I need a number, I'll use a `num`. `blob` is for a very specific purpose, the counting and indexing of things, so don't mess with it.
+
+Random word, you might become a keyword in sool! This language lacked a little touch of fun. Then again, maybe it's just dumb to call in integer a "blob".
+
+And blobs are not meant to be created by humans anyway: they come naturally when using generic for loops and iterators. They grow when adding things to containers. The few moments when you need to write them directly is when dealing with size:
+
+	array = #Object(100)		-- woo, 100 is a blob!
+	if array.size > 200 then	-- 200 should also be a blob
+
+That tells us that the compiler will have to do a bit of type inferring for number literals that look integral. And some reasonable amount of coercion:
+
+	c = array.size				-- that's definitely a blob
+	d = c.exp					-- hey, blobs can't do exponentials!
+								-- (but we know what you mean)
+
+Finally, goes the question of the invalid blob. Like numbers have `nan` and all references have `nil`. In the first place, blobs were meant for addresses. Thereby, the natural invalid would be 0 (NULL in C), and could very well be called `nil` in sool, since blobs are really pointers.
+
+But blobs are *really* integers, and in many cases, 0 is a perfectly valid value, like we discussed before. However, this goes *very* well with the fact that arrays are indexed from 1. 0 is not only an invalid address, it's also an invalid index. Megacool. Sadly, 0 is often a valid size (by that I mean a valid information about the size of something). If you ask me how many monkey heads I'd like in my soup, "0" really means "I don't want any", not "I cannot answer your question".
+
+Therefore, in terms of boolean evaluation, we could decide that a blob of 0 is false and the rest true:
+
+	if container.size then
+		-- it has things!
+	end
+
+Also, the generic for loop uses the truth value of the iterator variable to know when to stop. Since for arrays, the iterator would be a blob, and the index 0 is invalid, everything works fine. Of course the description I gave of the for loop was only pseudocode equivalent. The compiler can very well say that for blobs, the stopping condition is `iterator == 0`, not "boolean evalution gives false".
+
+It's also not very clear in any other use, and saves only a little typing. Blobs being very strange unshapely creatures, maybe they can't be evaluated for truth. They are neither true nor false, they just are.
+
+	if container.size > 0 then		-- makes sense.
+	if not container.empty then		-- we also like meaningful words.
+	if container.size then			-- ERROR! Leave the blobs alone!
+
+OK. Maybe I've gone crazy for good.
+
+Long live the blobs!
