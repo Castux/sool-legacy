@@ -107,6 +107,8 @@ bool Validator::CheckTemplateParameters()
 		{
 			std::string param = t->params[j];
 			
+			// Param - class conflict
+			
 			Class *other = context->Get(param);
 			if(other)
 			{
@@ -114,6 +116,22 @@ bool Validator::CheckTemplateParameters()
 				AddInfo("declared here:", other->name_pos);
 				success = false;
 				continue;
+			}
+			
+			// Param - param conflict
+			
+			for(uint k = 0 ; k < j ; k++)
+			{
+				if(param == t->params[k])
+				{
+					AddError("template parameter " + param + " shadows previous parameter with the same name", t->params_pos[j]);
+					AddInfo("here:", t->params_pos[k]);
+					success = false;
+					continue;
+				}
+				
+				if(!success)
+					continue;
 			}
 		}
 	}

@@ -81,7 +81,7 @@ Class* Parser::ParseClass()
 		c->ptype = ParseClassName();
 		if(!c->ptype)
 		{
-			AddInfo("as parent type for class started here:", start, true);
+			AddInfo("as parent class for class started here:", start, true);
 			delete c;
 			return NULL;
 		}
