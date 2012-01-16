@@ -349,7 +349,7 @@ TypeDecl* Parser::ParseType()
 		t->pos = head->pos;
 		t->name_pos = head->pos;
 		head++;
-		context->type_decls.push_back(t);
+		curr_class->type_decls.push_back(t);
 		return t;
 	}
 	
@@ -373,7 +373,7 @@ TypeDecl* Parser::ParseType()
 		t->pos = t->name_pos.To(sub->pos);
 		t->params.push_back(sub);
 		
-		context->type_decls.push_back(t);
+		curr_class->type_decls.push_back(t);
 		return t;
 	}
 	
@@ -456,7 +456,7 @@ TypeDecl* Parser::ParseClassName()
 	
 	t->pos = t->name_pos.To(head[-1].pos);
 
-	context->type_decls.push_back(t);
+	curr_class->type_decls.push_back(t);
 	return t;
 }
 

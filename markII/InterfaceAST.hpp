@@ -154,6 +154,9 @@ namespace sool
 		SourcePos	fullname_pos;
 		std::vector<SourcePos> params_pos;
 		
+		// Shortcut to all types used in this class
+		std::vector<TypeDecl*> type_decls;
+		
 		// Validation steps
 		bool validating_interface;		// circular inheritance guard
 		bool valid_interface;
@@ -198,8 +201,6 @@ namespace sool
 		
 		std::vector<Class*> classes;	// owned
 		std::vector<Extension*> extensions;	// owned
-		
-		std::vector<TypeDecl*> type_decls;	// shortcuts to in-tree ones
 		
 		// Analyzed
 

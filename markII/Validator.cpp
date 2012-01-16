@@ -23,7 +23,7 @@ bool Validator::Validate()
 	if(!CheckTemplateParameters())
 		return false;
 	
-	ResolveAllTypes();
+	MakeAllTypesAndInstances();
 	
 	// Validate interfaces
 	
@@ -139,16 +139,23 @@ bool Validator::CheckTemplateParameters()
 	return success;
 }
 
-bool Validator::ResolveAllTypes()
+bool Validator::MakeAllTypesAndInstances()
 {
-	for(uint i = 0 ; i < context->type_decls.size() ; i++)
+	for(uint i = 0 ; i < context->classes.size() ; i++)
 	{
-		TypeDecl *decl = context->type_decls[i];
+		Class *c = context->classes[i];
 		
-		Type *t = tforge.ConvertDecl(decl);
-		if(!t)
-			return false;
+		for(uint j = 0 ; j < c->type_decls.size() ; j++)
+		{
+			TypeDecl *decl = c->type_decls[j];
+			
+			Type *t = tforge.ConvertDecl(decl);
+			if(!t)
+				return false;
+		}
 	}
+	
+	// The same with instances, and again, until all is treated
 	
 	return true;
 }
