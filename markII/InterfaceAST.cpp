@@ -56,9 +56,6 @@ Class::~Class()
 	if(IsInstance())
 		return;
 	
-	for(uint i = 0 ; i < params.size() ; i++)
-		delete params[i];
-	
 	delete ptype;
 	
 	for(uint i = 0 ; i < members.size() ; i++)
@@ -149,7 +146,7 @@ Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
 	
 	for(uint i = 0; i < params.size(); i++)
 	{
-		inst->instmap[templ->params[i]->name] = params[i];
+		inst->instmap[templ->params[i]] = params[i];
 	}
 	
 	inst->params.clear();

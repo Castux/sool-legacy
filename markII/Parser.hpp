@@ -28,6 +28,7 @@ namespace sool
 		private:
 		
 		Class* ParseClass();
+		bool ParseNameOfClass(Class *c);
 		Extension* ParseExtension();
 		TypeDecl* ParseType();
 		TypeDecl* ParseClassName();

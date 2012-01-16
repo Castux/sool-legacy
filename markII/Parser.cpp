@@ -68,33 +68,11 @@ Class* Parser::ParseClass()
 	
 	// Class name, split into string and template params
 	
-	TypeDecl *t = ParseType();
-	if(!t)
+	if(!ParseNameOfClass(c))
 	{
-		AddInfo("in class definition started here:", start);
 		delete c;
 		return NULL;
 	}
-	
-	// Check that all template parameters are single names
-	
-	for(uint i = 0; i < t->params.size(); i++)
-	{
-		TypeDecl *par = t->params[i];
-		if(par->kind != TypeDecl::t_named || par->params.size() != 0)
-		{
-			AddError("invalid template parameter", par->pos);
-			delete c;
-			return NULL;
-		}
-	}
-	
-	c->name = t->name;
-	c->name_pos = t->name_pos;
-	c->fullname_pos = t->pos;
-	c->params = t->params;
-	t->params.clear();
-	delete t;
 	
 	// Class parent
 	
@@ -156,6 +134,135 @@ Class* Parser::ParseClass()
 	
 	curr_class = NULL;
 	return c;
+}
+
+bool Parser::ParseNameOfClass(Class *c)
+{
+	// In a class definition, the name can be either
+	// CName
+	// CName|CName
+	// CName|(CName,...)
+	// #CName
+	// primitive-type
+	
+	bool not_primitive = false;
+	switch(head->kind)
+	{
+		case Token::t_num:
+			c->name = "num";
+			break;
+		case Token::t_bool:
+			c->name = "bool";
+			break;
+		case Token::t_text:
+			c->name = "text";
+			break;
+		case Token::t_opaque:
+			c->name = "opaque";
+			break;
+		case Token::t_data:
+			c->name = "data";
+			break;
+		default:
+			not_primitive = true;
+			break;
+	}
+	
+	if(!not_primitive)
+	{
+		head++;
+		c->name_pos = head->pos;
+		c->fullname_pos = head->pos;
+		
+		return true;
+	}
+	
+	// Otherwise, array
+	
+	if(head->kind == Token::t_hash)
+	{
+		c->name = "#";
+		c->name_pos = head->pos;
+		head++;
+		
+		if(!Expect(Token::t_cname))
+		{
+			AddInfo("as template parameter for array started here:", c->name_pos);
+			return false;
+		}
+		
+		c->params.push_back(head[-1].string);
+		c->params_pos.push_back(head[-1].pos);
+		c->fullname_pos = c->name_pos.To(head[-1].pos);
+		
+		return true;
+	}
+	
+	// Last possibility, CName
+	
+	if(head->kind != Token::t_cname)
+	{
+		AddError("malformed name", head->pos);
+		AddInfo(std::string("in ") + c->Kind() + " definition started here:", head[-1].pos);
+		return false;
+	}
+	
+	c->name = head->string;
+	c->name_pos = head->pos;
+	head++;
+	
+	if(Accept(Token::t_pipe))
+	{
+		if(Accept(Token::t_lparens))
+		{
+			// Multiple parameters
+
+			SourcePos lparens = head[-1].pos;
+			
+			if(!Expect(Token::t_cname))
+			{
+				AddInfo("in template parameters list started here:", lparens, true);
+				return false;
+			}
+			
+			c->params.push_back(head[-1].string);
+			c->params_pos.push_back(head[-1].pos);
+			
+			while(Accept(Token::t_comma))
+			{
+				if(!Expect(Token::t_cname))
+				{
+					AddInfo("in template parameters list started here:", lparens, true);
+					return false;
+				}
+				c->params.push_back(head[-1].string);
+				c->params_pos.push_back(head[-1].pos);
+			}
+			
+			if(!Expect(Token::t_rparens))
+			{
+				AddInfo("to close template parameters list started here:", lparens, true);
+				return false;
+			}
+		}
+		else
+		{
+			// Single parameter
+			
+			if(!Expect(Token::t_cname))
+			{
+				AddInfo("as template parameter for template name started here:", c->name_pos, true);
+				return false;
+			}
+			
+			c->params.push_back(head[-1].string);
+			c->params_pos.push_back(head[-1].pos);
+		}
+	}
+	
+	c->fullname_pos = c->name_pos.To(head[-1].pos);
+	
+	return true;
 }
 
 Extension *Parser::ParseExtension()

@@ -136,7 +136,7 @@ namespace sool
 		bool	structure;
 		
 		std::string					name;		// In instances, this is the full name
-		std::vector<TypeDecl*>		params;		// For templates only: template parameters, owned
+		std::vector<std::string>	params;		// For templates only: template parameters, owned
 		TypeMap						instmap;	// For instances only: map to types
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
@@ -152,6 +152,7 @@ namespace sool
 		// Useful source code positions
 		SourcePos	name_pos;
 		SourcePos	fullname_pos;
+		std::vector<SourcePos> params_pos;
 		
 		// Validation steps
 		bool validating_interface;		// circular inheritance guard

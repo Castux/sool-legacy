@@ -105,12 +105,12 @@ bool Validator::CheckTemplateParameters()
 		
 		for(uint j = 0 ; j < t->params.size() ; j++)
 		{
-			TypeDecl *param = t->params[j];
+			std::string param = t->params[j];
 			
-			Class *other = context->Get(param->name);
+			Class *other = context->Get(param);
 			if(other)
 			{
-				AddError("template parameter " + param->name + " shadows " + other->Kind() + " with the same name", param->pos);
+				AddError("template parameter " + param + " shadows " + other->Kind() + " with the same name", t->params_pos[j]);
 				AddInfo("declared here:", other->name_pos);
 				success = false;
 				continue;
