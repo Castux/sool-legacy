@@ -132,7 +132,6 @@ namespace sool
 		public:
 		
 		bool	structure;
-		bool	extension;
 		
 		std::string					name;		// In instances, this is the full name
 		std::vector<TypeDecl*>		params;		// For templates only: template parameters, owned
@@ -169,11 +168,21 @@ namespace sool
 		std::string Kind();
 	};
 	
+	typedef std::map<std::string,Class*> ClassMap;
+
+	class Extension : public AST
+	{
+		public:
+		
+		TypeDecl				*type;
+		std::vector<Method*>	methods;
+	};
 	
 	// Context is the top level object, it basically holds the global
 	// scope. That is, classes and templates.
 	
-	typedef std::map<std::string,Class*> ClassMap;
+	
+	
 	
 	class Context
 	{
@@ -181,7 +190,7 @@ namespace sool
 		
 		std::vector<Class*> classes;	// owned
 		std::vector<Class*> templates;	// owned
-		std::vector<Class*> extensions;	// owned
+		std::vector<Extension*> extensions;	// owned
 		
 		ClassMap cmap;				// An indexing of classes and templates by name
 		

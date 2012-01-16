@@ -31,7 +31,6 @@ namespace sool
 		private:
 		
 		// Global work before doing individual classes
-		void SortOutExtensions();
 		bool CheckClassNames();		// Check unicity, and index by name
 		void SortOutTemplates();
 		bool CheckTemplateParameters();

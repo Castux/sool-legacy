@@ -15,14 +15,32 @@ Parser::~Parser()
 bool Parser::Parse()
 {
 	context = new Context;
+	Class *c;
+	Extension *e;
 	
 	while(head->kind != Token::t_eof)
 	{
-		Class *c = ParseClass();
-		if(!c)
-			return false;
-		else
-			context->classes.push_back(c);
+		switch(head->kind)
+		{
+			case Token::t_extend:
+				e = ParseExtension();
+				if(!e)
+					return false;
+				else
+					context->extensions.push_back(e);
+				break;
+			case Token::t_class:
+			case Token::t_struct:
+				c = ParseClass();
+				if(!c)
+					return false;
+				else
+					context->classes.push_back(c);
+				break;
+			default:
+				AddError("expected class, structure or extension definition", head->pos);
+				return false;
+		}
 	}
 	
 	return true;
@@ -39,9 +57,6 @@ Class* Parser::ParseClass()
 			break;
 		case Token::t_struct:
 			c->structure = true;
-			break;
-		case Token::t_extend:
-			c->extension = true;
 			break;
 		default:
 			error(std::string("Parser::ParseClass() - wrong class token: ") + head->FancyName());
@@ -138,6 +153,52 @@ Class* Parser::ParseClass()
 	c->pos = start.To(head[-1].pos);
 	
 	return c;
+}
+
+Extension *Parser::ParseExtension()
+{
+	Extension *e = new Extension;
+	SourcePos start = head->pos;
+	
+	Expect(Token::t_extend);
+	
+	// Extended type
+	
+	TypeDecl *t = ParseType();
+	if(!t)
+	{
+		AddInfo("in extension started here:", start);
+		delete e;
+		return NULL;
+	}
+	
+	e->type = t;
+	
+	// Method definitions
+	
+	while(head->kind != Token::t_end && head->kind != Token::t_eof)
+	{
+		Method *m = ParseMethod();
+		if(!m)
+		{
+			delete e;
+			return NULL;
+		}
+		e->methods.push_back(m);
+	}
+	
+	// End
+	
+	if(!Expect(Token::t_end))
+	{
+		AddInfo("to close extension started here:", start);
+		delete e;
+		return NULL;
+	}
+	
+	e->pos = start.To(head[-1].pos);
+	
+	return e;
 }
 
 TypeDecl* Parser::ParseType()
@@ -309,7 +370,7 @@ Method* Parser::ParseMethod()
 			m->foreign = true;
 			break;
 		default:
-			AddError("malformed method", head->pos);
+			AddError("malformed method definition", head->pos);
 			AddInfo("expected 'method', 'selfless' or 'foreign'");
 			delete m;
 			return NULL;

@@ -15,8 +15,6 @@ bool Validator::Validate()
 {
 	// Global stuff: check names, sort templates and extensions
 	
-	SortOutExtensions();
-	
 	if(!CheckClassNames())
 		return false;
 	
@@ -46,25 +44,6 @@ bool Validator::Validate()
 	//	AddInfo(it->second->signature);
 	
 	return true;
-}
-
-void Validator::SortOutExtensions()
-{
-	std::vector<Class*> extensions;
-	std::vector<Class*> classes;
-	
-	std::vector<Class*>::iterator it;
-	
-	for(it = context->classes.begin(); it < context->classes.end(); it++)
-	{
-		if((*it)->extension)
-			extensions.push_back(*it);
-		else
-			classes.push_back(*it);
-	}
-	
-	context->extensions = extensions;
-	context->classes = classes;
 }
 
 bool Validator::CheckClassNames()
