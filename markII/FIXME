@@ -1,0 +1,17 @@
+Putting the information of "definition class" in TypeDecl (in the aim of using it directly to find instmap in TypeForge::Get) is useless, since types in instances will still point at the template.
+
+Either:
+- entirely duplicate templates (down to code) at instantiation, and replace parameters by their instance value, or,
+- go back to passing the instmap along to Get
+
+However it *is* useful to do all instantiations at the begining, so we must keep the "all type decl" shortcut in classes. Loop on them for each class, build types, and instantiate on the go.
+
+Recursive typedecl will work OK because inner nodes are finnished parsing before outer (and therefore are before in the type_decls list) -> still have to check/fix the Get() method about it
+
+The TypeDecl->Type map, however is WRONG, since the types in templates (even accessed through instances) will be mega duplicate and not take the instance params in account. FIXTHAT.
+
+Have to decide how exactly recursive TypeDecl become recursive Type (through the instmap values of the pointed class, normally)
+
+Breakthrough: *classes* store the TypeDecl->Type map! Instances as well. That way we still have a good pointer to internized object shortcut (generated before all else, with instantiation on the go), and then Validator can use it when going through the code, either in classes or instances. Since most (all!) nodes will be shared between templates and their instances, no way we can replace TypeDecls by actual types, ANYWHERE --> LEFIX! All must stay TypeDecl until codegen, sorry!
+
+Rule of thumb: assume normal classes are instances with 0 parameters. Implement same logic.
