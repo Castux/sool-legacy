@@ -36,6 +36,7 @@ namespace sool
 	};
 	
 	typedef std::map<std::string,Type*> TypeMap;
+	typedef std::map<TypeDecl*,Type*> DeclToTypeMap;
 	
 	class TypeForge
 	{
@@ -45,6 +46,7 @@ namespace sool
 		
 		TypeMap tmap;				// Owned types, indexed by signature
 		Validator *v;				// Shortcut to the parent Validator, for access to context and reporting
+		DeclToTypeMap decl_map;		// Shortcut from declarations to internized types
 		
 		Type *Internize(Type *t);	// The passed object is deleted if one with same signature is already there
 		
@@ -53,13 +55,16 @@ namespace sool
 		TypeForge(Validator *validator);
 		~TypeForge();
 		
-		// Return internized type from declaration or signature.
+		// Create and return internized type from declaration
+		
+		Type *ConvertDecl(TypeDecl* decl);
+		
 		// Type resolution depends on which class we are in. Some "types" might just be
-		// template parameters. In an instance class, we need the instmap, which 
+		// template parameters. In an instance class, we need the instmap, which
 		// maps these simple names to types.
 		
-		Type* Get(TypeDecl* decl, TypeMap *instmap);
-		Type* Get(std::string sig, TypeMap *instmap);
+		Type* Get(TypeDecl* decl);
+		Type* Get(std::string sig);
 	};
 	
 }

@@ -34,6 +34,7 @@ namespace sool
 		bool CheckClassNames();		// Check unicity, and index by name
 		void SortOutTemplates();
 		bool CheckTemplateParameters();
+		bool ResolveAllTypes();		// Convert type declarations to types, and instantiate templates
 		
 		// Work on individual classes
 		bool ValidateInterface(Class *c);

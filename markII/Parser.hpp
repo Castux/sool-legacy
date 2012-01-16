@@ -18,6 +18,7 @@ namespace sool
 		std::vector<Token>	*tokens;	//owned
 		Token				*head;
 		Context				*context;	//not owned, will be passed to analyzer
+		Class				*curr_class;	// shortcut for deep setting
 		
 		Parser(std::vector<Token> *t);
 		~Parser();

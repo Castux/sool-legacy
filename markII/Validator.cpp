@@ -23,6 +23,8 @@ bool Validator::Validate()
 	if(!CheckTemplateParameters())
 		return false;
 	
+	ResolveAllTypes();
+	
 	// Validate interfaces
 	
 	for(uint i = 0 ; i < context->classes.size() ; i++)
@@ -119,6 +121,20 @@ bool Validator::CheckTemplateParameters()
 	return success;
 }
 
+bool Validator::ResolveAllTypes()
+{
+	for(uint i = 0 ; i < context->type_decls.size() ; i++)
+	{
+		TypeDecl *decl = context->type_decls[i];
+		
+		Type *t = tforge.ConvertDecl(decl);
+		if(!t)
+			return false;
+	}
+	
+	return true;
+}
+
 bool Validator::ValidateInterface(Class *c)
 {
 	// Don't do the work twice!
@@ -188,7 +204,7 @@ bool Validator::CheckParentClass(Class *c)
 	}
 	
 	// Get an actual type from declaration
-	Type *t = tforge.Get(c->ptype, &c->instmap);
+	Type *t = tforge.Get(c->ptype);
 	if(!t)
 		return false;
 	
@@ -214,7 +230,7 @@ bool Validator::TreatMembers(Class *c)
 		Member *m = c->members[i];
 		
 		// Resolve type
-		m->type = tforge.Get(m->tdecl, &c->instmap);
+		m->type = tforge.Get(m->tdecl);
 		if(!m->type)
 			return false;
 		

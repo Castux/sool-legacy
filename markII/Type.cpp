@@ -28,23 +28,27 @@ TypeForge::~TypeForge()
 		delete it->second;
 }
 
-Type* TypeForge::Get(std::string sig, TypeMap *instmap)
+Type* TypeForge::Get(std::string sig)
 {
 	TypeMap::iterator it = tmap.find(sig);
 	
 	if(it != tmap.end())
 		return it->second;
 	
-	// Not found, check if it's a template parameter
-	it = instmap->find(sig);
+	return NULL;
+}
+
+Type* TypeForge::Get(TypeDecl* decl)
+{
+	DeclToTypeMap::iterator it = decl_map.find(decl);
 	
-	if(it != instmap->end())
+	if(it != decl_map.end())
 		return it->second;
 	
 	return NULL;
 }
 
-Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
+Type *TypeForge::ConvertDecl(TypeDecl* decl)
 {
 	// Simple case: not a template, just get the class
 	
@@ -53,9 +57,10 @@ Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 		Class *c = v->context->Get(decl->name);
 		if(!c)
 		{
-			// Not found, maybe it is a template parameter
-			
+			// Not found, maybe it is a template parameter in the class where it was defined
+			TypeMap *instmap = &decl->def_class->instmap;
 			TypeMap::iterator it = instmap->find(decl->name);
+			
 			if(it != instmap->end())
 			{
 				// Yes, found
@@ -130,7 +135,7 @@ Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 	
 	for(uint i = 0; i < usenum; i++)
 	{
-		Type *t = Get(decl->params[i], instmap);
+		Type *t = Get(decl->params[i]);
 		if(!t)
 			return NULL;
 		
@@ -145,6 +150,10 @@ Type* TypeForge::Get(TypeDecl* decl, TypeMap *instmap)
 	
 	Type *t = new Type(inst);
 	Type *intern = Internize(t);
+	
+	// Save in shortcut map
+	
+	decl_map[decl] = intern;
 	
 	return intern;
 }

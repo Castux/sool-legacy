@@ -41,6 +41,8 @@ namespace sool
 		std::string				name;		// For t_named only. Use "#" for arrays
 		std::vector<TypeDecl*>	params;		// For template parameters, owned. Only with t_named
 		
+		Class					*def_class;	// Class in which type was declared (necessary when type contains template parameters)
+		
 		// Useful source code positions
 		SourcePos	name_pos;
 		
@@ -176,6 +178,9 @@ namespace sool
 		
 		TypeDecl				*type;
 		std::vector<Method*>	methods;
+		
+		Extension();
+		~Extension();
 	};
 	
 	// Context is the top level object, it basically holds the global
@@ -188,11 +193,18 @@ namespace sool
 	{
 		public:
 		
+		// Parsed
+		
 		std::vector<Class*> classes;	// owned
-		std::vector<Class*> templates;	// owned
 		std::vector<Extension*> extensions;	// owned
 		
-		ClassMap cmap;				// An indexing of classes and templates by name
+		std::vector<TypeDecl*> type_decls;	// shortcuts to in-tree ones
+		
+		// Analyzed
+
+		std::vector<Class*> templates;	// owned
+		std::vector<Class*> instances;	// owned
+		ClassMap cmap;					// An indexing of classes and templates by name
 		
 		Class* Get(std::string);	// Find class or template by name
 		Class *Instantiate(Class *templ, std::vector<Type*> params);

@@ -4,7 +4,7 @@
 
 using namespace sool;
 
-TypeDecl::TypeDecl() : kind(t_unknown)
+TypeDecl::TypeDecl() : kind(t_unknown), def_class(NULL)
 {
 }
 
@@ -86,6 +86,15 @@ std::string Class::Kind()
 		return "class";
 }
 
+Extension::Extension() : type(NULL)
+{
+}
+
+Extension::~Extension()
+{
+	delete type;
+}
+
 
 Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
 {
@@ -146,9 +155,9 @@ Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
 	inst->params.clear();
 	inst->name = sig;
 	
-	// Then add it to classes
+	// Then add it to the context
 	
-	classes.push_back(inst);
+	instances.push_back(inst);
 	cmap[sig] = inst;
 	
 	return inst;
@@ -171,6 +180,9 @@ Context::~Context()
 		
 	for(uint i = 0 ; i < templates.size() ; i++)
 		delete templates[i];
+		
+	for(uint i = 0 ; i < instances.size() ; i++)
+		delete instances[i];
 		
 	for(uint i = 0 ; i < extensions.size() ; i++)
 		delete extensions[i];
