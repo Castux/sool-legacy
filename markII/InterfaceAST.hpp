@@ -41,8 +41,6 @@ namespace sool
 		std::string				name;		// For t_named only. Use "#" for arrays
 		std::vector<TypeDecl*>	params;		// For template parameters, owned. Only with t_named
 		
-		Class					*def_class;	// Class in which type was declared (necessary when type contains template parameters)
-		
 		// Useful source code positions
 		SourcePos	name_pos;
 		
@@ -190,6 +188,8 @@ namespace sool
 		
 		TypeDecl				*type;
 		std::vector<Method*>	methods;
+		
+		std::vector<TypeDecl*>	type_decls;		// shortcut to all types within extension
 		
 		Extension();
 		~Extension();

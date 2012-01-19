@@ -2,7 +2,7 @@
 
 using namespace sool;
 
-Parser::Parser(std::vector<Token> *t) : tokens(t), context(NULL), curr_class(NULL), noinfo(false)
+Parser::Parser(std::vector<Token> *t) : tokens(t), context(NULL), curr_decls(NULL), noinfo(false)
 {
 	head = &tokens->front();
 }
@@ -49,7 +49,7 @@ bool Parser::Parse()
 Class* Parser::ParseClass()
 {
 	Class *c = new Class();
-	curr_class = c;
+	curr_decls = &c->type_decls;
 	
 	SourcePos start = head->pos;
 	
@@ -132,7 +132,7 @@ Class* Parser::ParseClass()
 	
 	c->pos = start.To(head[-1].pos);
 	
-	curr_class = NULL;
+	curr_decls = NULL;
 	return c;
 }
 
@@ -270,6 +270,8 @@ Extension *Parser::ParseExtension()
 	Extension *e = new Extension;
 	SourcePos start = head->pos;
 	
+	curr_decls = &e->type_decls;
+	
 	Expect(Token::t_extend);
 	
 	// Extended type
@@ -308,13 +310,13 @@ Extension *Parser::ParseExtension()
 	
 	e->pos = start.To(head[-1].pos);
 	
+	curr_decls = NULL;
 	return e;
 }
 
 TypeDecl* Parser::ParseType()
 {
 	TypeDecl *t = new TypeDecl;
-	t->def_class = curr_class;
 	
 	// Basic types
 	
@@ -349,7 +351,7 @@ TypeDecl* Parser::ParseType()
 		t->pos = head->pos;
 		t->name_pos = head->pos;
 		head++;
-		curr_class->type_decls.push_back(t);
+		curr_decls->push_back(t);
 		return t;
 	}
 	
@@ -373,7 +375,7 @@ TypeDecl* Parser::ParseType()
 		t->pos = t->name_pos.To(sub->pos);
 		t->params.push_back(sub);
 		
-		curr_class->type_decls.push_back(t);
+		curr_decls->push_back(t);
 		return t;
 	}
 	
@@ -392,7 +394,6 @@ TypeDecl* Parser::ParseType()
 TypeDecl* Parser::ParseClassName()
 {
 	TypeDecl *t = new TypeDecl;
-	t->def_class = curr_class;
 	
 	if(!Expect(Token::t_cname))
 		return NULL;
@@ -456,7 +457,7 @@ TypeDecl* Parser::ParseClassName()
 	
 	t->pos = t->name_pos.To(head[-1].pos);
 
-	curr_class->type_decls.push_back(t);
+	curr_decls->push_back(t);
 	return t;
 }
 

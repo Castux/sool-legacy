@@ -58,7 +58,7 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 		if(!c)
 		{
 			// Not found, maybe it is a template parameter in the class where it was defined
-			TypeMap *instmap = &decl->def_class->instmap;
+			/*TypeMap *instmap = &decl->def_class->instmap;
 			TypeMap::iterator it = instmap->find(decl->name);
 			
 			if(it != instmap->end())
@@ -66,7 +66,7 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 				// Yes, found
 				return it->second;
 			}
-			else
+			else*/
 			{
 				v->AddError("unknown class " + decl->name, decl->name_pos);
 				return NULL;

@@ -15,10 +15,10 @@ namespace sool
 		Report report;
 		
 		// Parsing context
-		std::vector<Token>	*tokens;	//owned
-		Token				*head;
-		Context				*context;	//not owned, will be passed to analyzer
-		Class				*curr_class;	// shortcut for deep setting
+		std::vector<Token>		*tokens;	//owned
+		Token					*head;
+		Context					*context;		//not owned, will be passed to analyzer
+		std::vector<TypeDecl*>	*curr_decls;	// shortcut to current class' or extension's list of types for deep setting
 		
 		Parser(std::vector<Token> *t);
 		~Parser();
