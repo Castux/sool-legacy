@@ -8,6 +8,16 @@ TypeDecl::TypeDecl() : kind(t_unknown), def_class(NULL)
 {
 }
 
+TypeDecl *TypeDecl::Copy()
+{
+	TypeDecl *t = new TypeDecl(*this);
+	
+	for(uint i = 0 ; i < t->params.size() ; i++)
+		t->params[i] = params[i]->Copy();
+	
+	return t;
+}
+
 TypeDecl::~TypeDecl()
 {
 	for(uint i = 0 ; i < params.size() ; i++)
@@ -23,6 +33,15 @@ Member::~Member()
 	delete(tdecl);
 }
 
+Member *Member::Copy()
+{
+	Member *m = new Member(*this);
+	
+	m->tdecl = tdecl->Copy();
+	
+	return m;
+}
+
 Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false), setter(false), member(NULL)
 {
 }
@@ -36,9 +55,37 @@ Method::~Method()
 		delete args[i].type;
 }
 
+Method *Method::Copy()
+{
+	Method *m = new Method(*this);
+	
+	for(uint i = 0 ; i < ret_decls.size() ; i++)
+		m->ret_decls[i] = ret_decls[i]->Copy();
+	
+	for(uint i = 0 ; i < args.size() ; i++)
+		m->args[i].type = args[i].type->Copy();
+	
+	return m;
+}
+
 Class::Class() :	structure(false), ptype(NULL), pclass(NULL), validating_interface(false),
 					valid_interface(false), valid_code(false)
 {
+}
+
+Class *Class::Copy()
+{
+	Class *c = new Class(*this);
+	
+	c->ptype = ptype->Copy();
+	
+	for(uint i = 0 ; i < members.size() ; i++)
+		c->members[i] = members[i]->Copy();
+	
+	for(uint i = 0 ; i < methods.size() ; i++)
+		c->methods[i] = methods[i]->Copy();
+	
+	return c;
 }
 
 Member *Class::GetMember(std::string name)

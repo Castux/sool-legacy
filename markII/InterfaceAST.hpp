@@ -48,6 +48,8 @@ namespace sool
 		
 		TypeDecl();
 		~TypeDecl();
+		
+		TypeDecl *Copy();
 	};
 	
 	class Member : public AST
@@ -71,6 +73,8 @@ namespace sool
 		
 		Member();
 		~Member();
+		
+		Member *Copy();
 	};
 	
 	class Method : public AST
@@ -118,6 +122,8 @@ namespace sool
 		
 		Method();
 		~Method();
+		
+		Method *Copy();
 	};
 	
 	typedef std::map<std::string,Member*> MemberMap;
@@ -168,6 +174,8 @@ namespace sool
 		Class();
 		~Class();
 		
+		Class *Copy();
+		
 		bool IsTemplate();
 		bool IsInstance();
 		
@@ -189,9 +197,6 @@ namespace sool
 	
 	// Context is the top level object, it basically holds the global
 	// scope. That is, classes and templates.
-	
-	
-	
 	
 	class Context
 	{
