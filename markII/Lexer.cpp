@@ -122,13 +122,13 @@ bool Lexer::LexNumber()
 	const char *end = head;
 	num value;
 	
-	while(isalnum(*end) || *end == '.')
+	while(isalnum(*end) || (*end == '.' && isdigit(end[1])))
 		end++;
 	
 	if((end[-1] == 'E' || end[-1] == 'e') && (*end == '+' || *end == '-'))
 	{
 		end++;
-		while(isalnum(*end) || *end == '.')
+		while(isalnum(*end))
 			end++;
 	}
 	
