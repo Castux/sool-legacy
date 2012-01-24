@@ -1,0 +1,233 @@
+Structs again, and multivalued expressions
+==========================================
+
+Oh no, more structs!
+--------------------
+
+So, I had a bit of a blank in my head during implementation, when I was 
+dealing with the `ref` keyword, which is meant to signify that a struct 
+as single return value of a method must be returned by reference, 
+instead of by value.
+
+It had been bothered by the need to add a keyword at the time, and now 
+that I think about it again, I do realize that it may not be necessary 
+at all. Indeed, the point was that since structs are normally returned 
+by value, it was impossible to modify a struct contained in another 
+object or container:
+
+	someobject.somestruct.structmember = 1
+	structarray[20].structmember = 2
+
+is really:
+
+	temp = someobject.somestruct	-- copy!
+	temp.structmember = 1			-- modify local value
+	
+	temp2 = structarray[20]			-- copy!
+	temp2.structmember = 2			-- modify local value
+
+And since that was slightly counterintuitive, especially since it works 
+differently in about any other language with structs, I decided to add 
+the possibility of returning a single struct by reference, so that an 
+immediate call to a setter would modify it in place.
+
+But, the other side of the coin is that it adds one keyword, and one 
+more non trivial concept to explain.
+
+What about simplifying to:
+
+1.	structs are always copied at assignment (including to function 
+	arguments and from return values)
+2.	local structs are returned by value
+3.	a struct reference is returned as is
+
+Since the automatic getter for a struct member (and the indexing of an 
+array) returns it by reference, rule three creates a nice transitivity 
+that basically means "non-local structs are returned by reference".
+
+No one needs to know what happens behind the scenes. What happens is the 
+expected behavior: if it's a member or an element of an array, you can 
+modify it in place. If it was a local, you can also modify it in place, 
+but it will be very useless if you don't retrieve the value somewhere 
+else.
+
+This means:
+
+	blah = MyStruct
+	
+	foo = blah			-- copied
+	someMethod(foo)		-- copied to a local in the method
+	obj.member = foo	-- copied to member
+	bar = obj.member	-- "obj.member" is a reference, but it's 
+						-- assigned, therefore copied, to "bar"
+	obj.member.a = 1	-- "obj.member" is a reference, so the struct is 
+						-- modified in place
+	bar = obj.makevalue	-- copy the return value
+	obj.makevalue.a = 1	-- if that method returned a local, this call is 
+						-- very useless, but that's really your fault...
+
+The compiler internally discriminate methods, and keeps track of what is 
+a reference and what is a value. Anyway, the only thing you can do with 
+a struct reference is send it a message, return it as is, or copy the 
+pointed value to a temporary local. It does require the code generation 
+to handle the cases differently, obviously, but it ends up being 
+equivalent to filling in the `ref` keyword automatically in 
+declarations.
+
+Pros:
+
+1.	"returning a struct" always acts as expected, in particular for 
+	non-local modification
+2.	less typing for the same meaning: since the compiler can decide 
+	itself how to act, no need for a redundant `ref` keyword that 
+	requires more analysis, and can lead to user errors. It's the 
+	classic "you have forgotten a ; here" that C/C++ compilers tell you. 
+	Well, if you know where I should have put one, maybe you could have 
+	put it for me, or maybe the language didn't need one in the first 
+	place.
+
+Cons:
+
+1.	too much hidden behavior could be evil, since it makes it less easy 
+	to understand
+2.	non consistent behavior with the same syntax: sometimes it's this, 
+	sometimes it's that. But then again it really comes down to whether 
+	you return a local or not, so it's not rocket science either.
+
+In any case, and it will be clearly stated in the reference, structures 
+are merely there for efficiency reasons, and they are a more advanced 
+feature of the language, that require a bit of insight to use correctly.
+
+Anything structures can do, objects could do to, but sometimes at the 
+price of execution speed and memory use.
+
+I also just thought about this, but structures have the funny 
+possibility of having themselves as member, and therefore be of infinite 
+size. That's one more thing the analyzer will have to check.
+
+Using multiple return values
+----------------------------
+
+This little structure chat made me think about something I hadn't 
+thought about before. So far, I always envisioned multiple return values 
+to be used directly in assignments:
+
+	a,b,c = someMethod()
+	otherMethod(someMethod())	-- that's three arguments right there
+
+and also spread out in array-like object constructors:
+
+	foo = [someMethod()]	-- three elements, most likely of the same 
+							-- type
+
+But I haven't though about sending messages to multiple values:
+
+	someMethod.doTheLulz	-- someMethod has 3 return values!
+
+What do we do here?
+
+-	Do we send the message to the first return value, and ignore the 
+	others?
+-	Do we send the same message to all return values? And if so, should 
+	we gather all return values of all calls into one big multi-valued 
+	expression? Like here if `doTheLulz` returns 2 values, the whole 
+	expression would have 6-valued? Obviously that can work only 
+	if all return values are of the same type, or at least if they 
+	answer to the same method. Which might be a rare case. How often 
+	would a method return many values that have an equivalent status, 
+	and that would be treated the same way? When that is the case, 
+	returning an array is probably the way to go.
+-	Do we just complain about it and blame the user for being lame?
+
+Likewise, can we ignore some or all return values in assignment?
+
+	a,b = someMethod	-- someMethod returns 3 values
+	foobar(someMethod)	-- foobar takes in only 1 value
+	doSomething			-- doSomething returns 2 values
+
+That's where functional and imperative programming meet and greet. Some 
+methods are meant to take in data, compute stuff, and return a result. 
+Some have mostly side-effects: modify the state of memory somewhere. 
+Most do both.
+
+And this is even accentuated by my intentional choice of having the 
+parentheses optional for methods without arguments:
+
+	obj.blah
+
+Is `blah` a member? Is it a computation that returns something? Does it 
+do something silently and return nothing? I had planned to have the 
+compiler warn about ignoring the return value of non-void methods, to 
+avoid mistakes like:
+
+	method foo()
+		obj.getSomething	-- hey! you forgot to take your something!
+	end
+
+But I can also imagine lots of methods with side effects that also 
+return an additional information about what happened, and that can be 
+safely ignored. For instance, a stream could return itself so that you 
+can chain calls, like in C++:
+
+	std::cout << "Foo " << somevar << " and bar" << std::endl;
+
+But the return value of the last call will definitely be ignored.
+
+And if we can ignore one can we ignore more? Select just what we want. 
+In Lua, many pattern matching functions return lots of information, like 
+the match, its position, and then optional captures. If we still want 
+only the information of whether there was a match, we can perfectly do:
+
+	if text:match("can you find me?") then
+		-- blah blah
+	end
+
+Here, the boolean evaluation is done only on the first argument, which 
+will be `nil` if the substring was not found. This is definitely an 
+idiom I want in sool.
+
+So, mmm, yes. If boolean evaluation discards all but the first return 
+value, maybe that should happen as well for a direct method call:
+
+	-- call print on the first result, which is the match
+	somestring.match("hello %w+").print
+
+Lua does the discarding also when multi-valued expressions appear within 
+expression lists:
+
+	a,b,c = 1,somefunction(),2
+
+Whatever the number of return values of `somefunction`, only the first 
+one gets assigned to `b`. I don't think I want that. I want multiple 
+values to be unfolded as expected and assigned to what's needed:
+
+	a,b,c,d,e = 1,returnthreevalues(),2
+	iTakeThreeArgs(1,iReturnTwoValues())
+
+We've talking about discarding values, what about missing ones?
+
+	a,b,c,d = iReturnTwoValues()
+
+That stands in assignments (and return statements and method calls, 
+which have the same semantics). In Lua, it's simple, anything missing 
+gets `nil`.
+
+	iTakeThreeArgs(1)	-- second and third will be nil
+	return 1			-- if the caller expects 3 things, the two 
+						-- others will be nil
+
+That is convenient for default arguments and typing less. That's also 
+cool if you don't want to type `return nil` all the time. It's implied. 
+In sool, where there is proper method overloading, that would just lead 
+to lots of ambiguity in selecting which method to call, just like in 
+C++.
+
+Furthermore, we don't really have a proper `nil` in sool. The "default" 
+or "invalid" or "uninitialized" value is not coherently defined for all 
+types. There is `nil` for objects, `nan` for numbers. Arguably, 0 for 
+blobs. Booleans don't have any, and structs are even a different story 
+altogether.
+
+So that sounds difficult. You can provide too many values, and they will 
+be silently discarded, but you always need to give at least as many as 
+are required.
