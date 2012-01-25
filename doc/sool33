@@ -1,0 +1,250 @@
+nil, again :(
+=============
+
+What I found most special about Rust is that every variable is always 
+initialized, and therefore no pointer can ever be NULL.
+
+When in C++ or sool, you allocate an object of a given type, and then 
+fill its members, in Rust, the only thing you can do is build an object 
+by specifying its members, and *this* determines its type. Then, if you 
+happened to have named this type earlier and defined methods for it, it 
+becomes the equivalent of an instance of that class. If you omitted to 
+give a value to a certain field, the field doesn't exist and it is 
+another type, in which you cannot access this particular field.
+
+Of course, in practice, that doesn't prevent you to have shortcut 
+functions that construct the objects by filling in default values, so 
+it's not necessarily less convenient.
+
+What fascinates me is that is supresses the need for NULL pointer checks 
+entirely. Remember, when discussing nil, I said it was impossible to do 
+without because we use it for:
+
+- variables not yet initialized: in Rust it simply is *not* possible to 
+have a variable without initialization
+- empty a variable (and free its object) before it goes out of scope: 
+now that I think about it, it's garbage collected anyway, so you might 
+as well wait the end of the block
+- optional arguments: in Rust you use enum types, like `option<T>`, and 
+the `alt` control statement that branches depending on which subtype is 
+that particular value. It is very clean, but requires one more control 
+structure
+- invalid return values: that is covered by enum types as well
+
+This is beautiful. Very logical, very neat and theoretical like a 
+functional language. Type constructors and type pattern matching. Wow.
+
+Does that mean I want the same in sool? Grumph. No nil-checks sound 
+*really* good, implementation-wise. So far in my head, the way to do it 
+is inserting a test before each method call (and hope for compiler 
+optimization), or inserting a test on self at the beginning of each 
+method's body. Doable, trivial, but not awesome.
+
+What would the "all members always initialized" mean in sool? For 
+primitive types and struct members, no issue there, I planned on having 
+default values anyway. The big question is for objects on the heap.
+
+Like I mentionned before (probably when discussing the "single 
+ownership" thing), it's OK the pre-allocate sub-objects all the way 
+down, as long as the whole thing has a tree structure. Obviously, when 
+there are loops, we'd have an infinite recursion.
+
+Many pointers are not meant for ownership, but for shortcut reference, 
+like parents in a tree, or a network manager that could be accessed from 
+all over the program. A big program can look like a cloud of objects, 
+all talking to each other.
+
+As I recall, I had the idea of two kinds of pointers: owning pointers, 
+and simple references. The first kind only would see automatic 
+allocation, but it wouldn't solve the second ones being nil.
+
+Even without the distinction between the two, having an automatic 
+allocation in sool would also mean that we force the "simple shortcuts" 
+to be pointed at something existing, at initialization.
+
+Instead of an initializer method in which you can set some fields, and 
+leave the others be, it would mean that *every* pointer-like variable 
+has to be set. Either to a new object, or an existing one. No exception.
+
+What about recursively defined data structures like linked lists or 
+trees? If we don't go all the way of Rust and have enumerated types, we 
+need new tricks: the last node of a list could point at itself to mean 
+"no next one".
+
+What about returning nil to mean "is not in this collection"? Or "this 
+pattern did not match"? What about object members for which we simply 
+*do not* have the info yet? Like in my sool compiler, lots of fields of 
+the AST nodes are filled in by the analyzer, a lot later than the 
+creation of the node. Should I, for instance, define a child class that 
+adds the new fields, and replace the old object by the new one instead 
+of having lots of members hanging uninitialized so long?
+
+Can members be optional, or only arguments and return values?
+
+Oh, Rust, why do you bring my old questions back? I was never satisfied 
+by the nil solution I had, but now I'm afraid to go back to the 
+"nullable vs. non-nullable" type quest.
+
+Why we really like nil
+----------------------
+
+Compare
+
+	str = "yepee"
+	if str:match("blah") then end
+
+to:
+
+	std::string str("yepee")
+	if(std.find("blah") != std::string::npos) {}
+
+The principle is exactly the same: if we have a valid result to return, 
+we return it. If not (and that might happen, we don't know), return some 
+kind of invalid value. What invalid value? -1? `std::string::find` 
+returns a integer of type `size_t`, which is unsigned, so it can't be 
+-1. Actually, it *is* -1 casted to an unsigned, so it becomes the 
+highest possible integer of the native integer size. So, in this case 
+the guys who made the STL decided arbitrarily what was the invalid 
+value. Not only that breaks if you have a veeeeery big string (albeit 
+unlikely), but also, it's so arbitrary that nobody can ever remember, 
+and the best is to compare to some class member where it is stored.
+
+Now if you use an std::map, the `find` method will return an iterator 
+that points to the result of map::end(). It could be anything else.
+
+In Lua, there is one standard normal way to say "invalid", it's nil. And 
+nil happens to evaluate to false in condition statements, which gives 
+very natural looking idioms.
+
+That's one of my favorite things in Lua, and I'm not ready to give it 
+up.
+
+It works in the other direction as well. In my compiler, when I generate 
+a diagnostic, I must first give the severity and the message, but then I 
+can also add a source position, so that the report contains a reminder 
+of the source code, with the exact position highlighted. "Would you like 
+to highlight some source?" "Yes" "Which one?" "Here, have this SourcePos 
+object". Without optional arguments that gives: "Would you like to 
+highlight some source?" "No thanks" "Which one?" "Err wut?".
+
+Sure, I could have two versions of the method, one with the SourcePos 
+argument, one without. But then what if I have instead two arguments of 
+the same type that I would like to be optional? If I make a method with 
+one less, how do I know which one it is?
+
+For sure we can do without optional arguments, but they can also make 
+life so much easier.
+
+Lastly, I think about the members. Same example, instead of printing 
+directly a diagnostic, I want to store it in a Diagnostic object, which 
+will be probably used for statistics and printing later. If I don't have 
+a SourcePos to give, what do I do? Invent an invalid SourcePos that will 
+not be printed later?
+
+That means inventing for each and every kind of objects a way to mean 
+"this one is invalid". Or we could have a unified proper mechanism: nil.
+
+Sure, I can think of ways to do without: have the Diagnostic class 
+contain no SourcePos, and a child class DiagnosticWithSourcePos contain 
+one, and by magic of dispatching, one would print its source and not the 
+other. Now suppose I have 10 similar optional members. Should I really 
+derive 2^10 children classes? I think not.
+
+In my previous example of the Class AST node, in which we add a bunch of 
+information later, it might be indeed a cleaner design to have a derived 
+class, because in that case they're not really optional, they are just 
+"not there yet". But once there, they will most likely be *all* there, 
+and we can do without nil-checks.
+
+"Optional" should really mean optional. Since it does require special 
+handling, it should be used only when really necessary.
+
+For all the rest (non optional references), we can force initialization. 
+Period. That's a good practice anyway. It will mean that you will have 
+to gather all the elements before grouping them together in an object. 
+But once an object is made, it is guarrantied to be full.
+
+If you use a custom `init`, the compiler checks that all members are 
+initialized. If you use the default `init` and the `with member = val 
+end` construct, the same check goes there. No mercy.
+
+Syntax
+------
+
+As I recall, I longly pondered about how to check for presence or 
+absence of an optional object, and how to cast an optional to a 
+non-optional.
+
+It's not that hard:
+
+	-- blah is an optional Object
+	if blah then
+		blah.do_things
+	else
+		blah.anything	-- compile time ERROR!
+	end
+
+I used to talk about boolean evaluation of types, which basically was a 
+way to check if they were valid (non nil, non nan, and the rest was 
+incoherent). Well how about this:
+
+Conditional statements can take either:
+
+- a boolean expression
+- an optional
+
+Nothing else. In case of an optional, the variable in the "true" branch 
+will be casted to a non-optional. Sure, that's the same name for 
+something of a different type, so internally, there will be variable 
+shadowing. Well yes, but not really, it's been checked, so no matter. 
+Let the analyzer do the work, and don't worry too much.
+
+	if blah then
+		-- blah is a true Object, no more checks
+	end
+	
+	-- blah is still an optional Object, do more checks
+
+What about the current idiom in Lua:
+
+	if not blah then
+		blah = Object()
+	end
+
+Ha, trickier! We know that after the `if`, blah is necessarily a true 
+Object. Will the analyzer be able to handle that? Well, it would just 
+have to follow each branch:
+
+	if not blah then
+		blah = Object()
+		-- at the end of the branch, blah was initialized
+	else
+		-- blah is a true Object
+	end
+	-- hurray, all branches lead to a real Object!
+
+Or stuff like:
+
+	if not blah then
+		return
+	end
+	blah.print
+
+Well, it's kind of the same, only the hidden branch "yes" can lead to 
+the method call, so it's OK. Won't that be complex? Well, probably.
+
+It will certainly require dividing the code into blocks of execution, 
+with an execution graph. But hey guess what, that will be required 
+anyway when generating LLVM representation.
+
+	blah = blah or Object()
+
+That's a lot of hidden things, but it means the same...
+
+	foo = bar and Object() or nil
+	meh = bar and nil or Object()
+
+Ha, this time `foo` is optional too. And `meh` will require a bit of 
+type inferrence.
+
+Oh it's gonna be complex.
