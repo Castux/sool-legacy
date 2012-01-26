@@ -1,0 +1,88 @@
+Class and struct renaming
+=========================
+
+One thing has always bothered me while writing my compiler, it's the 
+fact that the words "class" and "struct" have a very different status, 
+although they are used at the same level. Lemme clarify.
+
+A class is a model of object. The model is the class, the particular 
+instance is an object.
+
+A structure is both the model and the instance. I like this not. When I 
+do:
+
+	astruct = MyStruct
+
+the model is called a structure, and the content of that particular 
+variable is also "a structure". This is very annoying, because when 
+talking about the models, structures and classes are very similar. In 
+fact, they are even the same thing in my compiler, except that one has a 
+"structure" flag set. And I never know how to refer to the set of both. 
+"Class or structure". "Composite" usually does it. But everywhere in my 
+code, I use "Class" for both.
+
+Since structures are just "like classes, but value types", saying 
+"class" for just the "by reference" classes seems like a bit of language 
+abuse.
+
+When in the code we use "class" to introduce a class definition, and 
+"struct" to introduce a structure definition, we mix up the semantics a 
+little bit. Where "class" is quite clear ("what follows is a class, ie. 
+a model for an object"), "struct" is not ("what follows is a structure, 
+but not the one you mean, a model for it, but it still kind of is 
+called a structure anyway").
+
+Wiktionary defines class as:
+
+	A group, collection, category or set sharing characteristics or 
+	attributes.
+
+That applies to both: all struct of a same kind share attributes and 
+behavior, they form a class, just as much as objects that share 
+attributes and behaviors for a class.
+
+In sool, an object lives on the heap: it has a unique identity (it's 
+address), not only an internal state. It is an **object** as we mean it 
+in every day life (a mug, a phone, another phone). A structure on the 
+other hand has only its internal state, its **value**: where it is in 
+memory is irrelevant, and two separate structures with the same content 
+are indistinguishable.
+
+So what about using the word "class" for what it means: model, 
+blueprint, and apply it to both kind of things we have: objects and 
+values.
+
+Writing source code is writing *object classes* and *value classes*. And 
+since all we do is writing classes, we can omit the word, and put 
+directly the precision:
+
+	object Dog
+		text name
+	end
+	
+	value Vector
+		num x
+		num y
+	end
+
+The fact that it emphasizes the natural behaviors is really interesting. 
+Values have no identity, just content: they can only be copied around. A 
+Vector is a value just as a number is a value. An object, on the other 
+hand, is an independent separate entity. You create it, fill it with 
+data, and it can interact with other objects. The word "class" is 
+polyvalent.
+
+	v = Vector(1,2)
+	d = Dog("Barky")
+
+`v` is a value of class `Vector`. It is *the* vector `(1,2)`. If another 
+vector has the value `(1,2)`, they will be the same vector, just as we 
+say that 10 and 10 are the same number, or blue and blue are the same 
+color. On the other hand, `d` is an object of class `Dog`. It is *a* 
+dog, which happens to be named Barky. If another dog was named Barky, 
+they would still be different dogs. Just like two cars from the same 
+model, despite being exactly the same when they come out of the factory, 
+are really two different cars that can evolve in their own ways.
+
+I like this. Not only it makes things clearer, but it brings a 
+bit of originality. "struct" and "class" as keywords are so C++.
