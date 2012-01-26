@@ -1,13 +1,13 @@
 syntax "sool" ".*\.sool$"
 
 # Keywords
-color brightblue "\<(and|break|do|else|elseif|end|false|for|if|in|nil|not|or|return|then|true|while|as|class|meth|private|op|skip)\>"
+color brightblue "\<(object|value|extend|shared|internal|method|selfless|foreign|break|continue|return|do|while|if|then|elseif|else|as|not|to|and|or|is|isnot|true|false|nil|self|super|with|end)\>"
 
 # Known functions
-color magenta "\<(init|index)\>"
+color magenta "\<(init)\>"
 
 # Types
-color cyan "\<(str|num|vec|sym)\>"
+color cyan "\<(num|bool|text|data|blob)\>"
 
 # Numbers
 color cyan "\<[0-9]+(\.[0-9]+)?([eE][0-9]+)?"

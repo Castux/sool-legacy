@@ -68,7 +68,7 @@ Method *Method::Copy()
 	return m;
 }
 
-Class::Class() :	structure(false), ptype(NULL), pclass(NULL), validating_interface(false),
+Class::Class() :	value(false), ptype(NULL), pclass(NULL), validating_interface(false),
 					valid_interface(false), valid_code(false)
 {
 }
@@ -124,10 +124,10 @@ bool Class::IsInstance()
 
 std::string Class::Kind()
 {
-	if(structure)
-		return "structure";
+	if(value)
+		return "value class";
 	else
-		return "class";
+		return "object class";
 }
 
 Extension::Extension() : type(NULL)

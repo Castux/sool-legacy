@@ -115,9 +115,9 @@ namespace sool
 	typedef std::map<std::string,Member*> MemberMap;
 	typedef std::map<std::string,Method*> MethodMap;
 	
-	// Unified node for classes, structures and extensions
+	// Unified node for classes (object and value) and extensions
 	// It serves for:
-	// - normal classes/structures
+	// - normal classes (object and value)
 	// - templates (in which case the 'params' vector is filled with TypeDecl's)
 	// - template instances (in which case 'params' is empty, and 'instmap' maps names to types)
 	
@@ -125,7 +125,7 @@ namespace sool
 	{
 		public:
 		
-		bool	structure;
+		bool	value;		// Value class, or normal object class?
 		
 		std::string					name;		// In instances, this is the full name
 		std::vector<std::string>	params;		// For templates only: template parameters, owned

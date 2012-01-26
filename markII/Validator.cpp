@@ -220,11 +220,11 @@ bool Validator::CheckParentClass(Class *c)
 	if(!c->ptype)
 		return true;
 	
-	// Deal with structs
-	if(c->structure)
+	// Deal with value classes
+	if(c->value)
 	{
-		AddError("structures cannot inherit", c->ptype->pos);
-		AddInfo(c->name + " declared a structure here:", c->pos.To(c->name_pos));
+		AddError("value classes cannot inherit", c->ptype->pos);
+		AddInfo(c->name + " declared a value class here:", c->pos.To(c->name_pos));
 		return false;
 	}
 	
@@ -233,12 +233,12 @@ bool Validator::CheckParentClass(Class *c)
 	if(!t)
 		return false;
 	
-	// Check it is indeed a class (not a struct)
+	// Check it is indeed an object class
 	Class *pc = t->GetClass();
-	if(pc->structure)
+	if(pc->value)
 	{
-		AddError("cannot inherit from a structure", c->ptype->pos);
-		AddInfo(t->signature + " declared a structure here:", pc->pos.To(pc->name_pos));
+		AddError("cannot inherit from a value class", c->ptype->pos);
+		AddInfo(t->signature + " declared a value class here:", pc->pos.To(pc->name_pos));
 		return false;
 	}
 	

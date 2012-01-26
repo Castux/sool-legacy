@@ -29,8 +29,8 @@ bool Parser::Parse()
 				else
 					context->extensions.push_back(e);
 				break;
-			case Token::t_class:
-			case Token::t_struct:
+			case Token::t_object:
+			case Token::t_value:
 				c = ParseClass();
 				if(!c)
 					return false;
@@ -38,7 +38,7 @@ bool Parser::Parse()
 					context->classes.push_back(c);
 				break;
 			default:
-				AddError("expected class, structure or extension definition", head->pos);
+				AddError("expected class or extension definition", head->pos);
 				return false;
 		}
 	}
@@ -55,10 +55,10 @@ Class* Parser::ParseClass()
 	
 	switch(head->kind)
 	{
-		case Token::t_class:
+		case Token::t_object:
 			break;
-		case Token::t_struct:
-			c->structure = true;
+		case Token::t_value:
+			c->value = true;
 			break;
 		default:
 			error(std::string("Parser::ParseClass() - wrong class token: ") + head->FancyName());

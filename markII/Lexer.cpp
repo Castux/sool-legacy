@@ -80,7 +80,7 @@ bool Lexer::LexName()
 	// Check if it is a reserved keyword
 	if(islower(*head))
 	{
-		for(uint k = Token::t_class ; k <= Token::t_end ; k++)
+		for(uint k = Token::t_object ; k <= Token::t_end ; k++)
 		{
 			if(name.compare(Token::GetTokenString((Token::Kind) k)) == 0)
 			{
