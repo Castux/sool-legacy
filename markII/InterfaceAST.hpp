@@ -32,7 +32,7 @@ namespace sool
 			t_bool,
 			t_text,
 			t_data,
-			t_opaque,
+			t_blob,
 			t_named,
 			t_unknown
 		} Kind;
@@ -94,7 +94,6 @@ namespace sool
 		
 		std::vector<TypeDecl*>	ret_decls;		//owned
 		Type					*rtype;
-		bool					rbyref;
 		
 		std::string				name;
 		bool					setter;

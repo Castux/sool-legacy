@@ -19,8 +19,7 @@ KEYWORD(num)
 KEYWORD(bool)
 KEYWORD(text)
 KEYWORD(data)
-KEYWORD(opaque)
-KEYWORD(ref)
+KEYWORD(blob)
 
 // Final statements
 KEYWORD(break)
@@ -48,7 +47,6 @@ KEYWORD(isnot)
 KEYWORD(true)
 KEYWORD(false)
 KEYWORD(nil)
-KEYWORD(nan)
 KEYWORD(self)
 KEYWORD(super)
 
@@ -92,6 +90,7 @@ PUNCT(lcurly,			"{")
 PUNCT(rcurly,			"}")
 PUNCT(hash,				"#")
 PUNCT(equal,			"=")
+PUNCT(question,			"?")
 PUNCT(dot,				".")
 
 // Tokens with variable content, recognized programatically by the lexer

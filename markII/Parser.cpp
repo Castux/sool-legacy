@@ -157,8 +157,8 @@ bool Parser::ParseNameOfClass(Class *c)
 		case Token::t_text:
 			c->name = "text";
 			break;
-		case Token::t_opaque:
-			c->name = "opaque";
+		case Token::t_blob:
+			c->name = "blob";
 			break;
 		case Token::t_data:
 			c->name = "data";
@@ -334,9 +334,9 @@ TypeDecl* Parser::ParseType()
 			t->kind = TypeDecl::t_text;
 			t->name = "text";
 			break;
-		case Token::t_opaque:
-			t->kind = TypeDecl::t_opaque;
-			t->name = "opaque";
+		case Token::t_blob:
+			t->kind = TypeDecl::t_blob;
+			t->name = "blob";
 			break;
 		case Token::t_data:
 			t->kind = TypeDecl::t_data;
@@ -495,7 +495,7 @@ Method* Parser::ParseMethod()
 	
 	// Return type(s)
 	
-	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket && head->kind != Token::t_ref)
+	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
 	{
 		TypeDecl *t = ParseType();
 		if(!t)
@@ -517,14 +517,6 @@ Method* Parser::ParseMethod()
 			}
 			m->ret_decls.push_back(t);
 		}
-	}
-	
-	// Ref
-	
-	if(Accept(Token::t_ref))
-	{
-		m->rbyref = true;
-		m->rbyref_pos = head[-1].pos;
 	}
 	
 	// Name

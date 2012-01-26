@@ -42,7 +42,7 @@ Member *Member::Copy()
 	return m;
 }
 
-Method::Method() : internal(false), selfless(false), foreign(false), rbyref(false), setter(false), member(NULL)
+Method::Method() : internal(false), selfless(false), foreign(false), setter(false), member(NULL)
 {
 }
 

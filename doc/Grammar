@@ -8,14 +8,13 @@ composite-def :=	( 'struct' | 'class' | 'extend' )
 					composite-body
 					'end'
 
-class-name :=	CName [ template ]
+class-name :=	( ( CName | 'num' | 'bool' | 'text' | 'blob' | 'data' )
+				[ template ] ) |
+				'#' class-name
 
-template := 	'|' ( type | '(' list-type ')' )
+template := 	'|' ( class-name | '(' list-class-name ')' )
 
-type :=			'num' | 'bool' | 'text' | 'opaque' | 'data' |
-				class-name | type-low-array
-
-type-low-array :=	'#' type
+type :=			class-name [ '?' ]
 
 composite-body :=	{ member-def | method-def | foreign-def }
 
@@ -26,7 +25,6 @@ member-def :=	[ 'shared' ] [ 'internal' ]
 method-def :=	[ 'internal' ]
 				( 'method' | 'selfless' )
 				[ list-type ]
-				[ 'ref' ]
 				method-name
 				'(' [ list-arg-def ] ')'
 				block
@@ -73,11 +71,11 @@ if-stat :=		'if' exp [ 'as' Name ] 'then' block
 
 assignment :=	list-left-value '=' list-exp
 
-left-value :=	[ type ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name ) ]
+left-value :=	[ class-name ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name ) ]
 
 call-stat :=	method-call { exp-tail }
 
-method-call :=	[ type ':' ] Name [ call-arg ]
+method-call :=	[ class-name ':' ] Name [ call-arg ]
 
 exp :=			term { binop term }
 
@@ -91,7 +89,7 @@ basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
 				table-cons | object-cons | '(' exp ')' )
 				{ exp-tail }
 
-atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil' | 'nan'
+atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
 				'self' | 'super'
 
 vec-cons :=		'<' list-basic-exp '>'
@@ -102,8 +100,7 @@ table-cons :=	'{' [ list-table-cons-pair ] '}'
 
 table-cons-pair :=	exp ':' exp
 
-object-cons :=	( class-name | type-low-array )
-				[ array-cons | table-cons | with-cons | call-arg ]
+object-cons :=	class-name [ array-cons | table-cons | with-cons | call-arg ]
 
 with-cons :=	'with' list-with-cons-pair 'end'
 
