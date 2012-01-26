@@ -2,7 +2,7 @@
 
 using namespace sool;
 
-Parser::Parser(std::vector<Token> *t) : tokens(t), context(NULL), curr_decls(NULL), noinfo(false)
+Parser::Parser(std::vector<Token> *t) : tokens(t), curr_decls(NULL), noinfo(false)
 {
 	head = &tokens->front();
 }
@@ -14,7 +14,9 @@ Parser::~Parser()
 
 bool Parser::Parse()
 {
-	context = new Context;
+	result.classes = new std::vector<Class*>;
+	result.extensions = new std::vector<Extension*>;
+	
 	Class *c;
 	Extension *e;
 	
@@ -27,7 +29,7 @@ bool Parser::Parse()
 				if(!e)
 					return false;
 				else
-					context->extensions.push_back(e);
+					result.extensions->push_back(e);
 				break;
 			case Token::t_object:
 			case Token::t_value:
@@ -35,7 +37,7 @@ bool Parser::Parse()
 				if(!c)
 					return false;
 				else
-					context->classes.push_back(c);
+					result.classes->push_back(c);
 				break;
 			default:
 				AddError("expected class or extension definition", head->pos);

@@ -51,8 +51,8 @@ int main()
 	if(parser.report.numerror > 0)
 		return 1;
 	
-	Validator validator(parser.context);
-	validator.Validate();
+	Validator validator;
+	validator.Validate(parser.result);
 	
 	validator.report.Print();
 	

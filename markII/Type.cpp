@@ -6,14 +6,21 @@
 
 using namespace sool;
 
-Type::Type(Class* cl) : c(cl)
+Type::Type(Class* cl, bool opt) : c(cl), optional(opt)
 {
 	signature = c->name;
+	if(opt)
+		signature += "?";
 }
 
 Class *Type::GetClass()
 {
 	return c;
+}
+
+bool Type::IsOptional()
+{
+	return optional;
 }
 
 TypeForge::TypeForge(Validator *validator) : v(validator)
@@ -57,16 +64,6 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 		Class *c = v->context->Get(decl->name);
 		if(!c)
 		{
-			// Not found, maybe it is a template parameter in the class where it was defined
-			/*TypeMap *instmap = &decl->def_class->instmap;
-			TypeMap::iterator it = instmap->find(decl->name);
-			
-			if(it != instmap->end())
-			{
-				// Yes, found
-				return it->second;
-			}
-			else*/
 			{
 				v->AddError("unknown class " + decl->name, decl->name_pos);
 				return NULL;
@@ -77,12 +74,12 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 		
 		if(c->IsTemplate())
 		{
-			v->AddError("template " + c->Kind() + " " + c->name + " used without parameters", decl->pos);
+			v->AddError(c->Kind() + " " + c->name + " used without parameters", decl->pos);
 			return NULL;
 		}
 		
 		// Otherwise, ok. Build type.
-		Type *t = new Type(c);
+		Type *t = new Type(c,decl->optional);
 		Type *intern = Internize(t);
 		
 		return intern;
@@ -115,7 +112,7 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 	if(usenum != declnum)
 	{
 		std::stringstream tmp;
-		tmp << "template " << c->Kind() << " " << c->name << " used with " << usenum << " parameter";
+		tmp << c->Kind() << " " << c->name << " used with " << usenum << " parameter";
 		if(usenum > 1)
 			tmp << "s";
 		
@@ -129,7 +126,7 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 		return NULL;
 	}
 	
-	// Recursively get subtypes
+	// Recursively prepare subtypes
 	
 	std::vector<Type*> params;
 	
@@ -148,7 +145,7 @@ Type *TypeForge::ConvertDecl(TypeDecl* decl)
 	
 	// Finally build the type
 	
-	Type *t = new Type(inst);
+	Type *t = new Type(inst,decl->optional);
 	Type *intern = Internize(t);
 	
 	// Save in shortcut map

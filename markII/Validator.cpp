@@ -3,7 +3,84 @@
 
 using namespace sool;
 
-Validator::Validator(Context *c) : tforge(this), context(c)
+Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
+{
+	// Start by building the signature
+	
+	std::string sig;
+	
+	if(templ->name == "#")
+	{
+		// Special array case, we know there should be only one parameter
+		// thanks to the parser
+		
+		if(params.size() != 1)
+			error("array type didn't get exactly one parameter");
+		
+		sig = std::string("#") + params[0]->signature;
+	}
+	else
+	{
+		// Normal case, just cat the params
+		
+		sig = templ->name + "|";
+		
+		if(params.size() > 1)
+			sig += "(";
+		
+		for(uint i = 0; i < params.size()-1; i++)
+			sig += params[i]->signature + ",";
+		
+		sig += params.back()->signature;
+		
+		if(params.size() > 1)
+			sig += ")";
+	}
+	
+	// Check if the class already exists
+	
+	Class *inst = Get(sig);
+	
+	if(inst)
+		return inst;
+	
+	// If not we simply make a copy of the template, replace the template
+	// parameters by they values
+	
+	inst = templ->Copy();
+	
+	if(params.size() != templ->params.size())
+		error("Class::Instantiate - mismatched number of parameters");
+	
+	// Do the big replacement of types!
+	
+	inst->params.clear();
+	inst->name = sig;
+	
+	// Then add it to the context
+	
+	cmap[sig] = inst;
+	
+	return inst;
+}
+
+Class* Context::Get(std::string name)
+{
+	ClassMap::iterator it = cmap.find(name);
+	
+	if(it != cmap.end())
+		return it->second;
+	
+	return NULL;
+}
+
+Context::~Context()
+{
+	for(ClassMap::iterator it = cmap.begin(); it != cmap.end(); it++)
+		delete(it->second);
+}
+
+Validator::Validator() : tforge(this)
 {
 }
 
@@ -11,22 +88,20 @@ Validator::~Validator()
 {
 }
 
-bool Validator::Validate()
+bool Validator::Validate(ParseResult res)
 {
-	// Global stuff: check names, sort templates and extensions
+	// Start by filling the context
 	
-	if(!CheckClassNames())
+	context = new Context;
+	
+	if(!FillContextWithClasses(res))
 		return false;
 	
-	SortOutTemplates();
-	
-	if(!CheckTemplateParameters())
-		return false;
-	
-	MakeAllTypesAndInstances();
+	delete(res.classes);
+	delete(res.extensions);
 	
 	// Validate interfaces
-	
+	/*
 	for(uint i = 0 ; i < context->classes.size() ; i++)
 	{
 		if(!ValidateInterface(context->classes[i]))
@@ -42,19 +117,23 @@ bool Validator::Validate()
 		AddInfo(c->name + (c->pclass ? " : " + c->pclass->name : ""));
 	}
 	
-	//for(TypeMap::iterator it = tforge.tmap.begin(); it != tforge.tmap.end(); it++)
-	//	AddInfo(it->second->signature);
-	
+	for(TypeMap::iterator it = tforge.tmap.begin(); it != tforge.tmap.end(); it++)
+		AddInfo(it->second->signature);
+	*/
 	return true;
 }
 
-bool Validator::CheckClassNames()
+bool Validator::FillContextWithClasses(ParseResult res)
 {
+	std::vector<Class*> *classes = res.classes;
+	
 	bool success = true;
 	
-	for(uint i = 0; i < context->classes.size(); i++)
+	// Index classes by name, check unicity
+	
+	for(uint i = 0; i < classes->size(); i++)
 	{
-		Class *c = context->classes[i];
+		Class *c = (*classes)[i];
 		
 		ClassMap::iterator it = context->cmap.find(c->name);
 		
@@ -65,6 +144,7 @@ bool Validator::CheckClassNames()
 			AddInfo("here:", it->second->name_pos);
 			
 			success = false;
+			delete(c);
 		}
 		// Index by name
 		else
@@ -73,35 +153,16 @@ bool Validator::CheckClassNames()
 		}
 	}
 	
-	return success;
-}
-
-void Validator::SortOutTemplates()
-{
-	std::vector<Class*> templates;
-	std::vector<Class*> classes;
+	if(!success)
+		return false;
 	
-	std::vector<Class*>::iterator it;
+	// Then check parameters in templates
 	
-	for(it = context->classes.begin(); it < context->classes.end(); it++)
+	for(ClassMap::iterator it = context->cmap.begin(); it != context->cmap.end(); it++)
 	{
-		if((*it)->IsTemplate())
-			templates.push_back(*it);
-		else
-			classes.push_back(*it);
-	}
-	
-	context->templates = templates;
-	context->classes = classes;
-}
-
-bool Validator::CheckTemplateParameters()
-{
-	bool success = true;
-	
-	for(uint i = 0 ; i < context->templates.size() ; i++)
-	{
-		Class *t = context->templates[i];
+		Class *t = it->second;
+		if(!t->IsTemplate())
+			continue;
 		
 		for(uint j = 0 ; j < t->params.size() ; j++)
 		{
@@ -136,14 +197,27 @@ bool Validator::CheckTemplateParameters()
 		}
 	}
 	
+	if(!success)
+		return false;
+	
+	// Then the big magic "make it all happen"
+	if(!MakeAllTypesAndInstances())
+		return false;
+	
+	// Finally, now that all possible classes do exist, append the extensions
+	//
+	
 	return success;
 }
 
 bool Validator::MakeAllTypesAndInstances()
 {
-	for(uint i = 0 ; i < context->classes.size() ; i++)
+	for(ClassMap::iterator it = context->cmap.begin(); it != context->cmap.end(); it++)
 	{
-		Class *c = context->classes[i];
+		Class *c = it->second;
+		
+		if(c->IsTemplate())
+			continue;
 		
 		for(uint j = 0 ; j < c->type_decls.size() ; j++)
 		{

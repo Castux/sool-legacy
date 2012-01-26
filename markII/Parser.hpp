@@ -8,16 +8,22 @@
 
 namespace sool
 {
+	struct ParseResult
+	{
+		std::vector<Class*> 	*classes;
+		std::vector<Extension*>	*extensions;
+	};
+	
 	class Parser
 	{
 		public:
 		
 		Report report;
+		ParseResult result;
 		
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned
 		Token					*head;
-		Context					*context;		//not owned, will be passed to analyzer
 		std::vector<TypeDecl*>	*curr_decls;	// shortcut to current class' or extension's list of types for deep setting
 		
 		Parser(std::vector<Token> *t);

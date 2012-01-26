@@ -23,16 +23,18 @@ namespace sool
 		
 		private:
 		
-		Type(Class *cl);
+		Type(Class *cl, bool opt);
 		
 		public:
 		
 		std::string signature;
 		Class *GetClass();
+		bool IsOptional();
 		
 		private:
 		
 		Class *c;
+		bool optional;
 	};
 	
 	typedef std::map<std::string,Type*> TypeMap;

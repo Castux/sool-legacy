@@ -119,7 +119,6 @@ namespace sool
 	// It serves for:
 	// - normal classes (object and value)
 	// - templates (in which case the 'params' vector is filled with TypeDecl's)
-	// - template instances (in which case 'params' is empty, and 'instmap' maps names to types)
 	
 	class Class : public AST
 	{
@@ -129,7 +128,6 @@ namespace sool
 		
 		std::string					name;		// In instances, this is the full name
 		std::vector<std::string>	params;		// For templates only: template parameters, owned
-		TypeMap						instmap;	// For instances only: map to types
 		
 		TypeDecl	*ptype;		// Parent's name as is parsed, owned
 		Class		*pclass;	// Parent class, resolved, not owned
@@ -181,30 +179,6 @@ namespace sool
 		
 		Extension();
 		~Extension();
-	};
-	
-	// Context is the top level object, it basically holds the global
-	// scope. That is, classes and templates.
-	
-	class Context
-	{
-		public:
-		
-		// Parsed
-		
-		std::vector<Class*> classes;	// owned
-		std::vector<Extension*> extensions;	// owned
-		
-		// Analyzed
-
-		std::vector<Class*> templates;	// owned
-		std::vector<Class*> instances;	// owned
-		ClassMap cmap;					// An indexing of classes and templates by name
-		
-		Class* Get(std::string);	// Find class or template by name
-		Class *Instantiate(Class *templ, std::vector<Type*> params);
-		
-		~Context();
 	};
 }
 

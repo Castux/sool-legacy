@@ -5,9 +5,25 @@
 #include "InterfaceAST.hpp"
 #include "Report.hpp"
 #include "Type.hpp"
+#include "Parser.hpp"
 
 namespace sool
 {
+	// Context is the top level object, it basically holds the global
+	// scope. That is, classes and templates.
+	
+	class Context
+	{
+		public:
+		
+		ClassMap cmap;				// An indexing of classes and templates by name, owned
+		
+		Class* Get(std::string);	// Find class or template by name
+		Class *Instantiate(Class *templ, std::vector<Type*> params);
+		
+		~Context();
+	};
+	
 	// The main semantic analyzer
 	// It is passed a Context, and decides if it is valid or not,
 	// adding some information on the way
@@ -22,18 +38,16 @@ namespace sool
 		TypeForge tforge;
 		Context *context;	// not owned, will be passed to codegen
 		
-		Validator(Context *c);
+		Validator();
 		~Validator();
 		
 		// Validation entry point
-		bool Validate();
+		bool Validate(ParseResult result);
 		
 		private:
 		
 		// Global work before doing individual classes
-		bool CheckClassNames();		// Check unicity, and index by name
-		void SortOutTemplates();
-		bool CheckTemplateParameters();
+		bool FillContextWithClasses(ParseResult result);		// Check unicity, and index by name
 		bool MakeAllTypesAndInstances();
 		
 		// Work on individual classes
