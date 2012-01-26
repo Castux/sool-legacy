@@ -323,30 +323,25 @@ TypeDecl* Parser::ParseType()
 	switch(head->kind)
 	{
 		case Token::t_num:
-			t->kind = TypeDecl::t_num;
 			t->name = "num";
 			break;
 		case Token::t_bool:
-			t->kind = TypeDecl::t_bool;
 			t->name = "bool";
 			break;
 		case Token::t_text:
-			t->kind = TypeDecl::t_text;
 			t->name = "text";
 			break;
 		case Token::t_blob:
-			t->kind = TypeDecl::t_blob;
 			t->name = "blob";
 			break;
 		case Token::t_data:
-			t->kind = TypeDecl::t_data;
 			t->name = "data";
 			break;
 		default:
 			break;
 	}
 	
-	if(t->kind != TypeDecl::t_unknown)
+	if(t->name != "")
 	{
 		t->pos = head->pos;
 		t->name_pos = head->pos;
@@ -370,7 +365,6 @@ TypeDecl* Parser::ParseType()
 			return NULL;
 		}
 		
-		t->kind = TypeDecl::t_named;
 		t->name = "#";
 		t->pos = t->name_pos.To(sub->pos);
 		t->params.push_back(sub);
@@ -398,7 +392,6 @@ TypeDecl* Parser::ParseClassName()
 	if(!Expect(Token::t_cname))
 		return NULL;
 	
-	t->kind = TypeDecl::t_named;
 	t->name = head[-1].string;
 	t->name_pos = head[-1].pos;
 	

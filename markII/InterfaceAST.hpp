@@ -26,20 +26,9 @@ namespace sool
 	{
 		public:
 		
-		typedef enum
-		{
-			t_num,
-			t_bool,
-			t_text,
-			t_data,
-			t_blob,
-			t_named,
-			t_unknown
-		} Kind;
-		
-		Kind					kind;
-		std::string				name;		// For t_named only. Use "#" for arrays
+		std::string				name;		// Use "#" for arrays
 		std::vector<TypeDecl*>	params;		// For template parameters, owned. Only with t_named
+		bool					optional;
 		
 		// Useful source code positions
 		SourcePos	name_pos;

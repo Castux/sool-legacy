@@ -4,7 +4,7 @@
 
 using namespace sool;
 
-TypeDecl::TypeDecl() : kind(t_unknown)
+TypeDecl::TypeDecl()
 {
 }
 
