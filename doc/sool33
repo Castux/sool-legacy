@@ -2,21 +2,21 @@ nil, again :(
 =============
 
 What I found most special about Rust is that every variable is always 
-initialized, and therefore no pointer can ever be NULL.
+initialized, and no pointer can ever be NULL.
 
-When in C++ or sool, you allocate an object of a given type, and then 
-fill its members, in Rust, the only thing you can do is build an object 
-by specifying its members, and *this* determines its type. Then, if you 
+In C++ or sool, you allocate an object of a given type, and then fill 
+its members. In Rust, the only thing you can do is build an object by 
+specifying its members, and *this* determines its type. Then, if you 
 happened to have named this type earlier and defined methods for it, it 
 becomes the equivalent of an instance of that class. If you omitted to 
-give a value to a certain field, the field doesn't exist and it is 
-another type, in which you cannot access this particular field.
+give a value to a certain field, the field doesn't exist and the record 
+is of another type, in which you cannot access this particular field.
 
 Of course, in practice, that doesn't prevent you to have shortcut 
 functions that construct the objects by filling in default values, so 
 it's not necessarily less convenient.
 
-What fascinates me is that is supresses the need for NULL pointer checks 
+What fascinates me is that is suppresses the need for NULL pointer checks 
 entirely. Remember, when discussing nil, I said it was impossible to do 
 without because we use it for:
 
@@ -35,32 +35,29 @@ This is beautiful. Very logical, very neat and theoretical like a
 functional language. Type constructors and type pattern matching. Wow.
 
 Does that mean I want the same in sool? Grumph. No nil-checks sound 
-*really* good, implementation-wise. So far in my head, the way to do it 
-is inserting a test before each method call (and hope for compiler 
-optimization), or inserting a test on self at the beginning of each 
-method's body. Doable, trivial, but not awesome.
+*really* good, implementation-wise. So far in my head, the way to deal 
+with nil is inserting a test before each method call (and hope for 
+compiler optimization), or inserting a test on `self` at the beginning 
+of each method's body. Doable, trivial, but not awesome.
 
 What would the "all members always initialized" mean in sool? For 
 primitive types and struct members, no issue there, I planned on having 
 default values anyway. The big question is for objects on the heap.
 
-Like I mentionned before (probably when discussing the "single 
+Like I mentioned before (probably when discussing the "single 
 ownership" thing), it's OK the pre-allocate sub-objects all the way 
 down, as long as the whole thing has a tree structure. Obviously, when 
 there are loops, we'd have an infinite recursion.
 
 Many pointers are not meant for ownership, but for shortcut reference, 
-like parents in a tree, or a network manager that could be accessed from 
-all over the program. A big program can look like a cloud of objects, 
-all talking to each other.
+like pointing to parents in a tree, or a network manager that could be 
+accessed from all over the program. A big program can look like a cloud 
+of objects, all talking to each other.
 
-As I recall, I had the idea of two kinds of pointers: owning pointers, 
-and simple references. The first kind only would see automatic 
-allocation, but it wouldn't solve the second ones being nil.
-
-Even without the distinction between the two, having an automatic 
-allocation in sool would also mean that we force the "simple shortcuts" 
-to be pointed at something existing, at initialization.
+Having an automatic allocation in sool would also mean that we force the 
+distinction between "owned objects", that can be allocated 
+automatically, and "simple shortcuts" to must be pointed at something 
+existing, at initialization.
 
 Instead of an initializer method in which you can set some fields, and 
 leave the others be, it would mean that *every* pointer-like variable 
@@ -91,12 +88,17 @@ Why we really like nil
 Compare
 
 	str = "yepee"
-	if str:match("blah") then end
+	if str:find("blah") as where then
+		-- use where
+	end
 
 to:
 
 	std::string str("yepee")
-	if(std.find("blah") != std::string::npos) {}
+	size_t where = std.find("blah")
+	if(where != std::string::npos) {
+		// use where
+	}
 
 The principle is exactly the same: if we have a valid result to return, 
 we return it. If not (and that might happen, we don't know), return some 
@@ -107,17 +109,16 @@ highest possible integer of the native integer size. So, in this case
 the guys who made the STL decided arbitrarily what was the invalid 
 value. Not only that breaks if you have a veeeeery big string (albeit 
 unlikely), but also, it's so arbitrary that nobody can ever remember, 
-and the best is to compare to some class member where it is stored.
+and the best practice is to compare it to some class member where it is 
+stored.
 
 Now if you use an std::map, the `find` method will return an iterator 
 that points to the result of map::end(). It could be anything else.
 
-In Lua, there is one standard normal way to say "invalid", it's nil. And 
-nil happens to evaluate to false in condition statements, which gives 
-very natural looking idioms.
-
-That's one of my favorite things in Lua, and I'm not ready to give it 
-up.
+In Lua, there is one standard normal way to say "invalid": nil. And nil 
+happens to evaluate to false in condition statements, which gives very 
+natural looking idioms. That's one of my favorite things in Lua, and I'm 
+not ready to give it up.
 
 It works in the other direction as well. In my compiler, when I generate 
 a diagnostic, I must first give the severity and the message, but then I 
@@ -130,7 +131,7 @@ highlight some source?" "No thanks" "Which one?" "Err wut?".
 Sure, I could have two versions of the method, one with the SourcePos 
 argument, one without. But then what if I have instead two arguments of 
 the same type that I would like to be optional? If I make a method with 
-one less, how do I know which one it is?
+one less, how do I know which one was omitted?
 
 For sure we can do without optional arguments, but they can also make 
 life so much easier.
@@ -139,10 +140,9 @@ Lastly, I think about the members. Same example, instead of printing
 directly a diagnostic, I want to store it in a Diagnostic object, which 
 will be probably used for statistics and printing later. If I don't have 
 a SourcePos to give, what do I do? Invent an invalid SourcePos that will 
-not be printed later?
-
-That means inventing for each and every kind of objects a way to mean 
-"this one is invalid". Or we could have a unified proper mechanism: nil.
+not be printed later? That means inventing for each and every kind of 
+objects a way to mean "this one is invalid". Or we could have a unified 
+proper mechanism: nil.
 
 Sure, I can think of ways to do without: have the Diagnostic class 
 contain no SourcePos, and a child class DiagnosticWithSourcePos contain 
@@ -162,7 +162,7 @@ handling, it should be used only when really necessary.
 For all the rest (non optional references), we can force initialization. 
 Period. That's a good practice anyway. It will mean that you will have 
 to gather all the elements before grouping them together in an object. 
-But once an object is made, it is guarrantied to be full.
+But once an object is made, it is guarantied to be full.
 
 If you use a custom `init`, the compiler checks that all members are 
 initialized. If you use the default `init` and the `with member = val 
@@ -175,76 +175,241 @@ As I recall, I longly pondered about how to check for presence or
 absence of an optional object, and how to cast an optional to a 
 non-optional.
 
-It's not that hard:
+It's not that hard. We can decide that the only way to de-optionalize an 
+optional is conditional statements:
 
-	-- blah is an optional Object
-	if blah then
-		blah.do_things
-	else
-		blah.anything	-- compile time ERROR!
+- by naming a new local with the `as` in `if` and `while` constructs
+- by catching the value in a lazy `or`
+
+No message can be sent to an optional, it has to be verified first, and 
+in case it does have a value, this value should be put in a new name.
+
+	-- opt is an optional Object
+	
+	opt.dothing				-- ERROR
+	
+	if opt as value then	-- value is of type Object
+		value.dothing	
 	end
+	
+	value = opt or Object()	-- if opt is non-nil, value gets it,
+							-- otherwise the second branch
 
-I used to talk about boolean evaluation of types, which basically was a 
-way to check if they were valid (non nil, non nan, and the rest was 
-incoherent). Well how about this:
-
-Conditional statements can take either:
+This means the conditional statements can take either:
 
 - a boolean expression
 - an optional
 
 Nothing else. In case of an optional, the variable in the "true" branch 
-will be casted to a non-optional. Sure, that's the same name for 
-something of a different type, so internally, there will be variable 
-shadowing. Well yes, but not really, it's been checked, so no matter. 
-Let the analyzer do the work, and don't worry too much.
+will be casted to a non-optional. Sure, that requires using a new name, 
+but it makes sense. The fact that you can't do anything with an optional 
+(except casting it into a non optional) mirrors the fact that it would 
+be unsafe to do so anyway!
 
-	if blah then
-		-- blah is a true Object, no more checks
+nil, or optionals, are also a way to catch errors. And dealing with 
+errors is important enough that it may require additional typing. For 
+instance, typecasting may return nil, if the cast (which can serve as a 
+test as well) failed:
+
+	vehicule = Vehicule()
+	maybe_car = vehicule to Car		-- this returns an optional
+	if maybe_car as car then
+		car.honk
 	end
-	
-	-- blah is still an optional Object, do more checks
 
-What about the current idiom in Lua:
+Of course that can advantageously be combined into a single statement:
 
-	if not blah then
-		blah = Object()
-	end
-
-Ha, trickier! We know that after the `if`, blah is necessarily a true 
-Object. Will the analyzer be able to handle that? Well, it would just 
-have to follow each branch:
-
-	if not blah then
-		blah = Object()
-		-- at the end of the branch, blah was initialized
+	if vehicle to Car as car then
+		-- car is a real Car
 	else
-		-- blah is a true Object
+		-- well, vehicle is not a Car
 	end
-	-- hurray, all branches lead to a real Object!
 
-Or stuff like:
+Same for results that may be nil:
 
-	if not blah then
-		return
+	if mytext.match("pattern %w+") as thematch then
+		thematch.print
 	end
-	blah.print
 
-Well, it's kind of the same, only the hidden branch "yes" can lead to 
-the method call, so it's OK. Won't that be complex? Well, probably.
+It seems like a lot to type, but in Lua you would *have* to deal with 
+nil too anyway, otherwise you risk a runtime error of sending message to 
+nil:
 
-It will certainly require dividing the code into blocks of execution, 
-with an execution graph. But hey guess what, that will be required 
-anyway when generating LLVM representation.
+	local thematch = mytext:match("pattern")
+	thematch:whatever()		-- hey, forgot to deal with the nil case!
+							-- if it didn't match, runtime error!
 
-	blah = blah or Object()
+The fact that sool forces to use optionals in the `if` construct and 
+name a new local for the result is just one step further than Lua where 
+you don't have to, but any good code needs it anyway.
 
-That's a lot of hidden things, but it means the same...
+And, well, you don't even have to use them right away, you can store 
+them in a temporary optional. But you will definitely need to rename 
+them once they're casted into a non-optional:
 
-	foo = bar and Object() or nil
-	meh = bar and nil or Object()
+	opt1,opt2,opt3 = iReturnThreeOptionals()
+	
+	if opt1 as a then
+		a.yay
+	end
 
-Ha, this time `foo` is optional too. And `meh` will require a bit of 
-type inferrence.
+Finally, you can use optionals in boolean expressions even if you don't 
+gather their value:
 
-Oh it's gonna be complex.
+	if opt1 and opt2 then
+		"haha".print
+		-- still can't use the values of opt1 and opt2, even if
+		-- logically, we know they're both valid
+	end
+
+So, yes, it might make some syntax a wee bit heavier, but in the grand 
+order of things, it's for the greater good. Optionals and nil are 
+serious matters. In C/C++, dereferencing NULL makes the system shut you 
+down immediately and without mercy. In Lua, which runs on its own 
+virtual machine, it's caught, but the sentence is the same: immediate 
+shutdown. And the fact is that since these errors happen at runtime, you 
+don't see them happen until they do, which can depend on input data, and 
+is therefore more difficult to debug.
+
+If we manage to design a system in which there is no such thing as NULL 
+pointers, or rather, where the validity is enforced at compile time by 
+the type system, well, maybe the programming work-flow will get improved. 
+Be forced to be tidy and organized from the start instead of just 
+throwing sloppy code and see if it works.
+
+I don't know, but it sounds like a good idea.
+
+Declaration syntax
+------------------
+
+The C# syntax of using `?` seems obvious. A question mark for something 
+unsure is definitely meaningful, and it's one of the few tokens left. 
+Where to put it is another question:
+
+	class Meh
+		-- after the type
+		num? somenum
+		-- after the name
+		num somenum?
+		
+		-- for return values it doesn't change much
+		method text?,blob,blob match(text pattern, blob? start) end
+		-- but for arguments it does
+		method text?,blob,blob match(text pattern, blob start?) end
+	end
+
+One important thing to notice is that it qualifies the variables or the 
+expressions (which are equivalent internally to temporary variables), 
+not the values or objects. You can't have an allocated object that 
+contains the information "I am actually nil". The info is in the 
+variable.
+
+Of course for value types, the distinction is less clear, since the 
+entire value is contained in the variable itself. But conceptually, the 
+optional status is part of the variable, not the value.
+
+If also means that you can't use optionals as template arguments. Can't 
+have an "Array of optional numbers". And that's good, because having a 
+suffix `?` in the type declaration would be syntactically annoying. If 
+you really need containers of optionals, you must box them into a struct 
+or object. Templates are instantiated using class names, not types.
+
+Attaching the `?` at the end of the type seems more logical. It mirrors 
+exactly the type signatures and method signatures (in which the argument 
+names disappear).
+
+`nil` keyword
+-------------
+
+Finally, we get back the generic and unique keyword `nil` that works 
+with every type (provided it's optional):
+
+	method foo(Object a, Object? b)
+		a = nil		-- ERROR, "a" is not optional!
+		b = nil		-- fine
+		
+		somebool = (b == nil)	-- ERROR, optionals answer to no method!
+		somebool = (b is nil)	-- that could be allowed
+		somebool = (b is a)		-- that shouldn't hurt either
+	end
+
+Since the `is` operator is meant for testing the references, there is no 
+dereferencing, only comparison. In theory, the optionals should be 
+casted back to non-optionals, and only in the success branches could 
+their value be accessed (and compared). But it still would be safe and 
+much nicer to replace
+
+	method foo(Object obj, Object? opt)
+		if opt as obj2 then
+			if obj is obj2 then
+				-- they are the same
+			end
+		end
+	end
+
+by:
+
+	method foo(Object obj, Object? opt)
+		if obj is opt then
+			-- they are the same
+			-- technically, we still can't do anything with opt,
+			-- but we know obj is the same, so...
+		end
+	end
+
+That only implies that the compiler does the glue between the 
+representation of an optional reference and a real reference. Which 
+brings us to:
+
+Implementation
+--------------
+
+Soooo, we're back to adding a nil value to each variable type. A 
+consistent and simple way is to stick a boolean to each, and use it to 
+mark the variable as nil or not.
+
+But of course, we know there are more efficient ways to deal with this. 
+As long as it's hidden in implementation, anything goes. References can 
+obviously use the address 0 as a nil value. Double precision numbers 
+have a very big range of unused values (the NaNs), out of which we can 
+pick one to be nil (we just need to be sure that normal operations won't 
+generate this particular NaN). Booleans are probably going to be bytes, 
+so plenty of room there. The only sensitive one is the blob (aka opaque, 
+aka unsigned int), in which every value is normally valid. For this one, 
+no choice, we have to either reduce its range by one bit (or one value), 
+or add a boolean to it.
+
+This is mostly detail, except we'll have to be careful with it when 
+writing the foreign function interface. The C API should define clear 
+functions or macros to produce or compare these values. And as always 
+with FFI, C functions should be kind enough to return the correct type, 
+even if there will be built-in dynamic type checking on the sool side: 
+basically every pointer that comes from C is assumed to be an opaque 
+blob, and it is dynamically type-casted back to the sool declared type. 
+You can always fool the system, but that should prevent accidental 
+mistakes at least.
+
+Summary
+-------
+
+-	all normal reference types must be initialized during `init` (either 
+	to a new object, or an existing one). There is no such thing as 
+	assigning `nil`. That way, we know that all pointers are always 
+	valid, and there is no need for built-int nil-checks.
+-	all variables (and return values) can be declared "optional". In 
+	addition of an actual value/object, we can assign `nil` to an 
+	optional.
+-	no message can be sent to an optional, ever.
+-	optionals cannot be assigned to non-optionals, ever (explicit
+	assignment, argument in calls, or return values).
+-	in conditional constructs (if, while, or, and), optionals evaluate 
+	to false if they are nil, and to true if they are not nil. In the 
+	true case, the resulting value can be caught by the `as Name` 
+	construct, or the result of the `or` operator, and will be of the 
+	equivalent non-optional type.
+-	optionals of reference types can be used with the special `is`
+	operator, to be compared between them, or with non-optionals, or 
+	with the `nil` literal.
+
+Well, I'm fairly happy with that new `nil` system. Hopefully it won't 
+come back to haunt me later.
