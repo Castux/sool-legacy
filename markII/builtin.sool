@@ -13,7 +13,7 @@ value num
 	method num /(num b) end
 	method num ^(num b) end		-- pow(self,b)
 	method num %(num b) end		-- fmod(self,b)
-	methoc num -() end
+	method num -() end
 	
 	method bool ==(num b) end
 	method bool <(num b) end
