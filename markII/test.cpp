@@ -11,14 +11,21 @@
 
 using namespace sool;
 
-int main()
+int main(int argc, char **argv)
 {
 	SourceFile file;
-	bool success = file.Load("example.sool");
+	
+	if(argc < 2)
+	{
+		std::cout << "Usage: " << argv[0] << " sourcefile" << std::endl;
+		exit(EXIT_FAILURE);
+	}
+	
+	bool success = file.Load(argv[1]);
 	
 	if(!success)
 	{
-		std::cout << "Meh, failure to load" << std::endl;
+		std::cout << "Meh, failure to load " << argv[1] << std::endl;
 		return 1;
 	}
 	

@@ -1,0 +1,173 @@
+-- This file describes the interfaces of the built-in types.
+-- It should list only the methods that the compiler will have to 
+-- provide itself by mapping to the C implementation or the standard C 
+-- library. Those that will be written in sool will belong in another file.
+
+value num
+	
+	method init() end
+	
+	method num +(num b) end
+	method num -(num b) end
+	method num *(num b) end
+	method num /(num b) end
+	method num ^(num b) end		-- pow(self,b)
+	method num %(num b) end		-- fmod(self,b)
+	methoc num -() end
+	
+	method bool ==(num b) end
+	method bool <(num b) end
+	method bool ~=(num b) end
+	method bool >(num b) end
+	method bool <=(num b) end
+	method bool >=(num b) end
+	
+	selfless num nan() end
+	method bool isnan() end
+	
+	method num abs() end
+	method num acos() end
+	method num asin() end
+	method num atan() end
+	selfless num atan(num y, num x) end
+	method num ceil() end
+	method num cos() end
+	method num cosh() end
+	method num exp() end
+	method num floor() end
+	method num,num frexp() end
+	selfless num ldexp(num m, num e) end
+	method num log() end
+	selfless num max(num a, num b) end
+	selfless num min(num a, num b) end
+	method num,num modf() end
+	selfless num pi() end
+	method num sin() end
+	method num sinh() end
+	method num sqrt() end
+	method num tan() end
+	method num tanh() end
+	
+	method blob toblob() end
+
+end
+
+value bool
+
+	method init() end
+	method bool ==(bool b) end
+	method bool ~=(bool b) end
+	
+end
+
+value blob
+	
+	method init() end
+	
+	method blob +(blob b) end
+	method blob -(blob b) end
+	method blob *(blob b) end
+	method blob /(blob b) end
+	method blob %(blob b) end
+
+	method bool ==(blob b) end
+	method bool <(blob b) end
+	method bool ~=(blob b) end
+	method bool >(blob b) end
+	method bool <=(blob b) end
+	method bool >=(blob b) end
+
+	method blob band(blob b) end
+	method blob bor(blob b) end
+	method blob bnot(blob b) end
+	method blob bxor(blob b) end
+	method blob lsh(blob b) end
+	method blob rsh(blob b) end
+	method blob lrot(blob b) end
+	method blob rrot(blob b) end
+
+	selfless blob max(blob a, blob b) end
+	selfless blob min(blob a, blob b) end
+	
+	selfless srand(blob seed) end
+	selfless blob rand() end
+	
+	method num tonum() end
+	
+end
+
+value #T
+	
+	method init() end
+	method init(blob size) end
+	method init(blob size, T val) end
+	
+	method #T copy() end
+	method #T copy(blob newsize) end
+	method #T copy(blob newsize, T val) end
+	
+	method blob size() end
+	
+	method T [](blob index) end
+	method #T [](blob i, blob j) end
+	
+	method []=(T val) end
+	method []=(#T vals) end		-- sizes must match
+	method []=(blob index, T val) end
+	method []=(blob i, blob j, T val) end
+	method []=(blob i, blob j, #T vals) end	-- sizes must match
+	
+	method blob?,T next(blob? iter) end
+	method blob?,blob,T next2(blob? iter) end
+	
+end
+
+object text
+	
+	method init() end
+	method blob size() end
+	
+	method text [](blob index) end
+	method text [](blob i, blob j) end
+	
+	method #blob code() end
+	method blob code(blob index) end
+	method #blob code(blob i, blob j) end
+	
+	selfless text char(blob code) end
+	
+	method blob?,blob?,#text? find(text pattern) end
+	method blob?,blob?,#text? find(text pattern, blob start) end
+	-- match and gmatch implemented in sool, over find
+	method text gsub(text pattern, text repl) end
+	method text gsub(text pattern, text repl, blob times) end
+	
+	method text ~(text b) end
+	method text rep(blob times) end
+	method text rep(blob times, text sep) end
+	
+	method bool ==(text b) end
+	method bool <(text b) end
+	method bool ~=(text b) end
+	method bool <=(text b) end
+	method bool >(text b) end
+	method bool >=(text b) end
+	
+end
+
+object data
+	
+	method init() end
+	method init(blob size) end
+	method init(blob size, blob val) end
+	
+	method data copy() end
+	method data copy(blob newsize) end
+	method data copy(blob newsize, blob val) end
+	
+	method blob size() end
+	
+	method blob read(blob index, blob bytes, bool lendian) end
+	method write(blob index, blob bytes, bool lendian, blob val) end
+	
+end
