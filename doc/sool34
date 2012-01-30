@@ -1,5 +1,8 @@
+Some tweaking before the last straight line
+===========================================
+
 Class and struct renaming
-=========================
+-------------------------
 
 One thing has always bothered me while writing my compiler, it's the 
 fact that the words "class" and "struct" have a very different status, 
@@ -13,13 +16,13 @@ do:
 
 	astruct = MyStruct
 
-the model is called a structure, and the content of that particular 
-variable is also "a structure". This is very annoying, because when 
-talking about the models, structures and classes are very similar. In 
-fact, they are even the same thing in my compiler, except that one has a 
-"structure" flag set. And I never know how to refer to the set of both. 
-"Class or structure". "Composite" usually does it. But everywhere in my 
-code, I use "Class" for both.
+the model `MyStruct` is called a structure, and the content of that 
+particular variable `astruct` is also "a structure". This is very 
+annoying, because when talking about the models, structures and classes 
+are very similar. In fact, they are even the same thing in my compiler, 
+except that one has a "structure" flag set. And I never know how to 
+refer to the set of both. "Class or structure". "Composite" usually does 
+it. But everywhere in my code, I use "Class" for both.
 
 Since structures are just "like classes, but value types", saying 
 "class" for just the "by reference" classes seems like a bit of language 
@@ -37,9 +40,9 @@ Wiktionary defines class as:
 	A group, collection, category or set sharing characteristics or 
 	attributes.
 
-That applies to both: all struct of a same kind share attributes and 
+That applies to both: all structs of a same kind share attributes and 
 behavior, they form a class, just as much as objects that share 
-attributes and behaviors for a class.
+attributes and behaviors form a class.
 
 In sool, an object lives on the heap: it has a unique identity (it's 
 address), not only an internal state. It is an **object** as we mean it 
@@ -66,11 +69,11 @@ directly the precision:
 	end
 
 The fact that it emphasizes the natural behaviors is really interesting. 
-Values have no identity, just content: they can only be copied around. A 
-Vector is a value just as a number is a value. An object, on the other 
-hand, is an independent separate entity. You create it, fill it with 
-data, and it can interact with other objects. The word "class" is 
-polyvalent.
+Values have no identity, just content, or essence: they can only be 
+copied around. A Vector is a value just as a number is a value. An 
+object, on the other hand, is an independent separate entity. You create 
+it, fill it with data, and it can interact with other objects. The word 
+"class" is polyvalent.
 
 	v = Vector(1,2)
 	d = Dog("Barky")
@@ -86,3 +89,136 @@ are really two different cars that can evolve in their own ways.
 
 I like this. Not only it makes things clearer, but it brings a 
 bit of originality. "struct" and "class" as keywords are so C++.
+
+Default values for argument
+---------------------------
+
+I was writing a draft of interface for the built-in types, and I noticed 
+I was already repeating myself a lot. Thanks to method overloading, we 
+can have different prototypes for the same method. A particular use of 
+this is when we want to omit some arguments:
+
+	method data copy() end
+	method data copy(blob newsize) end
+	method data copy(blob newsize, blob val) end
+    
+	method text gsub(text pattern, text repl) end
+	method text gsub(text pattern, text repl, blob times) end
+	
+	method text rep(blob times) end
+	method text rep(blob times, text sep) end
+
+That already bothers me. In Lua, where everything is dynamic, you can 
+pass any number of arguments to any function, and if you don't pass 
+enough, the rest is filled with nil. That way, you can have a sequence 
+of optional arguments at the end of the argument list, which makes very 
+nice shortcuts.
+
+The current way to do that in sool is to manually define all prototypes 
+and do the calls with the default values inside. Thanks to inlining, the 
+final machine code will probably be the same, but the source code has a 
+lot more in it.
+
+Lua allows this in a general manner, and uses the nil mechanism to 
+"catch" which arguments were not filled. C++ allows default values for 
+the arguments at the end of the list as well.
+
+Since now we have a proper "optional type" equivalent for each normal 
+type, we could do something similar.
+
+	method data copy(blob? newsize, blob? val) end
+	method text rep(blob times, text? sep) end
+
+Consecutive optional typed arguments at the end of the list can be 
+omitted when writing the call (and will get the nil value):
+
+	foo = somedata.copy			-- same as .copy(nil,nil)
+	foo = somedata.copy(200)	-- same as .copy(200,nil)
+	foo = somedata.copy(200,2)
+	
+	megalol = "lol".rep(2)		-- same as "lol".rep(2,nil): "lollol"
+	megalol = "lol".rep(2,",")	-- "lol,lol"
+
+Pretty sweet. But here comes the "however".
+
+However, that can result in an ambiguity:
+
+	-- method foo(num a)
+	-- method foo(num a, num? b)
+	
+	obj.foo(10)		-- is it really foo(10) or foo(10,nil)?
+
+Are there really cases where you'd need to be able to define both? Are 
+there really cases in which an optional-typed argument is not an 
+optional argument?
+
+Some ambiguities are trickier:
+
+	-- method foo(num? lol) end
+	-- method foo(blob? lol) end
+	
+	obj.foo()
+	obj.foo(nil)
+
+Yikes. What `nil` is that? A nil num or a nil blob? A poor 
+implementation would simply pick the first one in the list that matches 
+the call. That would be random, that would be bad. I mentionned already 
+that classes may have a built-in selfless `nilval` method that would be 
+used only to type an expression:
+
+	obj.foo(num:nilval)		-- no more ambiguity
+	obj.foo(blob:nilval)
+
+But the less stuff I build in, the happier I am. You can always do:
+
+	extend num
+		selfless num? nilval()
+			return nil
+		end
+	end
+
+if you really need it.
+
+In any case, trying to solve ambiguities at the call is not completely 
+awesome. Defining conflicting methods in the first place is a bad idea. 
+If it's possible to pass either a number, or a blob, or nothing, the 
+safer thing to do is:
+
+	method foo() end
+	method foo(num a) end
+	method foo(blob a) end
+
+and be done with it. I have difficulties imagining cases where you'd 
+need to make the difference between an absence of number and an absence 
+of blob. When in doubt, just write them all down.
+
+Unfortunately, that means a bit more work for the analyzer, which will 
+have to internally generate all protoypes corresponding to missing 
+arguments:
+
+	method foo(num n, num? m, text? t, data? d) end
+	
+	-- becomes:
+	foo:num,num?,text?,data?
+	foo:num,num?,text?
+	foo:num,num?
+	foo:num
+
+And all conflicts can be caught. C++ allows ambiguous interfaces to be 
+defined, and catches the conflict only at the call. That seems odd, 
+given that an ambiguous interface will always result in a ambiguous 
+call, except if all arguments are provided, which would make the whole 
+default argument thing pretty useless.
+
+If the conflicts are checked at the interface, then every call is non 
+ambiguous and can be resolved to a single method.
+
+It's true, defining optional-typed arguments at the end of the list does 
+slightly pollute the method namespace, and may unintentionally bring 
+trouble. But like I wrote earlier, if two methods have the same name, 
+they really should do the same thing. If this system gives birth to a 
+conflict, then probably one of the methods does something slightly 
+different, and needs to be named something else.
+
+Optionals, in any case, should be used wisely. They require a certain 
+amount of care in handling them.

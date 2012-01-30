@@ -98,12 +98,8 @@ end
 
 value #T
 	
-	method init() end
-	method init(blob size) end
-	method init(blob size, T val) end
+	method init(blob? size, T? val) end
 	
-	method #T copy() end
-	method #T copy(blob newsize) end
 	method #T copy(blob newsize, T val) end
 	
 	method blob size() end
@@ -127,8 +123,7 @@ object text
 	method init() end
 	method blob size() end
 	
-	method text [](blob index) end
-	method text [](blob i, blob j) end
+	method text [](blob i, blob? j) end
 	
 	method #blob code() end
 	method blob code(blob index) end
@@ -136,15 +131,12 @@ object text
 	
 	selfless text char(blob code) end
 	
-	method blob?,blob?,#text? find(text pattern) end
-	method blob?,blob?,#text? find(text pattern, blob start) end
+	method blob?,blob?,#text? find(text pattern, blob? start) end
 	-- match and gmatch implemented in sool, over find
-	method text gsub(text pattern, text repl) end
-	method text gsub(text pattern, text repl, blob times) end
+	method text gsub(text pattern, text repl, blob? times) end
 	
 	method text ~(text b) end
-	method text rep(blob times) end
-	method text rep(blob times, text sep) end
+	method text rep(blob times, text? sep) end
 	
 	method bool ==(text b) end
 	method bool <(text b) end
@@ -157,13 +149,9 @@ end
 
 object data
 	
-	method init() end
-	method init(blob size) end
-	method init(blob size, blob val) end
+	method init(blob? size, blob? val) end
 	
-	method data copy() end
-	method data copy(blob newsize) end
-	method data copy(blob newsize, blob val) end
+	method data copy(blob? newsize, blob? val) end
 	
 	method blob size() end
 	
