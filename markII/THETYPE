@@ -1,0 +1,48 @@
+Probably what needs to be done is:
+
+- during parsing, internize the TypeDecl objects. Do not link them to 
+any class, obviously. Return also a SourcePos for info purposes, to be 
+stored in the enclosing object. Types may keep one SourcePos as "first 
+declaration".
+
+- classes also keep a list of the types they use
+
+- we refuse class name shadowing by template parameters, so pseudo types 
+that include parameter names won't be ambiguous
+
+- perform global analysis: sort classes and templates and index them by 
+name
+
+- for each real class iterate using numerical indexes and 
+vector::size(), so that we can safely add new classes at the end during 
+the iteration, go through list of types, and validate them: link type 
+to actual class, or instantiate template and link to instance.
+
+- instantiation is: duplicate the template entirely, and while doing so, 
+update the list of types. When going through a type, replace 
+parameters by actual value, and create new (internized) type. Add 
+instance at the back of list of classes.
+
+All Instantiate() methods take a InstMap parameter to get down deep to 
+the types, and a link to the new instance, to gather all types (or just 
+the type list)
+
+Then same with extensions:
+
+- remember current number of classes
+- for all extensions, go through list of types, link them, instantiate 
+the ones that are needed, put these at the back of class list
+- process list from where previous stopped, (which might add new stuff 
+at the back) until empty
+- possibly already add the list of methods to the class
+
+When that is done, we should have:
+
+- all classes and instances in the list of classes, and indexed by name 
+in the class map
+- still templates in the template list and indexed by name, but we don't 
+use them anymore
+- all actual types in the type forge, linked to their class
+- all fake types (types that use a template parameter) in the type 
+forge, not linked to a class, and not used anymore
+

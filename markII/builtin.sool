@@ -96,7 +96,7 @@ value blob
 	
 end
 
-value #T
+object #T
 	
 	method init(blob? size, T? val) end
 	
@@ -155,7 +155,16 @@ object data
 	
 	method blob size() end
 	
-	method blob read(blob index, blob bytes, bool lendian) end
-	method write(blob index, blob bytes, bool lendian, blob val) end
+	method blob readuint8(blob index, blob bytes, bool lendian) end
+	method blob readuint16(blob index, blob bytes, bool lendian) end
+	method blob readuint32(blob index, blob bytes, bool lendian) end
+	method writeuint8(blob index, blob bytes, bool lendian, blob val) end
+	method writeuint16(blob index, blob bytes, bool lendian, blob val) end
+	method writeuint32(blob index, blob bytes, bool lendian, blob val) end
+	
+	method num readfloat(blob index, bool lendian) end
+	method num readdouble(blob index, bool lendian) end
+	method writefloat(blob index, bool lendian, num val) end
+	method writedouble(blob index, bool lendian, num val) end
 	
 end
