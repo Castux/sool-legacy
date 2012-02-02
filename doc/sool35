@@ -1,0 +1,298 @@
+My, myself and my God complex
+=============================
+
+Conditional statements as expressions
+-------------------------------------
+
+In my small review of Rust, I noticed one useful thing, that was the 
+fact that the branches of `if-else` constructs could "return" a 
+final value, which made the whole construct an expression, that could be 
+assigned to a variable:
+
+	let var = if a == b {
+		5
+	} else {
+		6
+	};
+
+I wrote it was particularly convenient associated with the fact that 
+variables in Rust cannot be declared without initialization, which made 
+the following Lua idiom impossible:
+
+	local var
+	if a == b then
+		var = 5
+	else
+		var = 6
+	end
+
+And obviously, it makes for less typing, since there is no need to 
+repeat the `var =` part.
+
+However, I completely overlooked the fact that it was possible to do 
+exactly the same in Lua, thanks to the lazy boolean operators:
+
+	var = a == b and 5 or 6
+
+And see, it's even far more concise. Even if there are many `else if` 
+branches, it stays fairly short:
+
+	var =	cond1 and val1 or
+			cond2 and val2 or
+			cond3 and val3 or
+			defaultval
+
+Note however that you can have only one expression in the branch, while 
+using Rust's proper `if` thing gives you an actual block of statements, 
+that can be ended in a single return value if you want. But well.
+
+Lua's logic
+-----------
+
+Reminder: in Lua, the `or` operator evaluates its first argument. If it 
+is non-nil or true, it returns it. If it is false or nil, it evaluates 
+the second argument and returns it. Of course, when using booleans, it's 
+exactly equivalent to the logical "or". When using other stuff, it keeps 
+the same logic but allows you to keep the values (not simply their 
+boolean truth).
+
+The `and` operator evaluates its first argument. It it's nil or false, 
+it returns this nil or false value. If it's non-nil or true, it 
+evaluates the second argument and returns it. Again, that's exactly a 
+logical "and" with booleans.
+
+Let's review the truth tables:
+
+	true or true = true
+	true or false = true
+	false or true = true
+	false or false = false
+	
+Therefore:
+
+	true or X = true
+	false or X = X
+
+Hence the possibility of lazy evaluation. We need to evaluate the right 
+hand side only when the left hand side is false.
+
+	true and true = true
+	true and false = false
+	false and true = false
+	false and false = false
+
+Therfore:
+
+	true and X = X
+	false and X = false
+
+Can you see the pretty symmetry? The "and" and "or" are perfect 
+negatives of each other. These fundamental relations hold:
+
+	not(A and B) = not(A) or not(B)
+	not(A or B) = not(A) and not(B)
+
+And these:
+
+		not(true and X) = not(X)
+	==>	not(true) or not(X) = not(X)
+	==> false or Y = Y
+	
+		not(false and X) = not(false)
+	==>	not(false) or not(X) = true
+	==> true or Y = true
+
+Logic is pretty. Math is pretty.
+
+Anyway, some Lua users despise the overuse of `and` and `or` for other 
+stuff than booleans, calling them unclear and difficult to read. I 
+happen to like them very much.
+
+The first classic use is the "default value":
+
+	give_me(tea or coffee)
+
+If there's tea, I'd like some. Otherwise, coffee is just fine. When you 
+say "I'll have tea, or coffee", you mean that both are OK, but you 
+usually put your first choice first. That's what happens in Lua too.
+
+The second classic use is an equivalent of C's ternary operator `a ? b
+: c`:
+
+	foo = cond and yes or no
+
+If condition `cond` holds, give me the `yes`. Else, the `no`. It's more 
+difficult to find real language equivalents using "and" and "or", but it 
+quickly becomes a natural idiom in Lua.
+
+	take(raining and umbrella or sunhat)
+
+"It's raining *and* I take my umbrella, *or* then just my sun-hat." I 
+admit it's less clear than the previous example, but once you're used to 
+it, it's as readable as:
+
+	take(if raining then umbrella else sunhat end)
+
+Or course if you don't need a default value (and can deal with nil), you 
+can leave it out, as a third (maybe less common) idiom:
+
+	take(raining and umbrella)
+
+Finally, combine several of these and you get a multiple branch 
+construct:
+
+	var =	cond1 and val1 or
+			cond2 and val2 or
+			defaultval
+
+I had never done that in Lua, but it's completely correct, and I like 
+it. What about in sool? The boolean operators are going to work exactly 
+the same, so it should be OK. The only missing thing is the operator 
+precedence. In Lua, the `and` is applied before the `or`, and we have:
+
+	( (cond1 and val1) or (cond2 and val2) ) or defaultval
+
+I recently re-established operator precedence to sool, and for the sake 
+of this beautiful construct, `and` must have higher precedence. And `or` 
+must be left-associative, which is what I decided for all operators. 
+
+Done.
+
+Semantic digressions
+--------------------
+
+Of course, all this supposes the existence of nil. And that makes a 
+pretty sentence:
+
+> We suppose the existence of the nothing.
+
+Riddle me that one! It's easy to name things, but it takes one more 
+neuron to name the absence of things. But even then, if you're able to 
+name it, talk about it, manipulate it in thought, isn't it already 
+*something*?
+
+That's one possible way to construct mathematics (or, well, at least the 
+natural numbers). The only thing you know how to do it make sets of 
+things. Start with an empty universe. There is nothing in it. Give a 
+name to the set of all things that exist (which is none): the empty set.
+
+	∅ = {}
+
+Then there's one thing in your universe: the empty set. You can also 
+call it 0. Consider the set that contains only it. And for fun, call it 
+"1".
+
+	1 = {∅}
+
+And then
+
+	2 = 1 ∪ {1} = {0,1} = {∅,{∅}}
+	3 = 2 ∪ {2} = {0,1,2} = {∅,{∅},{∅,{∅}}}
+
+The way to go from one set to the next one is called a successor 
+function:
+
+	For any set n, S(n) = n ∪ {n}
+
+And then you conclude, the set N of natural numbers is the smallest set 
+containing 0 and closed by application of S.
+
+And from this, define operations and whatnot, and build yourself a 
+mathematical system. Fun hey? For more info, there's always 
+[Wikipedia](http://en.wikipedia.org/wiki/Set-theoretic_definition_of_natural_numbers).
+
+I love cosmogony, the study of the creation of the universe. Can really 
+anything start existing if there was nothing before? And can you define 
+"nothing" if there is indeed nothing to compare it too?
+
+In a more fantasy-like setting, I love the power attributed to language 
+and speech as a creation, or "actuation" tool, whether it's from the 
+Finnish Kalevala, where bards are wise men who engage in duels of words 
+that slash like weapons, or the biblical creation myth that says
+
+> In the beginning was the Word, and the Word was with God, and the Word
+was God.
+
+The French versions usually say "verb" instead of "word", which implies 
+action and gives it a certain twist. There's also the Myst series of 
+games in which writing books with the proper words creates actual worlds 
+that can be visited, or Tolkien's universe in which some ancient beings 
+sang the world into existence (if I remember correctly).
+
+In math terms, when there is a one to one bijection between one space 
+and another one which has a similar structure, you can use one *as if* 
+it actually was the other. If we simplify a bit, that would hold for the 
+space of names and the space of objects or concepts they refer too.
+
+Considering the name equal to the named: that's what we often do in 
+programming.
+
+	int i = 5;
+	Object *obj = new Object;
+
+What's `i`? It's an int. No, it's a variable that contains an int. One 
+step further (notice the quotes): what's "`i`"? It's an int. No, it's a 
+variable that contains an int. Well, no, it's really the name of a 
+variable that contains an int.
+
+And as I wrote before, it's even worse with references. When I say `obj` 
+is an object, I bypass several levels of existence: `obj` is a variable 
+that contains the address of an object. And with quotes, it would be the 
+name of that.
+
+But mind you, there is exactly the same confusion happening in real 
+languages, the confusion of the name and the named:
+
+- What is the name of this man?
+- This man's name is John.
+
+Now replace "this man" by another way to name him, his actual name:
+
+- What is the name of John?
+- John's name is John.
+
+And in that last sentence, "John" is both the person and the name. 
+Confused yet?
+
+In a way, we could try to solve the problem by writing it as such:
+
+- John's name is "John".
+
+The need to put quotes is equivalent to using the address operator in C. 
+Think about this:
+
+- The name of John is "John".
+- The name of "John" is...
+
+What's the name of the name of John? John's name probably doesn't have a 
+name, because John is a random guy. But if you take God instead, his 
+name actually has a name: "tetragrammaton".
+
+Indeed, in Hebrew, Yahveh is written in four letters (semitic languages 
+normally omit the vowels): YHWH. Hence, the name of god is "YHWH", and 
+since the name of god has four letters, it is itself called the 
+"tetragrammaton" ("having four letters", in Greek).
+
+The quoting mechanism becomes a serious one in a language like LISP, 
+where code and data are written the same. There is a quote operator that 
+prevents the enclosed expression to be evaluated. Now try writing a 
+LISP interpretor in LISP, using quotes and `exec` calls. Guarantied 
+headache.
+
+One last related issue in programming is naming strings. When I talk 
+about the string "Hello", does it include its double quotes? When I 
+write about the string, should I say `Hello` or `"Hello"`? Or did I 
+really mean `""Hello""`. Is is clearer if I write `<"Hello">`? A 
+programming language normally defines clearly how to write literal 
+strings and how to escape characters in them. But that is also a source 
+of tremendous headaches, bugs, and security holes (PHP, JavaScript, 
+anyone?)
+
+Anyway, back to the creationist power of words. Complex architectures 
+and silent beings live in the virtual world that is the computer's 
+memory, follow inflexible laws at the very base of their every behavior, 
+evolve and reshape themselves as the processor ticks and does the 
+bidding of a mighty being that conveyed it through language from outside 
+the universe. I think the analogy is pretty clear.
+
+I suppose all programmers have a little bit of a god complex.

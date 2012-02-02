@@ -1,12 +1,12 @@
 -- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
 
-chunk :=	{ composite-def }
+chunk :=	{ class-def }
 
-composite-def :=	( 'struct' | 'class' | 'extend' )
-					class-name
-					[ ':' class-name ]
-					composite-body
-					'end'
+class-def :=	( 'object' | 'value' | 'extend' )
+				class-name
+				[ ':' class-name ]
+				composite-body
+				'end'
 
 class-name :=	( ( CName | 'num' | 'bool' | 'text' | 'blob' | 'data' )
 				[ template ] ) |
@@ -16,7 +16,7 @@ template := 	'|' ( class-name | '(' list-class-name ')' )
 
 type :=			class-name [ '?' ]
 
-composite-body :=	{ member-def | method-def | foreign-def }
+class-body :=	{ member-def | method-def | foreign-def }
 
 member-def :=	[ 'shared' ] [ 'internal' ]
 				type Name
