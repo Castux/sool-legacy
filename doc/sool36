@@ -1,0 +1,116 @@
+Concurrency
+===========
+
+I definitely don't plan to put threads in the current version of sool, but it doesn't prevent me to think about future features. More and more, we need applications that spawn multiple subprocesses, each running independently and at the same time. It can make parallel operations faster, and some designs simpler. On the other hand, we know that this poses numerous design and programming issues, such as accessing shared data, race conditions, mutual locking, etc.
+
+In the spirit of a language that tries to protect the user from being too stupid, any concurrency model in sool would need to be thread-safe, as in:
+
+- no concurrent access to the same data
+- no deadlocks
+
+at the possible cost of efficiency.
+
+The classic way to write multithreaded programs is to manually create threads, start them, and use mutexes and condition variables to synchronize them. This offers far too many possibilities of error, and even a deep semantic analysis done by a compiler couldn't catch all mistakes. This has no place in sool.
+
+Interprocess messages
+---------------------
+
+sool is an object-oriented language, in which we constantly use the metaphor of the objects, that send each other messages and expect answers. This is done synchronously, meaning that each object waits for the other one to finish its job before continuing. This big metaphor is really just a way to describe the classic imperative programming: there is one execution point, and it moves around in code, jumps into functions, and jumps back with return values, until it reaches the end of the `main` function.
+
+What if we could extend this model to an asynchronous one? With objects living in independent threads, but still sending each other messages. Only, instead of being function calls in disguise, they would be actual real-time "messages": one object sends a message and goes on with its business. The other one reads the messages whenever it can or wants, and deals with it accordingly, perhaps by answering with another message.
+
+This looks like wider scale inter process communication. Whether it's over a network, or within the same host, you have separate programs that send each other data over channels (TCP sockets, Unix sockets), and run totally asynchronously. Obviously, for it to be of any use, they need to be designed together, and agree on a protocol, but that makes many problems simpler:
+
+- no shared memory: each process has its own memory space, garbage collection, etc.
+- no need for locks, since two processes can't access the same data
+- therefore, no low-level locking ever
+
+Then the actual details of how it works is a deeper problem. The current draft for Rust has something similar: each program can run several tasks, each entirely independent, and tasks can only communicate through channels and ports. These channels work like sockets, and each task can call functions like `send` and `recv` on them to exchange data.
+
+In Rust, and I think most other languages, threads are started using a function: spawn a thread and run this function in it. When the function returns, close the thread.
+
+In sool, I want to keep the object at the center of the model, so it would be more like "instantiate an object of this class in a new task, and run `init` on it." This creation would of course return immediately, and give you a handle to that object:
+
+	newobj = spawn SomeObject
+
+Now the question is how to use this "remote" object. Do we limit ourselves to a low level socket-like communication, in which `newobj` only answers to basic send and receive methods?
+
+	newobj.send(somevalue)
+	-- do other stuff and then hope for a result
+	answer = newobj.recv()
+
+That supposes that the spawned object has a kind of main loop that regularly listens to the channel, and acts consequently. That leaves open the question of the type of the messages (is it just raw bytes, which requires serialization, or full sool types). Also, whether each task has only one mailbox to which every other task can send stuff, or if each pair of tasks have their own private socket. Also, one has to decide if the receive method is blocking or not, or if it can timeout. Then you could also have a kind of `select` to wait for several other tasks to send you data.
+
+This model is basically equivalent to separate processes with classic socket-like IPC. Like I mentioned, this requires designing some kind of protocol, and format for the messages: type of message, and list of arguments. In other words, an interface.
+
+Native interface
+----------------
+
+Can we do better? After all, the language itself has a perfectly fine and built-in way to declare interfaces: methods of an object. What if we could simply call a method of the remote object? How would that look like, what would be the implications?
+
+The message concept could transparently wrap channels: each pair of tasks have their own channels, and calling a method adds it to a list of calls of the task. Whenever it has time, it executes the methods in its waiting list, and sends the results back to the calling tasks, which will read the result whenever they like.
+
+	task1 = spawn Object
+	task2 = spawn Object
+	task1.do_long_computation(123)
+	task2.do_long_computation(456)
+	
+	-- do something else in the meantime
+	-- then take results
+	
+	res1 = task1.recv	-- or any other syntax
+	res2 = task2.recv	-- (in particular, one that enforces type)
+
+However, how does that allow a "main loop" kind of design? Imagine you have some kind of simulation and each element has its own logic. You want them to run at the same time, but still be able to communicate with each other. Where do the main loops fit?
+
+One idea would be to have a `yield` keyword which means: put this function in pause, and treat incoming messages. Once that is done, resume execution from there. Then your main loop could call `yield` once per iteration or more, to allow other tasks to talk to it, and then go on with its own business.
+
+That is still a usual design (treat input, update internal state, output changes, loop forever), but it largely simplifies the whole protocol thing, and the treatment of input: it's all directly done as methods of the object.
+
+Additionally, there could be a `wait` keyword that would block until an incoming message arrives, so as to not use CPU if there is nothing to do.
+
+Return values
+-------------
+
+Dealing with the return values of the remote calls is what seems most complex to me. Having only void remote methods solves this, but forces every task to define "return methods" to allow the remote task to send back a value. That's complex and not elegant.
+
+What could happen is that any asynchronous remote call returns a "delayed" value, that can be later on waited for, then read, or checked regularly:
+
+	result = remote.dosomething
+	-- meanwhile, do something else here
+	-- then check if result is there
+	if result.arrived then
+		treat(result.value)
+	end
+	-- or even wait for it
+	result.wait
+
+Here, `result` would be of a specific type, for instance a template applied to the particular type of the return value. Type safety!
+
+Syntax could be slightly better by using boolean evaluation, and a built-in special type (like the optionals):
+
+	result = remote.return_a_num	-- result is of type "async num"
+	while not result then			-- boolean evaluation tests availability
+		-- do something else
+	end
+	
+	-- and any other use of the variable would transparently wait for it
+	result.print
+	other = result
+	treat(result)
+
+Simple syntax is good, as long as users know what it stands for.
+
+Object passing
+--------------
+
+To make sure no memory is shared, no references can be passed to another task. Only values, that are copied. This can obviously be annoying. What if several tasks need to access a big amount of data, like the game state (one task for physics, one for drawing)? Copying the entire game state around is obviously a bad idea.
+
+Rust solves this with unique pointers. Like my early idea of unique ownership, some objects can be "uniquely boxed", and each uniquely boxed object can have only one pointer pointing at it at any given time. When you assign to a new pointer (or pass to a function), the original pointer is deleted and cannot be used anymore.
+
+One condition for passing objects to other tasks is that they must be uniquely boxed. That way, you can share big amounts of memory between tasks, but only one can access it at a time. It has to give back the pointer when it's done with it.
+
+Conclusion
+----------
+
+This high level model of concurrency is quite nice and fits well the spirit of sool. It probably has its problems, and would need to be tested and refined. In any case, it is not meant for the current version of sool, so this is mostly speculation. But interesting speculation.
