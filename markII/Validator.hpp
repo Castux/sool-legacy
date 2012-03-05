@@ -30,12 +30,9 @@ namespace sool
 	
 	class Validator
 	{
-		friend class TypeForge;
-		
 		public:
 		
 		Report report;
-		TypeForge tforge;
 		Context *context;	// not owned, will be passed to codegen
 		
 		Validator();
@@ -48,12 +45,13 @@ namespace sool
 		
 		// Global work before doing individual classes
 		bool FillContextWithClasses(ParseResult result);		// Check unicity, and index by name
-		bool MakeAllTypesAndInstances();
 		
 		// Work on individual classes
+		/*
 		bool ValidateInterface(Class *c);
 		bool CheckParentClass(Class *c);	// Check existence of parent class, and resolve type
 		bool TreatMembers(Class *c);
+		*/
 		
 		// Shortcuts
 		void AddError(std::string message, SourcePos position = SourcePos());

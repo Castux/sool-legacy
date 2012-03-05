@@ -2,6 +2,7 @@
 #define TYPE_HPP
 
 #include <map>
+#include <vector>
 
 #include "common.hpp"
 
@@ -13,62 +14,60 @@ namespace sool
 	
 	class Validator;
 	class Class;
-	class TypeDecl;
+	
+	class ClassName;
+	typedef std::map<std::string,ClassName*> ClassNameMap;
+	
+	class ClassName
+	{
+		private:
+		
+		static ClassNameMap map;	// The map used for internizing: indexed by signature
+		
+		ClassName();
+		
+		public:
+		
+		std::string name;		// The base name of the class
+		std::vector<ClassName*> params;
+		
+		std::string signature;	// The full canonical name of the class, with '|' and parameters
+		
+		// Build an internized ClassName
+		static ClassName *Build(std::string name, std::vector<ClassName*> params);
+		// Get a ClassName by signature
+		static ClassName *Get(std::string sig);
+		
+		// Empty database
+		static void Clear();
+	};
+	
+	// Type is a wider concept: qualifies variables, can be multiple, and void
 	
 	class Type
 	{
-		friend class TypeForge;
-		
-		// Type interface
-		
-		private:
-		
-		Type(Class *cl, bool opt);
-		
 		public:
+		
+		ClassName	*cname;
+		bool		optional;
+		
+		std::string	signature;
+		
+		Type();
+		Type(ClassName *c, bool opt);
+	};
+	
+	class MultiType
+	{
+		public:
+		
+		std::vector<Type> types;
 		
 		std::string signature;
-		Class *GetClass();
-		bool IsOptional();
 		
-		private:
-		
-		Class *c;
-		bool optional;
+		MultiType();
+		MultiType(std::vector<Type> subtypes);
 	};
-	
-	typedef std::map<std::string,Type*> TypeMap;
-	typedef std::map<TypeDecl*,Type*> DeclToTypeMap;
-	
-	class TypeForge
-	{
-		friend class Validator;
-		
-		private:
-		
-		TypeMap tmap;				// Owned types, indexed by signature
-		Validator *v;				// Shortcut to the parent Validator, for access to context and reporting
-		DeclToTypeMap decl_map;		// Shortcut from declarations to internized types
-		
-		Type *Internize(Type *t);	// The passed object is deleted if one with same signature is already there
-		
-		public:
-		
-		TypeForge(Validator *validator);
-		~TypeForge();
-		
-		// Create and return internized type from declaration
-		
-		Type *ConvertDecl(TypeDecl* decl);
-		
-		// Type resolution depends on which class we are in. Some "types" might just be
-		// template parameters. In an instance class, we need the instmap, which
-		// maps these simple names to types.
-		
-		Type* Get(TypeDecl* decl);
-		Type* Get(std::string sig);
-	};
-	
 }
 
 #endif // TYPE_HPP

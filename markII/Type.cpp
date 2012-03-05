@@ -6,167 +6,123 @@
 
 using namespace sool;
 
-Type::Type(Class* cl, bool opt) : c(cl), optional(opt)
+ClassName::ClassName()
 {
-	signature = c->name;
+}
+
+ClassNameMap ClassName::map;
+
+ClassName *ClassName::Build(std::string name, std::vector<ClassName*> params)
+{
+	// Build signature
+	
+	std::string sig;
+	
+	if(name == "#")
+	{
+		// Special array case, we know there should be only one parameter
+		// thanks to the parser
+		
+		if(params.size() != 1)
+			error("array class name didn't get exactly one parameter");
+		
+		sig = std::string("#") + params[0]->signature;
+	}
+	else if(params.size() > 0)
+	{
+		// Normal case, just cat the params
+		
+		sig = name + "|";
+		
+		if(params.size() > 1)
+			sig += "(";
+		
+		for(uint i = 0; i < params.size()-1; i++)
+		{
+			sig += params[i]->signature;
+			sig += ",";
+		}
+		
+		sig += params.back()->signature;
+		
+		if(params.size() > 1)
+			sig += ")";
+	}
+	else
+	{
+		sig = name;
+	}
+	
+	// Check if it already exists
+	
+	ClassName *cname = Get(sig);
+	if(cname)
+		return cname;
+	
+	// Make new one otherwise
+	
+	cname = new ClassName;
+	
+	cname->name = name;
+	cname->params = params;
+	cname->signature = sig;
+	
+	// Add to map
+	
+	map[sig] = cname;
+	
+	// And return
+	
+	return cname;
+}
+
+ClassName *ClassName::Get(std::string sig)
+{
+	ClassNameMap::iterator it = map.find(sig);
+	
+	if(it != map.end())
+		return it->second;
+	
+	return NULL;
+}
+
+void ClassName::Clear()
+{
+	ClassNameMap::iterator it;
+	
+	for(it = map.begin(); it != map.end(); it++)
+		delete it->second;
+}
+
+Type::Type() : cname(NULL), optional(false)
+{
+}
+
+Type::Type(ClassName *c, bool opt) : cname(c), optional(opt)
+{
+	signature = c->signature;
 	if(opt)
 		signature += "?";
 }
 
-Class *Type::GetClass()
-{
-	return c;
-}
-
-bool Type::IsOptional()
-{
-	return optional;
-}
-
-TypeForge::TypeForge(Validator *validator) : v(validator)
+MultiType::MultiType()
 {
 }
 
-TypeForge::~TypeForge()
+MultiType::MultiType(std::vector<Type> sub)
 {
-	TypeMap::iterator it;
-	
-	for(it = tmap.begin(); it != tmap.end(); it++)
-		delete it->second;
-}
-
-Type* TypeForge::Get(std::string sig)
-{
-	TypeMap::iterator it = tmap.find(sig);
-	
-	if(it != tmap.end())
-		return it->second;
-	
-	return NULL;
-}
-
-Type* TypeForge::Get(TypeDecl* decl)
-{
-	DeclToTypeMap::iterator it = decl_map.find(decl);
-	
-	if(it != decl_map.end())
-		return it->second;
-	
-	return NULL;
-}
-
-Type *TypeForge::ConvertDecl(TypeDecl* decl)
-{
-	// Simple case: not a template, just get the class
-	
-	if(decl->params.size() == 0)
+	if(sub.size() == 0)
 	{
-		Class *c = v->context->Get(decl->name);
-		if(!c)
-		{
-			{
-				v->AddError("unknown class " + decl->name, decl->name_pos);
-				return NULL;
-			}
-		}
-		
-		// Found something. If it's a template, no good, we don't have parameters
-		
-		if(c->IsTemplate())
-		{
-			v->AddError(c->Kind() + " " + c->name + " used without parameters", decl->pos);
-			return NULL;
-		}
-		
-		// Otherwise, ok. Build type.
-		Type *t = new Type(c,decl->optional);
-		Type *intern = Internize(t);
-		
-		return intern;
-	}
-	
-	// Less simple case, template instantiation
-	
-	// Check there is a template by that name
-	
-	Class *c = v->context->Get(decl->name);
-	if(!c)
-	{
-		v->AddError("unknown template " + decl->name, decl->name_pos);
-		return NULL;
-	}
-	
-	// Check that it is indeed a template
-	
-	if(!c->IsTemplate())
-	{
-		v->AddError(c->Kind() + " " + c->name + " used as a template", decl->pos);
-		v->AddInfo("but not declared as one:", c->name_pos);
-		return NULL;
-	}
-	
-	// Check that the number of parameters match
-	
-	uint usenum = decl->params.size();
-	uint declnum = c->params.size();
-	if(usenum != declnum)
-	{
-		std::stringstream tmp;
-		tmp << c->Kind() << " " << c->name << " used with " << usenum << " parameter";
-		if(usenum > 1)
-			tmp << "s";
-		
-		v->AddError(tmp.str(), decl->pos);
-		
-		std::stringstream tmp2;
-		tmp2 << "but declared with " << declnum;
-		
-		v->AddInfo(tmp2.str(), c->fullname_pos);
-		
-		return NULL;
-	}
-	
-	// Recursively prepare subtypes
-	
-	std::vector<Type*> params;
-	
-	for(uint i = 0; i < usenum; i++)
-	{
-		Type *t = Get(decl->params[i]);
-		if(!t)
-			return NULL;
-		
-		params.push_back(t);
-	}
-	
-	// Now it gets ugly: request the corresponding class
-	
-	Class *inst = v->context->Instantiate(c,params);
-	
-	// Finally build the type
-	
-	Type *t = new Type(inst,decl->optional);
-	Type *intern = Internize(t);
-	
-	// Save in shortcut map
-	
-	decl_map[decl] = intern;
-	
-	return intern;
-}
-
-Type *TypeForge::Internize(Type *t)
-{
-	TypeMap::iterator it = tmap.find(t->signature);
-	
-	if(it == tmap.end())
-	{
-		tmap[t->signature] = t;
-		return t;
+		signature = "void";
 	}
 	else
 	{
-		delete t;
-		return it->second;
+		for(uint i = 0 ; i < sub.size() ; i++)
+		{
+			types.push_back(sub[i]);
+			signature += sub[i].signature;
+			if(i < sub.size()-1)
+				signature += ",";
+		}
 	}
 }

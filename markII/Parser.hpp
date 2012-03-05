@@ -24,7 +24,6 @@ namespace sool
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned
 		Token					*head;
-		std::vector<TypeDecl*>	*curr_decls;	// shortcut to current class' or extension's list of types for deep setting
 		
 		Parser(std::vector<Token> *t);
 		~Parser();
@@ -34,10 +33,9 @@ namespace sool
 		private:
 		
 		Class* ParseClass();
-		bool ParseNameOfClass(Class *c);
 		Extension* ParseExtension();
-		TypeDecl* ParseType();
-		TypeDecl* ParseClassName();
+		Type ParseType(SourcePos *pos = NULL);
+		ClassName* ParseClassName();
 		Method* ParseMethod();
 		Member* ParseMember();
 		

@@ -21,24 +21,6 @@ namespace sool
 		SourcePos pos;
 	};
 	
-	
-	class TypeDecl : public AST
-	{
-		public:
-		
-		std::string				name;		// Use "#" for arrays
-		std::vector<TypeDecl*>	params;		// For template parameters, owned. Only with t_named
-		bool					optional;
-		
-		// Useful source code positions
-		SourcePos	name_pos;
-		
-		TypeDecl();
-		~TypeDecl();
-		
-		TypeDecl *Copy();
-	};
-	
 	class Member : public AST
 	{
 		public:
@@ -46,8 +28,7 @@ namespace sool
 		bool		shared;
 		bool		internal;
 		
-		TypeDecl	*tdecl;		// owned, type as parsed
-		Type		*type;		// shortcut to resolved type
+		Type		type;
 		std::string	name;
 		
 		// Initialization
@@ -56,6 +37,7 @@ namespace sool
 		// Useful source code positions
 		SourcePos	shared_pos;
 		SourcePos	internal_pos;
+		SourcePos	type_pos;
 		SourcePos	name_pos;
 		
 		Member();
@@ -70,9 +52,10 @@ namespace sool
 		
 		struct Argument
 		{
-			TypeDecl *type;		// owned
+			Type type;
 			std::string name;
-			SourcePos pos;
+			SourcePos type_pos;
+			SourcePos name_pos;
 		};
 		
 		// Interface
@@ -81,8 +64,7 @@ namespace sool
 		bool					selfless;
 		bool					foreign;
 		
-		std::vector<TypeDecl*>	ret_decls;		//owned
-		Type					*rtype;
+		MultiType				rtype;
 		
 		std::string				name;
 		bool					setter;
@@ -101,7 +83,6 @@ namespace sool
 		SourcePos	internal_pos;
 		SourcePos	selfless_pos;
 		SourcePos	rtype_pos;
-		SourcePos	rbyref_pos;
 		SourcePos	name_pos;
 		SourcePos	args_pos;
 		SourcePos	interface_pos;
@@ -129,8 +110,7 @@ namespace sool
 		std::string					name;		// In instances, this is the full name
 		std::vector<std::string>	params;		// For templates only: template parameters, owned
 		
-		TypeDecl	*ptype;		// Parent's name as is parsed, owned
-		Class		*pclass;	// Parent class, resolved, not owned
+		ClassName	*pname;		// Parent's name
 		
 		std::vector<Member*> members;	// owned
 		std::vector<Method*> methods;	// owned
@@ -143,9 +123,7 @@ namespace sool
 		SourcePos	name_pos;
 		SourcePos	fullname_pos;
 		std::vector<SourcePos> params_pos;
-		
-		// Shortcut to all types used in this class
-		std::vector<TypeDecl*> type_decls;
+		std::vector<SourcePos> parent_pos;
 		
 		// Validation steps
 		bool validating_interface;		// circular inheritance guard
@@ -172,10 +150,8 @@ namespace sool
 	{
 		public:
 		
-		TypeDecl				*type;
+		ClassName				*cname;
 		std::vector<Method*>	methods;
-		
-		std::vector<TypeDecl*>	type_decls;		// shortcut to all types within extension
 		
 		Extension();
 		~Extension();

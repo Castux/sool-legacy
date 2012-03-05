@@ -2,7 +2,7 @@
 
 using namespace sool;
 
-Parser::Parser(std::vector<Token> *t) : tokens(t), curr_decls(NULL), noinfo(false)
+Parser::Parser(std::vector<Token> *t) : tokens(t), noinfo(false)
 {
 	head = &tokens->front();
 }
@@ -51,7 +51,6 @@ bool Parser::Parse()
 Class* Parser::ParseClass()
 {
 	Class *c = new Class();
-	curr_decls = &c->type_decls;
 	
 	SourcePos start = head->pos;
 	
@@ -70,42 +69,39 @@ Class* Parser::ParseClass()
 	
 	// Class name, split into string and template params
 	
-	TypeDecl *t = ParseClassName();
-	if(!t)
+	c->name_pos = head->pos;
+	
+	ClassName *cname = ParseClassName();
+	if(!cname)
 	{
 		delete c;
 		return NULL;
 	}
 	
-	c->name = t->name;
-	c->name_pos = t->name_pos;
-	c->fullname_pos = t->pos;
+	c->name = cname->name;
+	c->fullname_pos = c->name_pos.To(head[-1].pos);
 	
 	// Check that parameters consist in single names
-	for(uint i = 0; i < t->params.size(); i++)
+	for(uint i = 0; i < cname->params.size(); i++)
 	{
-		TypeDecl *p = t->params[i];
+		ClassName *p = cname->params[i];
 		if(p->params.size() > 0 || !isupper(p->name[0]))
 		{
-			AddError("invalid template parameter", p->pos);
+			AddError(std::string("invalid template parameter ") + p->signature, c->fullname_pos);
 			AddInfo("(expected single class name)");
-			delete t;
 			delete c;
 			return NULL;
 		}
 		
 		c->params.push_back(p->name);
-		c->params_pos.push_back(p->name_pos);
 	}
-	
-	delete t;
 	
 	// Class parent
 	
 	if(Accept(Token::t_colon))
 	{
-		c->ptype = ParseClassName();
-		if(!c->ptype)
+		c->pname = ParseClassName();
+		if(!c->pname)
 		{
 			AddInfo("as parent class for class started here:", start, true);
 			delete c;
@@ -158,7 +154,6 @@ Class* Parser::ParseClass()
 	
 	c->pos = start.To(head[-1].pos);
 	
-	curr_decls = NULL;
 	return c;
 }
 
@@ -167,21 +162,19 @@ Extension *Parser::ParseExtension()
 	Extension *e = new Extension;
 	SourcePos start = head->pos;
 	
-	curr_decls = &e->type_decls;
-	
 	Expect(Token::t_extend);
 	
 	// Extended type
 	
-	TypeDecl *t = ParseClassName();
-	if(!t)
+	ClassName *cname = ParseClassName();
+	if(!cname)
 	{
 		AddInfo("in extension started here:", start);
 		delete e;
 		return NULL;
 	}
 	
-	e->type = t;
+	e->cname = cname;
 	
 	// Method definitions
 	
@@ -207,48 +200,43 @@ Extension *Parser::ParseExtension()
 	
 	e->pos = start.To(head[-1].pos);
 	
-	curr_decls = NULL;
 	return e;
 }
 
-TypeDecl* Parser::ParseClassName()
+ClassName* Parser::ParseClassName()
 {
-	TypeDecl *t = new TypeDecl;
+	std::string name;
+	std::vector<ClassName*> params;
+	
+	SourcePos start = head->pos;
 	
 	// Built-in
 	
 	if(head->kind >= Token::t_num && head->kind <= Token::t_blob)
 	{
-		t->name = Token::GetTokenString(head->kind);
-		t->pos = head->pos;
-		t->name_pos = head->pos;
+		name = Token::GetTokenString(head->kind);
 		head++;
-
-		curr_decls->push_back(t);
-		return t;
+		
+		return ClassName::Build(name,params);
 	}
 	
 	// Array type
 	
 	if(head->kind == Token::t_hash)
 	{
-		t->name_pos = head->pos;
+		name = "#";
 		head++;
 		
-		TypeDecl *sub = ParseClassName();
+		ClassName *sub = ParseClassName();
 		if(!sub)
 		{
-			AddInfo("in array class name started here:", t->name_pos, true);
-			delete t;
+			AddInfo("in array class name started here:", start, true);
 			return NULL;
 		}
 		
-		t->name = "#";
-		t->pos = t->name_pos.To(sub->pos);
-		t->params.push_back(sub);
+		params.push_back(sub);
 		
-		curr_decls->push_back(t);
-		return t;
+		return ClassName::Build(name,params);
 	}
 	
 	// Last try: CName
@@ -256,12 +244,10 @@ TypeDecl* Parser::ParseClassName()
 	if(head->kind != Token::t_cname)
 	{
 		AddError("malformed class name", head->pos);
-		delete t;
 		return NULL;
 	}
 	
-	t->name = head->string;
-	t->name_pos = head->pos;
+	name = head->string;
 	head++;
 	
 	// Template parameters
@@ -273,71 +259,76 @@ TypeDecl* Parser::ParseClassName()
 			SourcePos lparens = head[-1].pos;
 			
 			// List of types
-			TypeDecl *sub = ParseClassName();
+			ClassName *sub = ParseClassName();
 			if(!sub)
 			{
 				AddInfo("in template parameters list started here:", lparens, true);
-				delete t;
 				return NULL;
 			}
 			
-			t->params.push_back(sub);
+			params.push_back(sub);
 			
 			while(Accept(Token::t_comma))
 			{
-				TypeDecl *sub = ParseClassName();
+				ClassName *sub = ParseClassName();
 				if(!sub)
 				{
 					AddInfo("in template parameters list started here:", lparens, true);
-					delete t;
 					return NULL;
 				}
-				t->params.push_back(sub);
+				params.push_back(sub);
 			}
 			
 			if(!Expect(Token::t_rparens))
 			{
 				AddInfo("to close template parameters list started here:", lparens, true);
-				delete t;
 				return NULL;
 			}
 		}
 		else
 		{
 			// Single sub type
-			TypeDecl *sub = ParseClassName();
+			ClassName *sub = ParseClassName();
 			if(!sub)
 			{
-				AddInfo("as template parameter for class name started here:", t->name_pos, true);
-				delete t;
+				AddInfo("as template parameter for class name started here:", start, true);
 				return NULL;
 			}
 			
-			t->params.push_back(sub);
+			params.push_back(sub);
 		}
 	}
 	
-	t->pos = t->name_pos.To(head[-1].pos);
-
-	curr_decls->push_back(t);
-	return t;
+	return ClassName::Build(name,params);
 }
 
-TypeDecl* Parser::ParseType()
+// We know the parsing failed if type.cname is NULL
+Type Parser::ParseType(SourcePos *pos)
 {
-	TypeDecl *t = ParseClassName();
-	if(!t)
+	SourcePos start = head->pos;
+	
+	ClassName *cname = ParseClassName();
+	if(!cname)
 	{
-		return NULL;
+		AddError("could not parse class name", start);
+		return Type();
 	}
+	
+	bool opt = false;
 	
 	if(Accept(Token::t_question))
 	{
-		t->optional = true;
-		t->pos = t->name_pos.To(head[-1].pos);
+		opt = true;
 	}
 	
-	return t;
+	SourcePos end = head[-1].pos;
+	
+	if(pos)
+	{
+		*pos = start.To(end);
+	}
+	
+	return Type(cname, opt);
 }
 
 Method* Parser::ParseMethod()
@@ -374,29 +365,33 @@ Method* Parser::ParseMethod()
 	
 	// Return type(s)
 	
+	std::vector<Type> rtypes;
+	
 	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
 	{
-		TypeDecl *t = ParseType();
-		if(!t)
+		Type t = ParseType();
+		if(!t.cname)
 		{
 			AddInfo("as return type for method started here:", start);
 			delete m;
 			return NULL;
 		}
-		m->ret_decls.push_back(t);
+		rtypes.push_back(t);
 		
 		while(Accept(Token::t_comma))
 		{
-			TypeDecl *t = ParseType();
-			if(!t)
+			Type t = ParseType();
+			if(!t.cname)
 			{
 				AddInfo("as return type for method started here:", start);
 				delete m;
 				return NULL;
 			}
-			m->ret_decls.push_back(t);
+			rtypes.push_back(t);
 		}
 	}
+	
+	m->rtype = MultiType(rtypes);
 	
 	// Name
 	
@@ -443,13 +438,17 @@ Method* Parser::ParseMethod()
 	
 	if(head->kind != Token::t_rparens)
 	{
-		TypeDecl *t = ParseType();
-		if(!t)
+		SourcePos type_pos;
+		
+		Type t = ParseType(&type_pos);
+		if(!t.cname)
 		{
 			AddInfo("as argument type in method started here:", start);
 			delete m;
 			return NULL;
 		}
+		
+		SourcePos name_pos = head->pos;
 		
 		if(!Expect(Token::t_name))
 		{
@@ -461,18 +460,23 @@ Method* Parser::ParseMethod()
 		Method::Argument arg;
 		arg.type = t;
 		arg.name = head[-1].string;
-		arg.pos = t->pos.To(head[-1].pos);
+		arg.type_pos = type_pos;
+		arg.name_pos = name_pos;
 		m->args.push_back(arg);
 		
 		while(Accept(Token::t_comma))
 		{
-			TypeDecl *t = ParseType();
-			if(!t)
+			SourcePos type_pos;
+			
+			Type t = ParseType(&type_pos);
+			if(!t.cname)
 			{
 				AddInfo("as argument type in method started here:", start);
 				delete m;
 				return NULL;
 			}
+			
+			SourcePos name_pos = head->pos;
 			
 			if(!Expect(Token::t_name))
 			{
@@ -484,7 +488,8 @@ Method* Parser::ParseMethod()
 			Method::Argument arg;
 			arg.type = t;
 			arg.name = head[-1].string;
-			arg.pos = t->pos.To(head[-1].pos);
+			arg.type_pos = type_pos;
+			arg.name_pos = name_pos;
 			m->args.push_back(arg);
 		}
 	}
@@ -532,14 +537,14 @@ Member* Parser::ParseMember()
 		m->internal_pos = head[-1].pos;
 	}
 	
-	TypeDecl *t = ParseType();
-	if(!t)
+	Type t = ParseType(&m->type_pos);
+	if(!t.cname)
 	{
 		AddInfo("in member definition");
 		delete m;
 		return NULL;
 	}
-	m->tdecl = t;
+	m->type = t;
 	
 	if(!Expect(Token::t_name))
 	{

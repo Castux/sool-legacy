@@ -5,63 +5,7 @@ using namespace sool;
 
 Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
 {
-	// Start by building the signature
-	
-	std::string sig;
-	
-	if(templ->name == "#")
-	{
-		// Special array case, we know there should be only one parameter
-		// thanks to the parser
-		
-		if(params.size() != 1)
-			error("array type didn't get exactly one parameter");
-		
-		sig = std::string("#") + params[0]->signature;
-	}
-	else
-	{
-		// Normal case, just cat the params
-		
-		sig = templ->name + "|";
-		
-		if(params.size() > 1)
-			sig += "(";
-		
-		for(uint i = 0; i < params.size()-1; i++)
-			sig += params[i]->signature + ",";
-		
-		sig += params.back()->signature;
-		
-		if(params.size() > 1)
-			sig += ")";
-	}
-	
-	// Check if the class already exists
-	
-	Class *inst = Get(sig);
-	
-	if(inst)
-		return inst;
-	
-	// If not we simply make a copy of the template, replace the template
-	// parameters by they values
-	
-	inst = templ->Copy();
-	
-	if(params.size() != templ->params.size())
-		error("Class::Instantiate - mismatched number of parameters");
-	
-	// Do the big replacement of types!
-	
-	inst->params.clear();
-	inst->name = sig;
-	
-	// Then add it to the context
-	
-	cmap[sig] = inst;
-	
-	return inst;
+	return NULL;
 }
 
 Class* Context::Get(std::string name)
@@ -80,7 +24,7 @@ Context::~Context()
 		delete(it->second);
 }
 
-Validator::Validator() : tforge(this)
+Validator::Validator()
 {
 }
 
@@ -200,40 +144,9 @@ bool Validator::FillContextWithClasses(ParseResult res)
 	if(!success)
 		return false;
 	
-	// Then the big magic "make it all happen"
-	if(!MakeAllTypesAndInstances())
-		return false;
-	
-	// Finally, now that all possible classes do exist, append the extensions
-	//
-	
 	return success;
 }
-
-bool Validator::MakeAllTypesAndInstances()
-{
-	for(ClassMap::iterator it = context->cmap.begin(); it != context->cmap.end(); it++)
-	{
-		Class *c = it->second;
-		
-		if(c->IsTemplate())
-			continue;
-		
-		for(uint j = 0 ; j < c->type_decls.size() ; j++)
-		{
-			TypeDecl *decl = c->type_decls[j];
-			
-			Type *t = tforge.ConvertDecl(decl);
-			if(!t)
-				return false;
-		}
-	}
-	
-	// The same with instances, and again, until all is treated
-	
-	return true;
-}
-
+/*
 bool Validator::ValidateInterface(Class *c)
 {
 	// Don't do the work twice!
@@ -374,7 +287,7 @@ bool Validator::TreatMembers(Class *c)
 	
 	return true;
 }
-
+*/
 void Validator::AddError(std::string message, SourcePos position)
 {
 	report.Add("validator", Diagnostic::Error, message, position);
