@@ -33,6 +33,7 @@ namespace sool
 		private:
 		
 		Class* ParseClass();
+		bool ParseNameOfClass(Class *c);
 		Extension* ParseExtension();
 		Type ParseType(SourcePos *pos = NULL);
 		ClassName* ParseClassName();
