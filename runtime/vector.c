@@ -1,128 +1,128 @@
 #include <math.h>
 #include "vector.h"
 
-const sool_num sool_pi = 3.14159265358979323846;
-const sool_vec sool_i = {0.0, 1.0};
+static const snum spi = 3.14159265358979323846;
+static const svec si = {0.0, 1.0};
 
-sool_vec sool_vec_add(sool_vec a, sool_vec b)
+svec svec_add(svec a, svec b)
 {
-	sool_vec c;
+	svec c;
 	c.x = a.x + b.x;
 	c.y = a.y + b.y;
 	return c;
 }
 
-sool_vec sool_vec_sub(sool_vec a, sool_vec b)
+svec svec_sub(svec a, svec b)
 {
-	sool_vec c;
+	svec c;
 	c.x = a.x - b.x;
 	c.y = a.y - b.y;
 	return c;
 }
 
-sool_vec sool_vec_mul(sool_vec a, sool_num k)
+svec svec_mul(svec a, snum k)
 {
-	sool_vec c;
+	svec c;
 	c.x = a.x * k;
 	c.y = a.y * k;
 	return c;
 }
 
-sool_vec sool_vec_div(sool_vec a, sool_num k)
+svec svec_div(svec a, snum k)
 {
-	sool_vec c;
+	svec c;
 	c.x = a.x / k;
 	c.y = a.y / k;
 	return c;
 }
 
-sool_vec sool_vec_neg(sool_vec a)
+svec svec_neg(svec a)
 {
-	return sool_vec_mul(a,-1.0);
+	return svec_mul(a,-1.0);
 }
 
-sool_num sool_vec_dot(sool_vec a, sool_vec b)
+snum svec_dot(svec a, svec b)
 {
 	return a.x*b.x + a.y*b.y;
 }
 
-sool_num sool_vec_cross(sool_vec a, sool_vec b)
+snum svec_cross(svec a, svec b)
 {
 	return a.x*b.y - a.y*b.x;
 }
 
-sool_vec sool_vec_cmul(sool_vec a, sool_vec b)
+svec svec_cmul(svec a, svec b)
 {
-	sool_vec c;
+	svec c;
 	c.x = a.x*b.x - a.y*b.y;
 	c.y = a.x*b.y + a.y*b.x;
 	return c;
 }
 
-sool_num sool_vec_norm(sool_vec a)
+snum svec_norm(svec a)
 {
 	return sqrt(a.x*a.x + a.y*a.y);
 }
 
-sool_num sool_vec_sqnorm(sool_vec a)
+snum svec_sqnorm(svec a)
 {
 	return a.x*a.x + a.y*a.y;
 }
 
-sool_num sool_vec_dist(sool_vec a, sool_vec b)
+snum svec_dist(svec a, svec b)
 {
-	return sool_vec_norm(sool_vec_sub(a,b));
+	return svec_norm(svec_sub(a,b));
 }
 
-sool_num sool_vec_sqdist(sool_vec a, sool_vec b)
+snum svec_sqdist(svec a, svec b)
 {
-	return sool_vec_sqnorm(sool_vec_sub(a,b));
+	return svec_sqnorm(svec_sub(a,b));
 }
 
-sool_vec sool_vec_yx(sool_vec a)
+svec svec_yx(svec a)
 {
-	sool_vec b;
+	svec b;
 	b.x = a.y;
 	b.y = a.x;
 	return b;
 }
 
-sool_vec sool_vec_ortho(sool_vec a)
+svec svec_ortho(svec a)
 {
-	sool_vec b;
+	svec b;
 	b.x = -a.y;
 	b.y = a.x;
 	return b;
 }
-sool_vec sool_vec_normalize(sool_vec a)
+svec svec_normalize(svec a)
 {
-    return sool_vec_div(a,sool_vec_norm(a));
+    return svec_div(a,svec_norm(a));
 }
 
-sool_num sool_vec_angle(sool_vec a, sool_vec b)
+snum svec_angle(svec a, svec b)
 {
-	sool_num angle_a = atan2(a.y,a.x);
-	sool_num angle_b = atan2(b.y,b.x);
-	sool_num diff = angle_b - angle_a;
+	snum angle_a = atan2(a.y,a.x);
+	snum angle_b = atan2(b.y,b.x);
+	snum diff = angle_b - angle_a;
 	
-	if(diff <= -sool_pi)
-		diff += 2*sool_pi;
-	else if(diff > sool_pi)
-		diff -= 2*sool_pi;
+	if(diff <= -spi)
+		diff += 2*spi;
+	else if(diff > spi)
+		diff -= 2*spi;
 	
 	return diff;
 }
 
-sool_num sool_vec_dir(sool_vec a)
+snum svec_dir(svec a)
 {
 	return atan2(a.y,a.x);
 }
 
-sool_vec sool_vec_polar(sool_vec a)
+svec svec_polar(svec a)
 {
-	sool_num dir = atan2(a.y,a.x);
-	sool_num len;
-	sool_vec res;
+	snum dir = atan2(a.y,a.x);
+	snum len;
+	svec res;
 	
 	if(a.x == 0.0)
 		len = fabs(a.y);
@@ -134,24 +134,24 @@ sool_vec sool_vec_polar(sool_vec a)
 	return res;
 }
 
-sool_vec sool_vec_rect(sool_vec a)
+svec svec_rect(svec a)
 {
-	sool_num len = a.x;
-	sool_num dir = a.y;
-	sool_vec res;
+	snum len = a.x;
+	snum dir = a.y;
+	svec res;
 	res.x = len*cos(dir);
 	res.y = len*sin(dir);
 	return res;
 }
 
-sool_vec sool_vec_rotate(sool_vec a, sool_num angle, sool_vec center)
+svec svec_rotate(svec a, snum angle, svec center)
 {
-	sool_vec rot;
+	svec rot;
 	rot.x = cos(angle);
 	rot.y = sin(angle);
 	
-	a = sool_vec_sub(a,center);
-	a = sool_vec_cmul(a,rot);
-	a = sool_vec_add(a,center);
+	a = svec_sub(a,center);
+	a = svec_cmul(a,rot);
+	a = svec_add(a,center);
 	return a;
 }

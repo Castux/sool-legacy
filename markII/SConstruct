@@ -1,6 +1,6 @@
 env = Environment()
 
-env['CXX'] = 'g++'
+env['CXX'] = 'clang++'
 env.Append(CXXFLAGS = '-Wall')
 
 btype = ARGUMENTS.get('build','debug')  # Defaults to debug

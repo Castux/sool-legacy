@@ -123,7 +123,7 @@ namespace sool
 		SourcePos	name_pos;
 		SourcePos	fullname_pos;
 		std::vector<SourcePos> params_pos;
-		SourcePos parent_pos;
+		SourcePos	parent_pos;
 		
 		// Validation steps
 		bool validating_interface;		// circular inheritance guard

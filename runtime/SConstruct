@@ -2,8 +2,8 @@ sources = Glob('*.c')
 
 env = Environment()
 
-env.Append(CCFLAGS = '-ansi -pedantic -Wall -Werror')
-env.Append(LIBS = 'm')
+env.Append(CCFLAGS = '--std=c99 -Wall -Werror')
+env.Append(LIBS = ['m', 'gc'])
 
 # Build types
 

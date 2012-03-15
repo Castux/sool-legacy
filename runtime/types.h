@@ -1,9 +1,13 @@
-#ifndef DEFINES_H
-#define DEFINES_H
+#ifndef TYPES_H
+#define TYPES_H
+
+#include <stdint.h>
 
 typedef unsigned int uint32;
 typedef char bool;
 
-typedef double sool_num;
+typedef double		snum;
+typedef uintptr_t	sblob;
+typedef uint32		schar;
 
-#endif /* DEFINES_H */
+#endif /* TYPES_H */

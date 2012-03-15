@@ -3,26 +3,26 @@
 
 #include "types.h"
 
-typedef sool_num type;
+typedef void* type;
 #define nil (0)
 
 typedef struct
 {
-	uint32 allocated_count;
-	uint32 logical_count;
+	sblob allocated_count;
+	sblob logical_count;
 	
 	type *data;
-} sool_array;
+} sarray;
 
-extern sool_array *sool_array_new(void);
-extern void sool_array_reserve(sool_array *a, uint32 count);
+extern sarray *sarray_new(void);
+extern void sarray_reserve(sarray *a, uint32 count);
 
-extern type sool_array_get(sool_array *a, uint32 index);
-extern uint32 sool_array_size(sool_array *a);
+extern type sarray_get(sarray *a, uint32 index);
+extern uint32 sarray_size(sarray *a);
 
-extern void sool_array_set(sool_array *a, uint32 index, type elem);
-extern void sool_array_append(sool_array *a, type elem);
-extern void sool_array_insert(sool_array *a, uint32 index, type elem);
-extern void sool_array_remove(sool_array *a, uint32 index);
+extern void sarray_set(sarray *a, uint32 index, type elem);
+extern void sarray_append(sarray *a, type elem);
+extern void sarray_insert(sarray *a, uint32 index, type elem);
+extern void sarray_remove(sarray *a, uint32 index);
 
 #endif /* ARRAY_H */

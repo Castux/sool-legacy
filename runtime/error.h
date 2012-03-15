@@ -1,6 +1,6 @@
 #ifndef ERROR_H
 #define ERROR_H
 
-extern void sool_error(const char *message);
+extern void serror(const char *message);
 
 #endif /* ERROR_H */
