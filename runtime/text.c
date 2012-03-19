@@ -4,6 +4,9 @@
 #include "text.h"
 #include "memory.h"
 
+sblob schar_from_utf8(schar *c, const char *bytes);
+sblob schar_to_utf8(schar c, char *bytes);
+
 stext *stext_from_latin1(const char *str)
 {
 	stext *t = smalloc(sizeof(stext));
@@ -195,7 +198,7 @@ char *stext_to_utf8(stext *t)
 	}
 	
 	sblob len = curr - buff + 1;
-	char *final = smalloc(len);
+	char *final = smalloc_no_pointers(len);
 	memcpy(final, buff, len);
 	final[len] = 0;
 	
