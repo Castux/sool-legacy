@@ -3,7 +3,7 @@ All talk and no do make soolc a dull compiler
 
 I've been a lazy person, and haven't worked on the compiler's implementation in a while. I've been stuck on some big design problems (namely, template class instantiation) and wandered away to easier activities.
 
-And, to make things even more stuck, I have more language design doubts. In this case, about constructors, or, as sool calls them, initializers.
+And, to make things even more stuck, I have more language design doubts. In this case, about constructors, or, as I call them in sool, initializers.
 
 The premise
 -----------
@@ -21,18 +21,18 @@ The consequence
 
 The first consequence is that you can't declare variables without initializing them. That was always true for locals: declarations were assignments, and therefore initialization. This shall be true for object members.
 
-This would mean that every object instanciation must fill right away all its members. Philosophically great, but user-friendlynessly not so awesome. If an object has twenty members, does it mean that its `init()` methods should also take in twenty arguments? Or does it force a systematic use of the `with` construct filled with twenty lines of assignment? Very heavy. And one of the core design guideline for sool was "Less writing, more meaning".
+This would mean that every object instantiation must fill right away all its members. Philosophically great, but user-friendlynessly not so awesome. If an object has twenty members, does it mean that its `init()` methods should also take in twenty arguments? Or does it force a systematic use of the `with` construct filled with twenty lines of assignment? Very heavy. And one of the core design guideline for sool was "Less writing, more meaning".
 
 Enter: default values
 
 Default values
 --------------
 
-The only real problem of uninitialized variables is for objects. Since they are refered to, there is the issue of random pointers and memory corruption. That is a low-level memory safety problem, and it is the greatest sin. Allocating automatically an object for every reference variable is also a no-no, for the obvious issue of infinite recursion (and the fact that it is stupid, ressource-wise). Hence, every reference must strictly be initialized manually.
+The only real problem of uninitialized variables is for objects. Since they are refered to, there is the issue of random pointers and memory corruption. That is a low-level memory safety problem, and it is the greatest sin. Allocating automatically an object for every reference variable is also a no-no, for the obvious issue of infinite recursion (and the fact that it is stupid, resource-wise). Hence, every reference must strictly be initialized manually.
 
 But the rest... The value types... The fact that they have random values if uninited is only a logical bug. If you forget to start your counters at 0, or your quit flags at false, that is really just your fault, and memory is still safe.
 
-Of course, conceptually we could push the concept of "a variable will be uselessuntil it gets an initial value", but hey. If we give sensible default values, that can save a lot of typing. And logical bugs are fairly easy to find. Also, it doesn't result in random behavior, if all variables are set to default values instead of taking whatever garbage was in memory before them.
+Of course, conceptually we could push the concept of "a variable will be useless until it gets an initial value", but hey. If we give sensible default values, that can save a lot of typing. And logical bugs are fairly easy to find. Also, it doesn't result in random behavior, if all variables are set to default values instead of taking whatever garbage was in memory before them.
 
 Sensible default values for the primitive types could be:
 
@@ -66,7 +66,7 @@ And I waived the problem by saying "the semantic analyzer will make sure that al
 Indeed, this means that for every `init()` method, and every use of the `with` construct, the analyzer must:
 
 - replace default initial values with the ones given in the member declarations
-- check which variables are explicitely inited
+- check which variables are explicitly inited
 - provide default values for variables that are *not* inited and have default values
 - complain if a variable is still not inited (at that point, it is necessarily a non optional object reference)
 
@@ -87,7 +87,7 @@ Every member is inited, happy panda. But look how the second assignment relies o
 
 A simple implementation could see that both members are on the left side of an assignment, and therefore, they are initialized, and therefore this `init` method is valid. Generate code, run, and segfault. Sad panda. Two solutions:
 
-- the analyzer must be smart enough, and inside the `init` method, keep track of which members have been initialized *so far*, and refuse expressions that use other, non inited yet members.
+- the analyzer must be smart enough, and inside the `init` method, keep track of which members have been initialized *so far*, and refuse expressions that use other, not yet inited members.
 - refuse all use of members in `init`: only constant expressions, or expressions that make use of arguments, are allowed. Good bye expressivity.
 
 Note that this problem does not happen in `with`, since in there, no variable exists to read the object being created, or its members and methods.
@@ -144,7 +144,7 @@ Furthermore, not all arguments to constructors are systematically values for the
 
 Well, ok. I'm just not sure how to make it work. If `init` is a method, it should be just like any other method, and not have fancy restrictions on it. Maybe it should be called *after* ensuring that every member is initialized.
 
-I'm thinking of the C++ syntax, where contructors can use their arguments to call super constructors and member constructors:
+I'm thinking of the C++ syntax, where constructors can use their arguments to call super constructors and member constructors:
 
 	Foo::Foo(int i, string s) : Bar(i), str(s)
 	{
@@ -154,9 +154,9 @@ I'm thinking of the C++ syntax, where contructors can use their arguments to cal
 
 Maybe also sool could have a special syntax for simple member setting, which would be followed by initialization check, and then by a regular method, that can do whatever the hell it wants.
 
-Once more, I note that I always hated C++ for this (weird additionaly syntax for something you could do in the body of the function itself), but in my case, that could be useful.
+Once more, I note that I always hated C++ for this (weird additionally syntax for something you could do in the body of the function itself), but in my case, that could be useful.
 
-Maybe the restriction could be that these small pieces of code can use the arguments passed to `init`, but not `self`, exactly like in `with`, because `self` does not exist yet. Once in the body of the method, it's a regular method, the object is valid, use it as you please. In fact, maybe they can have only one expression, like `with`.
+Maybe the restriction could be that these small pieces of code can use the arguments passed to `init`, but not `self`, exactly like in `with`, because `self` does not exist yet. Once in the body of the method, it's a regular method, the object is valid, use it as you please. In fact, maybe they can have only one expression per member, like `with`.
 
 In fact, constructors will become "default `with` constructs", followed by arbitrary code.
 
@@ -189,7 +189,7 @@ Why not? The `build` methods can call each other all they want, do whatever they
 
 You can use these methods to fill in default values, or switch depending on arguments. You can use these to return `nil` or return objects of children classes. In fact, since they are normal methods, they could even return whatever the hell you want that has nothing to do with objects of the class, and use them only for the syntactic sugar.
 
-I once complained that C++ constructors were not awesome because they could not fail, and because we often used them trivially to set members. And that often, complex object construction had to be done in static methods, that handled failure, internizing, ressource allocation, and what not.
+I once complained that C++ constructors were not awesome because they could not fail, and because we often used them trivially to set members. And that often, complex object construction had to be done in static methods, that handled failure, internizing, resource allocation, and what not.
 
 Well guess what. In sool, that could be the only way to do it! The low level constructor uses default values and requires `with` for the others. Use that if that's enough, or wrap that in a selfless method otherwise. And in the spirit of typing less, the language provides syntactic sugar.
 
@@ -224,8 +224,60 @@ It's a bit more elegant (makes checking easy too), but still involves creating a
 
 Easy enough, the `super` argument to `with` must be of type Parent, not optional. If the parent builder is optional, you're forced to check it before passing it to `with`.
 
-However, that is conceptually interesting. To create a child, you must give a parent model, in which case its constructors are explicitely used. Otherwise, you can override the parent's functionality, and fill the inherited members yourself. This is good, because that formalizes (and makes safe) the memory copy from parent to child, to specialize an object at runtime.
+However, that is conceptually interesting. To create a child, you must give a parent model, in which case its constructors are explicitly used. Otherwise, you can override the parent's functionality, and fill the inherited members yourself. This is good, because that formalizes (and makes safe) the memory copy from parent to child, to specialize an object at runtime.
 
 The only problem left is, again, when you directly want a child, you still get all the ancestor intermediaries, and many memory copies that you don't need. So what, compiler optimization? When calling directly the parent builder from `with`, secretly pass an allocation size hint to the parent that will directly build an object big enough to hold a child, and then bypass the copies?
 
-Not so pretty. Must find better.
+Not so pretty, and unreasonable. Nothing forces the parent builders to "well behave" and simply set fields in a new object. They could return a totally different object (for internizing, or specialization at creation, or whatnot). We cannot assume that the parent builders will be only member setters. In fact, if they are trivial member setters, it's probably better to set the members yourself in the `with`.
+
+The problem lies in more complex initialization operations. The fact is that normal constructors are called on self *after allocation*, while these selfless builders do the allocation themselves. We can't use inheritance with the builders, because each class in the hierarchy creates an object.
+
+It really seems like a proper constructor that respects inheritance *must* act on an existing object. And for that to work in sool, the object must already have been initialized, at least for the sensitive parts: the non optional reference members.
+
+So what, a double system? Selfless `build` methods to ensure that references are inited, followed by a call to `init`, that may recursively call parent initializers if needed? This is madness, and more importantly, it might not work at all since some sensitive members might be set in parent `build` methods. Having to reproduce code from parent to child is definitely against all that OOP stands for.
+
+I feel stuck. What else could be done?
+
+Basically, we need an external function to prepare and set the object's members. We also need it to *not* create the object, so that it supports inheritance. But then again, if it sets object members, it means the object already exists, and it must have had some of its members inited already.
+
+What if... this functions don't *set* the members, but only *prepare* them? You could call them recursively, gather all the values that are needed, and only at the end create an object and set all its members in one shot.
+
+Is that feasible? The "gather" part of it is the difficulty. How do I do that? Passing around an object of the given type, we know it, is not possible. How about a struct for each parent in the hierarchy? Then each child class could read from it, and add its own info to a newer struct, bigger, equivalent to the object at this stage.
+
+Mmm wait, that ends up being exactly equivalent to the "build parent object and use it as a basis for the child object" thing, which involves full object copies at each layer of `build`. Realloc, bad.
+
+What if... there was only one struct with all equivalent fields of the child object, that could be filled by the parent constructors? Well, how is that different from passing the object around? It's not. If the object exists, its members must have valid values. The snake is biting its own tail.
+
+What if, exceptionally, in the `init` methods, non optional references could be uninited? Like, the `init` methods act on a similar object, but whose references are all optional. And at the end, it is copied into a real object, and the references are checked for nil-ness. Nah, this equivalent object would not be of the actual type, so you couldn't safely send messages to it.
+
+This is fairly annoying.
+
+Blah
+----
+
+In a theoretical point of view, the cleanest solution I see so far is the syntactic shortcut to selfless `build` methods, and the use of `super` in `with` constructs.
+
+To avoid too much object copying, and too much code rewriting, the infamous "complex calculations" could be done in helper selfless methods, called again from children `build` methods. They would return the interesting values directly, which could be used to set members in the objects.
+
+That's still a bit of redundant writing, true. But let's be honest, most of the time, the builder methods are only used as shortcuts. Furthermore, only the non optional reference members need to be taken care of prior to object creation. All the rest could in fact be set afterwards.
+
+In fact, children classes also inherit the default values for members, so basically, a good part of the initialization is automatic. The necessary redundancy appears only in the cases where parent init is complex. Maybe it's an acceptable trade off. And in fact, nothing prevents you to write `init`-like methods that call parents and do complex setting stuff. It's just that the objects will need to have their object members set before.
+
+For now, let's assume this is the solution.
+
+Syntax
+------
+
+When writing and thinking about these examples, I came to question the `with` syntax. It is a tad heavy, in particular if it becomes the main (only) way to make an object. An obvious replacement is to use parentheses:
+
+	foo = Foo(x = 4, y = 5)
+
+The parser will be slightly unhappy, though, as it makes the grammar non LL(1). When you see `Foo(x`, there's no way of seeing if it is going to be a list of `member = value` pairs, or a list of expressions for arguments. Then again, it's just a matter of looking one token ahead and check for `=`.
+
+Anyway, all other bracket style tokens are taken already: `[]` is a shortcut for array-like initialization, and `{}` for table-like. `Foo<` looks like a binary operator after an argument-less instantiation. Parentheses are fairly OK.
+
+One last thing, the name of the special method for which `Class(args)` is a shortcut. `build` is self explanatory, but the simple `new` might be nicer. Short, and familiar (Ruby, for instance).
+
+One last last thing. Remember that shared members can be overridden, in which case a new storage is created for this class and the children classes that do not override is again? And obviously the new definition of the shared member can set a new initial value.
+
+Well, maybe we could do the same for normal members, the "change initial value" thing. Normally the analyzer complains if you try to define a member which has the same name as an inherited member (no shadowing rule). But if you give a new `= initvalue` thing, maybe it could be just to change this init value. But then the syntax kind of blows, since you have to put the type again, and it really looks like a new declaration. Soooo, just `parentmember = newinitvalue`, floating in the class definition? Bah, why not. More grammar.
