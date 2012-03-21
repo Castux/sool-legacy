@@ -1,0 +1,11 @@
+Not so difficult after all!
+
+Template instantiation is done by an external object, fairly stateless (just to avoid clogging the AST classes). It's recursive and boring, and basically just copies AST nodes. The only difference is that Type objects (really their contained ClassNames) are checked for template parameters, and new types are created on the fly.
+
+To avoid deep parameter passing, the instantiator has the parameter map as member. It could also possibly keep track of the new created classes, if needed.
+
+At higher level, after parsing and class discrimination, we check all existing ClassNames (from the internized database), and check if the classes exist. If not, instantiate. This will sometimes add new ClassNames, so iterate until the list is stable (or fancily use the info from the Instantiator).
+
+Note: for useful error messages, this might require storing "first use" position in ClassName objects. Not sure. Error could be delayed until actual use of the Type (in which case the enclosing AST node will probably have a Pos for us).
+
+For this, the ClassName objects could have pointer to their actual Class, filled on the go. At use, if no class, complain. Or something.
