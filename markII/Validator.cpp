@@ -3,11 +3,6 @@
 
 using namespace sool;
 
-Class *Context::Instantiate(Class *templ, std::vector<Type*> params)
-{
-	return NULL;
-}
-
 Class* Context::Get(std::string name)
 {
 	ClassMap::iterator it = cmap.find(name);
@@ -60,10 +55,10 @@ bool Validator::Validate(ParseResult res)
 		Class *c = context->classes[i];
 		AddInfo(c->name + (c->pclass ? " : " + c->pclass->name : ""));
 	}
-	
-	for(TypeMap::iterator it = tforge.tmap.begin(); it != tforge.tmap.end(); it++)
-		AddInfo(it->second->signature);
 	*/
+	for(ClassNameMap::iterator it = ClassName::map.begin(); it != ClassName::map.end(); it++)
+		AddInfo(it->second->signature);
+	
 	return true;
 }
 

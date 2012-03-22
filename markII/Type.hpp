@@ -20,7 +20,8 @@ namespace sool
 	
 	class ClassName
 	{
-		private:
+		// private: FIXME
+		public:
 		
 		static ClassNameMap map;	// The map used for internizing: indexed by signature
 		
@@ -40,6 +41,9 @@ namespace sool
 		
 		// Empty database
 		static void Clear();
+		
+		// Create new class name by replacing occurences of the keys in the tmap by their values
+		ClassName *ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
 	// Type is a wider concept: qualifies variables, can be multiple, and void
@@ -55,6 +59,9 @@ namespace sool
 		
 		Type();
 		Type(ClassName *c, bool opt);
+		
+		// Replace class name in place by replacing occurences of the keys in the tmap by their values
+		Type ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
 	class MultiType
@@ -67,7 +74,11 @@ namespace sool
 		
 		MultiType();
 		MultiType(std::vector<Type> subtypes);
+		
+		// Replace class name in place by replacing occurences of the keys in the tmap by their values
+		MultiType ReplaceTemplateParams(ClassNameMap &tmap);
 	};
+
 }
 
 #endif // TYPE_HPP

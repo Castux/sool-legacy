@@ -42,8 +42,6 @@ namespace sool
 		
 		Member();
 		~Member();
-		
-		Member *Copy();
 	};
 	
 	class Method : public AST
@@ -89,8 +87,6 @@ namespace sool
 		
 		Method();
 		~Method();
-		
-		Method *Copy();
 	};
 	
 	typedef std::map<std::string,Member*> MemberMap;
@@ -135,8 +131,6 @@ namespace sool
 		
 		Class();
 		~Class();
-		
-		Class *Copy();
 		
 		bool IsTemplate();
 		bool IsInstance();

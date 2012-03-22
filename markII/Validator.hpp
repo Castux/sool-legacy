@@ -19,7 +19,6 @@ namespace sool
 		ClassMap cmap;				// An indexing of classes and templates by name, owned
 		
 		Class* Get(std::string);	// Find class or template by name
-		Class *Instantiate(Class *templ, std::vector<Type*> params);
 		
 		~Context();
 	};

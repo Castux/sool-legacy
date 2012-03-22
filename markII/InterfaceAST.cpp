@@ -12,13 +12,6 @@ Member::~Member()
 {
 }
 
-Member *Member::Copy()
-{
-	Member *m = new Member(*this);
-	
-	return m;
-}
-
 Method::Method() : internal(false), selfless(false), foreign(false), setter(false), member(NULL)
 {
 }
@@ -27,23 +20,9 @@ Method::~Method()
 {
 }
 
-Method *Method::Copy()
-{
-	Method *m = new Method(*this);
-	
-	return m;
-}
-
 Class::Class() :	value(false), validating_interface(false),
 					valid_interface(false), valid_code(false)
 {
-}
-
-Class *Class::Copy()
-{
-	Class *c = new Class(*this);
-	
-	return c;
 }
 
 Member *Class::GetMember(std::string name)
