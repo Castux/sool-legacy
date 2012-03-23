@@ -392,7 +392,6 @@ Type Parser::ParseType(SourcePos *pos)
 	ClassName *cname = ParseClassName();
 	if(!cname)
 	{
-		AddError("could not parse class name", start);
 		return Type();
 	}
 	
@@ -622,7 +621,7 @@ Member* Parser::ParseMember()
 	Type t = ParseType(&m->type_pos);
 	if(!t.cname)
 	{
-		AddInfo("in member definition");
+		AddInfo("for type in member definition");
 		delete m;
 		return NULL;
 	}

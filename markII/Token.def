@@ -29,6 +29,8 @@ KEYWORD(return)
 // Control structures
 KEYWORD(do)
 KEYWORD(while)
+KEYWORD(for)
+KEYWORD(in)
 KEYWORD(if)
 KEYWORD(then)
 KEYWORD(elseif)
