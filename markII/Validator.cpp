@@ -37,6 +37,10 @@ bool Validator::Validate(ParseResult res)
 		return false;
 	
 	delete(res.classes);
+	
+	// For now
+	for(uint i = 0 ; i < res.extensions->size() ; i++)
+		delete (*res.extensions)[i];
 	delete(res.extensions);
 	
 	// Validate interfaces

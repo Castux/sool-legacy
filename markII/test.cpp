@@ -66,6 +66,7 @@ int main(int argc, char **argv)
 	// For now
 	
 	delete validator.context;
+	ClassName::Clear();
 	
 	return 0;
 }

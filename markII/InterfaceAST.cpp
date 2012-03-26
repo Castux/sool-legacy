@@ -68,4 +68,6 @@ Extension::Extension()
 
 Extension::~Extension()
 {
+	for(uint i = 0 ; i < methods.size() ; i++)
+		delete methods[i];
 }
