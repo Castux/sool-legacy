@@ -1,0 +1,161 @@
+A take on inheritance
+=====================
+
+Inheritance, we know it, is a cornerstone of object-oriented programming, along with dynamic dispatch, abstraction, encapsulation, and subtype polymorphism (your milage may vary).
+
+In particular, the combination of inheritance, dynamic dispatch and subtype polymorphism allow us to flexibly enjoy:
+
+- code reuse. Code some behavior in a parent class, it's available in all the derived classes. For instance, the physics associated with every object in a game world.
+- behavior overriding. If a specific class needs to do things a tad differently, it can write its own implementation of a method, and all the rest of the inherited code will still work fine and use these new methods (assuming they are virtual, which I do).
+- to some extent, honoring the "is a" principle, where you can give an object of a child class whenever one of the parent class is needed.
+
+In fact, we've been using OOP as expressed here so much that it feels both natural and normal. There are some quirks, largely discussed on the interwebs, and critiscism, that usually revolves around the terms "too complex". Just open a book about object-oriented design patterns. And in any case, there's always the possibility of shooting oneself in the foot. Too deep an inheritance tree, and you spend all your time jumping from one file to another to see who does what and how ("Now where is that `do_that` method?. Oooooh right, the great-great-great-grandfather class implements it!") And obviously, it's easy do just do it wrong (like putting tags in the objects to know what class they are, and then big switches, and ugly casting all over, instead of having the code in the object themselves and use dynamic dispatch).
+
+However, one can argue that it's still better than having to write physics code over and over, or effectively *have* to use switches and casting to simulate this behavior in a non OOP language (GTK+, anyone?)
+
+Now check this out: both Mozilla's Rust and Google's Go, which are recent still-in-dev languages, walk away from traditional OOP. They both *can* be used in an OOP manner by defining methods for types, and they both have some substitute for inheritence, but they are definitely *not* OOP at the core.
+
+Coincidence? Are people so tired of C++, Java and other well established OOP languages that they feel the need to create new languages that are in fact not object oriented? Is OOP outdated, a relic of olden and narrow minded times?
+
+And if so, do I want sool to adhere to a deprecated mode of thinking, or be surfing on the wave of modern languages?
+
+Analysis.
+
+The struct as basic data type
+-----------------------------
+
+Both Rust and Go have the struct/record as principal constructed type. Nothing new there, we had it in C already. It is just a convenient way to group related variables together and manipulate them as a whole. Note that in both languages, they are value types by default: variables actually hold the whole data, which resides (probably) on the stack or in registers. To actually make objects out of this, you need to take an extra step ("box" the record in Rust, or use `new` in Go). In both languages you can name the types you create, and even name directly the objectified type (by naming the pointer to it).
+
+In short, Rust and Go (like C and C++) let you define classes, and then instantiate either values or objects from them, whereas for instance the D language (and sool) let the class writer make the decision (this shall spawn only values, while this shall be only objects).
+
+I'm not sure what to think about this, except that in practice, I suppose only rather small classes should be used as value types. You don't really want to be passing around so much data between functions. Then again, when used only as a local, object instantiation can be expensive.
+
+Most of the time, big structures will be only used as objects, and small ones as value, so why giving the opportunity of mixing the two, especially when it brings more syntax in the game. My opinion (and the choice I made in sool) is that it's up to the class writer to decide, because "they know better". Like we said, it also brings its share of complications. Values variables can have different sizes, while references are always the same size. The assignment mechanisms are different, and we had all the talks about reference/value comparison. And after all, an object is nothing more than a value in the heap.
+
+Let's skip this question for now.
+
+The method as syntax sugar
+--------------------------
+
+Rust and Go are fundamentally procedural, which makes the function the principal element of the language. But as functions act on data, and data can be grouped in structures, we often end up defining a set of functions that act on a particular structure, and it becomes tiresome to have to specify it as argument. Hence the "method", where one argument is made more important by being the recipient of the call, and the nicer syntax to make the call:
+
+	obj.method(args)
+
+instead of
+
+	function(obj,args)
+
+In particular, the language can allow methods to have the same name if they act on different recipients, which is a kind of polymorphism, hence making it easier on the namespace.
+
+So far, we have a very simplified object concept: chunk of data on the heap, can be sent "messages" which are really just function calls and hidden arguments. That's all very static, and for now only a nicer way to organize code.
+
+Interfaces
+----------
+
+Both Rust and Go let the coder the possibility of declaring *interfaces*. Details vary, but the concept is the same: an interface is simply a set of method prototypes (name and type of arguments).
+
+Then, a type is said to "implement the interface" if it implements all methods in the interface. Simple as that. In Go, it is automatic (if you have the methods, then you implement the interface). In Rust, it is explicit (you must say "this is the implementation of interface X for type T", and put your methods in it).
+
+So, what with them? Well, you can write generic code that works with any type that follows a certain interface. For instance, in Go, if a container type answers to `Len() int` to get its length, `Less(i, j int) bool` to compare two elements, and `Swap(i, j int)` to swap two elements, then your type follows the `sort` interface, and you can call `Sort(obj)` on it. For free. No more effort required.
+
+How it works behind the scenes is another problem, but on the language side, this is fairly nice. Define an interface (a set of methods that are required for a certain algorithm), write some functions that uses these methods, and *any* type that complies with the interface automatically is a valid argument for these functions. How's that for code reuse?
+
+Rust has the same, but a tad less "automatic". To write code that works on any type that follows an interface, you can either:
+
+- use the interface as a constraint for a type parameter in a generic function (which binds the type parameter to a single interface-compliant type)
+- use the interface name as a type itself (which allows to mix objects of several interface-compliant types in the same function)
+
+By the way, Go doesn't have generics, which means that behind the scenes, all the interface vodoo is done dynamically by sending virtual tables along with object references, when using them for their interface. In the `Sort` example earlier, it means that calling `Sort(obj)` actually gathers the addresses of the `Len`, `Less` and `Swap` methods for `obj`, and sends them along to the `Sort` method in a virtual table.
+
+The same would happen in Rust, when using the second option (using the interface as a type). Obviously, this results in slower runtime than using generics, which simply duplicate the code for any type that uses it, but does all the binding at compile time.
+
+Note that Rust also has generic data types, which depend on other types, while Go, fatally, doesn't.
+
+A final note: these interface types in both languages are used only for function arguments. It does not seem possible to define *methods* for them, which would take advantage of the nicer call syntax. But then it could create conflicts if an object follows several interfaces, and if these interfaces were to define methods with the same prototype. But I guess that would be a detail.
+
+What about data?
+----------------
+
+So far, we've only talked about methods: interfaces and implementations, and how these can be shared to an extent. This is particularly useful to write generic algorithms that work the same on different kinds of objects that behave similarly. In C++, we'd do that with purely virtual classes, that would have some non implemented methods (the required interface), and some implemented methods (the algorithms). Subclassing from that forces to implement the interface, and inherits the algorithm as a bonus. That, or using generics, for compile-time binding, like the choice you have in Rust.
+
+So Rust and Go do nothing new? Probably not. But inheritance is a tad heavier, in particular if you try do deal with multiple inheritance. Having anything else than a clean tree of objects is (as far as I read) a good way to make a hell of a bloated mess. When seeing it with the interface point of view, it's a lot clearer: each type, independently of others, may implement and take advantage of any number of independent interfaces.
+
+Picture that as two rows: on top, the interfaces, on the bottom, the types, and arrows in an "many to many" pattern from top to bottom. Now try to transform that into an inheritance tree. Good luck.
+
+Add to that the fact that an interface in Go can in fact also embed another one (which is only a shortcut to avoid writing again a set of method prototypes, if they are the same), and good luck. Interfaces make super-multiple-inheritance trivial.
+
+Except we still haven't talked about data. Interfaces deal with methods, and their implementations. Traditional OOP inheritance is not only about methods, but also data members.
+
+To take the example of the physical entity in a game world, say it has coordinates, speed and mass. Forces are applied specifically depending on the type of object, but then the cinematic integration is the same everywhere. If we were to define that only in terms of interface, each entity would need to implement some form of accessors `getForces`, `getCoordinates`, `getMass`, and the setter `setCoordinates` for their own members. Then, there could be indeed a generic `iterPhysics(dt)` that would use these to do the classic Euler integration:
+
+	v = v + f/m * dt
+	x = x + v * dt
+
+But think of the effort! Writing trivial accessor methods for data is already annoying (but the language might write them automatically), but it also means that all the binding is done at runtime. Hello, virtual tables and slow physics!
+
+The usual C++ way is to have the position, speed, mass and force members in a parent class, say "PhysicalEntity", along with the physics algorithm as a method, and everyone who needs it would simply inherit it. Happy static binding.
+
+Inheriting in C++ means not only having access to methods of the parent, but also *replicating its memory layout* (and adding to it). And any sensible compiler would make sure that the parent object layout is at the start of the memory chunk, so that a pointer to a child object can effectively and safely be interpreted as a pointer to a parent object. Here's the subtype polymorphism.
+
+Thanks to:
+
+- similar interface (the virtual table for the child is the virtual table of the parent with potentially some overrides, and some additional elements at the end))
+- similar memory layout (the memory layout of the child is the one of the parent, plus the new fields at the end)
+
+a Child object **is a** Parent object. With stuff after. Technically, it *includes* a parent object, but everything looks like it *is* one, which is why C++ lets you cast the hell out of everything without problem.
+
+And it sure seems like a better way to do things than redefining the same members in different objects, and turning member access into virtual methods, like the interface technique seems to require.
+
+Well, some say that it should simply be a separate object. In particular when entities need to mix behaviors from many different things in many different ways, the classic inheritance fails miserably. The Wikipedia page for [Composition over inheritance](http://en.wikipedia.org/wiki/Composition_over_inheritance) explains that nicely. You can have a global Object, and three children: Visible, Solid, Movable. And then some entities that mix these:
+
+- class Player - which is Solid, Movable and Visible
+- class Cloud - which is Movable and Visible, but not Solid
+- class Building - which is Solid and Visible, but not Movable
+- class Trap - which is Solid and not Visible nor Movable
+                
+If you use multiple inheritance, you have the diamond problem (inheriting Object's members several times through different parents). If you want to make specific combinations, you have to write the VisibleAndSolid class, or MovableAndVisible and the rest of the 8 possibilities.
+
+In that case, what is recommended is to compose instead of inherit. Make each behavior happen in a different class, independently, and bring them together by having subobjects of your object. Then, you will need to do message forwarding, true, but that is still cleaner.
+
+Go proposes the possibility of anonymous subtype. In a struct, if you don't name a member, the forwarding of methods and members is done automatically. In effect, that brings the interface of the subobject to the main object. Modulo name conflicts, you get a form of member inheritance, plus methods inheritance.
+
+By default, a method or member of the container object has priority over those of a subobject, but the subobject can still be entirely accessed by explicitely using its type as a member name.
+
+You can use that to entirely simulate classic inheritance if you want. And more. I have never used it, so I can't really imagine how convenient it can be, but it seems like a nice idea. A bit in the Lua/sool spirit: use existing mechanisms (fields in a struct) through syntactic sugar (automatic access if there is not name conflict), and you have almost-free multiple inheritance.
+
+You turn the *has a* relation into a *is a*, by a simple syntactic twist. And all we said about interfaces still hold. If the subobject complies to a useful interface, the containing object can be the target of the generic algorithms.
+
+Magic.
+
+And when you think about it, that's what C++ does anyway, except it hides it in mounds of implementation. That seems like a nice idea.
+
+There are some quirks, obviously. The *has a* can never be a true *is a* relationship. Suppose `myA` of type A has a B subobject. You can't assign `myA` to a B variable, nor pass it as a B argument to a function. You can, however, pass the B subobject itself, but that separates it from the parent: you can't cast back to an A later, as you could have done if it was a classic OOP parent-child relationship.
+
+Also, for structures the inclusion is quite clear. What about objects? Should the memory layout be included in the parent, or only a reference to a separate object? Both have advantages:
+
+-	if you include the memory layout (as if it was a struct), there is no need for pointer dereferencing, the data is right here, while if you have many levels of inclusion by reference, a simple `obj.dothat()` call might become a long and slow series of forwarding: `obj.sub1.sub2.sub3.sub4.dothat()`. But then again, you probably shouldn't have that many levels of inclusion (just like you shouldn't have too many levels of inheritence).
+-	if you include only a reference to a separate object, the mechanism is then *actually* nothing more than syntactic sugar. The subobject is a proper independant regular object that we know only by reference. That even solves our "parent initialization" problem:
+	
+		child = Child with
+			super = Parent(),
+			member = value
+		end
+	
+	where the classic model would have implied allocating a Parent, then a Child, and then copying the parent in the child. Here, if the `super` member is in fact a regular member, there is one allocation for Parent, and the assignment to `super` is a regular reference assignment, no copy. The "child" allocates memory only for its own fields. Of course, the `super` member would be hidden and probably mentionned by type name, but that's details.
+
+I'm seeing at least one other nice advantage of including only a reference: free "static" members! Nothing prevents you to build the objects with a common subobject, so that they all share some memory.
+
+I'm starting to like this. So far, it looks pretty clean. Sure, that's less efficient "proper" OOP, because of the message forwarding, but it also shows that these mechanisms are less than trivial, and should be used with care.
+
+Note that in Go, you have the choice: the subtype of a struct can be either a value (like another struct) or a pointer to one. Since in sool you have no choice between value or reference (that's decided by the class writer), the simplest would be to have no choice either. If you embed a value class, it's added to the memory layout; if you embed an object class, you get only a reference to it. Exactly like normal members.
+
+At the moment, there is no similar mecanism in Rust. You can always write the method forwarding by hand, but that's not as nice...
+
+Conclusion
+----------
+
+So there you have it. Rust and Go, two modern languages being designed as we speak, decided to do without object-oriented programming. They state that OOP is not the solution to all problems. They propose the mechanism of interfaces instead, in combination with either statically bound generic functions, or entirely dynamic functions that use dynamic dispatch.
+
+Additionally, Go has syntactic sugar to include an object in another one, and make its members and methods available at first level.
+
+Is this "better", "more flexible" and "simpler" than classic OOP? More importantly, is this a direction that sool could take? It's certainly tempting, but that would mean a new rewriting of the language's core mechanics. At that rate, the first compiler prototype will never be ready.
