@@ -1,0 +1,115 @@
+Generics and templates: can we do without?
+==========================================
+
+In short, yes. But that might not be a good idea.
+
+First, why would we question their utility?
+
+- they are a pain to code in the compiler, as I've been learning recently. Sure, that's a compiler-writer problem, but still.
+- they duplicate code for each type they are applied to, which makes longer compile time, and bigger binaries.
+- they can be difficult to debug, as the source shows generic types, while they are in fact replaced by specific types. Again, that might be mostly a compiler-writer problem (just make the compiler messages clearer!)
+- they require revalidating the code for all the types they're used with, which again might be slow, especially if they're used a lot.
+
+Why does it seem that we can't do without:
+
+- the built-in type of array is, in a way, a template: its methods arguments and return values depend on the subtype, and its generated code as well (in particular, on the size of the type).
+- writing the same code for different types is out of question, there must be a mecanism to deal with this.
+
+Why it looks like we could do without:
+
+- thanks to the interface system we described in the last post, generics could be replaced by functions that use dynamic dispatch. Modulo a few problems.
+
+Generics with dynamic dispatch vs. early bound templates
+--------------------------------------------------------
+
+It's the great compromise between generating a lot of efficient code, for each type that needs it, or generating a single version of the function that works with every type but is slower.
+
+And even if we accepted the compromise of slower functions, because they bring simplicity to compiler and code, there is still the issue of the value types.
+
+See, if a function takes a generic type in, it needs to have variables that can hold any of the possible types. And when calling methods on them, the generated code should work for any type as well. Objects are fine, they're manipulated by reference, and all pointers have the same size, but values might all have different sizes... A bool is 1 byte, a num is 8, and a struct can by any length it wants.
+
+Therefore, a truely generic function could be written only for objects.	This eliminates all values, or more likely, forces us to box them into objects before using them with generic functions. Imagine, how lame would that be? Even if that could be written automatically by the compiler (after all, that's a serious case of embedded object, like we described for Go earlier), that would still suck.
+
+Suppose you have a template for growable arrays. To use it with numbers, you need to actually use it with boxed numbers, which means that instead of having an array of numbers, you'd have an arrays of pointers to many little heap-allocated numbers. That is *not* an option. 
+
+In fact, even for objects, dynamic generic functions are not the absolute solution. Some things are not easily expressed with interfaces. Think about some arithmetic calculations, like averaging. An average is just a sum divided by the number of elements, so any type that supports addition, and division by a number would do. Numbers, complexes, vectors, they all could enjoy the same algorithm.
+
+Let's try:
+
+	interface Averagable
+		method Averagable +(Averagable other)
+		method Averagable /(num other)
+	end
+
+And now the algorithm itself making use of the interface, and take an array of averagables:
+
+	function Averagable average(#Averagable vals)
+		-- do the sum and division and return result
+	end
+
+Looks perfect! But now you call `average([1,2.7,3,4,5])` and the compiler complains that `num` does not implement interface Averagable, because:
+
+	type num doesn't answer to Averagable:+:Averagable
+
+Yep, fail. For this to work, you'd need an addition method between numbers and *any* other averagable type. In fact I'm even wondering if that's possible at all, since the interface is self referent. How do you even build an averageable in the first place?
+
+This is a typical case of "we need templates". Polymorphic interfaces, say Rust.
+	interface Averageable|T
+		method T +(T other)
+		method T /(num other)
+	end
+
+	function T average(#Averageable|T)
+		-- blabla
+	end
+
+That one is a bit convoluted, because the T is both the template parameter for the interface, and the type that implements it, but it could be simpler too.
+
+Imagine you write an interface for objects that can produce numbers, and then use it to, say, make arrays out of the produced numbers:
+
+	interface NumMaker
+		method num make_one()
+	end
+	
+	function #num make_ten_nums(NumMaker m)
+		arr = []
+		for i in 10 do
+			arr.insert(m.make_one)
+		end
+		return arr
+	end
+
+And then you realize that hey, that's sweet, but I could really use the same for blobs, and strings. Are you going to write the StringMaker interface, and the `make_ten_strings` method?
+
+	interface Maker|T
+		method T make_one()
+	end
+	
+	-- Use interface template with parameter num
+	
+	function num make_ten_nums(Maker|num m)
+		-- etc
+	end
+	
+	-- Or even declare an also generic function that
+	-- uses the generic interface
+	
+	function #T make_ten(Maker|T m)
+		-- etc
+	end
+
+And it works for any object that has any `make_one` method that returns a single value. Note again that this example with this imaginary syntax is not totally clear on how things work, because the function `make_ten` doesn't explicitely declare a type parameter, so maybe the compiler would ask, "hey what the hell is `T`?" But details, details.
+
+So generics are pretty sweet, and it's difficult to have the compiler figure out by itself where to use them (you need an explicit binding of the type, otherwise we might have the same problem as with Averageable earlier).
+
+The great question is: what can be templated? In Rust, types, functions, interfaces and implementations can all have type parameters independently. In sool so far, only classes can have type parameters, but they pretty much englobe the concept of type declaration, interfaces and implementations, since we don't have separate functions.
+
+The more I see it, the more I like the idea of templates requiring a certain interface. No more "everything goes" type of thing. If you make a template, you must restrict the interface of its type parameters, and therefore you need to do only one validation pass, using only the interface information. That sounds pretty good, because it delays the code duplication until code gen, and even then it doesn't sound too bad.
+
+Oh I like it. You can validate templates just like any other class, because you have full information about the types in it. In fact, normal classes are just templates with no parameters. Same treatment for everybody. Sweet.
+
+Of course the one implication is that to write a template, you need to write an interface first. But some interfaces can be very simple. Take containers, they need only to assign, read and copy values around. That's built-in for every type. So, "Containable" is the empty interface! One done.
+
+Anyway, once we have interfaces, there's only one step to the "no more classic object-orientation" concept discussed about Rust and Go. And it's a step I'm willing to consider.
+
+In the next episode: let's see, just for fun, what it would look like in sool.
