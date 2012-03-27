@@ -45,7 +45,7 @@ Now it looks a bit empty, and still very C++ish. A very simple option is to simp
 		Writable
 	end
 
-However, since interfaces names are capitalised, like class names, that will annoy the parser a bit. In fact, interface names are also type names:
+However, since interfaces names are capitalized, like class names, that will annoy the parser a bit. In fact, interface names are also type names:
 
 	interface RWable
 		Readable
@@ -107,7 +107,7 @@ So that was easy. That only brings the question, "how to access the hidden membe
 
 So far in sool we had the "no shadowing" policy for members: cannot have a member with the same name as a parent member. On the other hand, method overriding was always allowed (even overriding the accessors of the parent member, to "hide it" in calculations). Now, well... That would go against the principle that embedding is really *just* a shortcut. If we have the member, use it, otherwise look for it in the embedded members. Same for methods.
 
-The real question is for the second point, if a method is not at the first level, but in two or more embedded members. One solution is to say that the embedding is invalid, because there is conflict. Another solution is to say the the *shortcut* is invalid, and the exact hidden member/method must be accessed explicitely. In other words, the interface of A, which embeds B and C is the union of B and C's method set, minus their intersection. Wikipedia tells me it's called the "symmetric difference". I just see it as a big xor: you get shortcuts to members and methods that appear in exactly one of the embedded types.
+The real question is for the second point, if a method is not at the first level, but in two or more embedded members. One solution is to say that the embedding is invalid, because there is conflict. Another solution is to say the the *shortcut* is invalid, and the exact hidden member/method must be accessed explicitly. In other words, the interface of A, which embeds B and C is the union of B and C's method set, minus their intersection. Wikipedia tells me it's called the "symmetric difference". I just see it as a big xor: you get shortcuts to members and methods that appear in exactly one of the embedded types.
 
 Cool cool. What about these without shortcuts? Since the members are in fact anonymous, we really can't name them (no shit Sherlock). However, their types are unique, so we could always use the type to access.
 
@@ -157,7 +157,7 @@ but these are confusing, because of the lexical idea that methods and members ar
 
 or `__embedded_Foo`. That's extra yuck. Nah, just the type name will do. Internally, the name doesn't change anything anyway.
 
-Also, that means that when making the objects or values with the (former) `with`constructor, you can set directly a whole embedded member:
+Also, that means that when making the objects or values with the (former) `with` constructor, you can set directly a whole embedded member:
 
 	bar = Bar(Foo = foo, i = 10)
 
@@ -194,7 +194,7 @@ And that's exactly then (at the passing) that the typecasting (and the construct
 	foo.make_it_bark(dog)
 	barker = dog		-- barker was for instance a member, declared CanBark
 
-To the compiler, the assignment is pretty clear. Can a Dog bark? Yes? Well, do the magic dynamic cast, thank you. However, it could also be available explicitely for creating locals:
+To the compiler, the assignment is pretty clear. Can a Dog bark? Yes? Well, do the magic dynamic cast, thank you. However, it could also be available explicitly for creating locals:
 
 	barker = dog to CanBark		-- look ma, a cast!
 
@@ -202,7 +202,7 @@ Note that casting from one interface to another is possible, if and only if the 
 
 In fact, there *could* be also some kind of dynamic downcasting, if we really wanted to. Every object could carry its exact class information with it, and from an interface-like generic object go down to an exact object, with a runtime check and possibly a failure (announced by nil).
 
-But is that a good idea? It forces every interface-typed object to carry an additional pointer for RTTI. And more importantly, it brings back the question of "is it OK to downcast?" It's a twist on the classic OOP principle: if you're going to switch on the object's actual type, you probably should be writing methods in the objects instead and use dynamic dispatch. Well here, if you're gonna downcast from an interface and do shenannigans, you probably should have included one more method in the interface and call it, leaving every object free to implement it as they will.
+But is that a good idea? It forces every interface-typed object to carry an additional pointer for RTTI. And more importantly, it brings back the question of "is it OK to downcast?" It's a twist on the classic OOP principle: if you're going to switch on the object's actual type, you probably should be writing methods in the objects instead and use dynamic dispatch. Well here, if you're gonna downcast from an interface and do shenanigans, you probably should have included one more method in the interface and call it, leaving every object free to implement it as they will.
 
 Then I usually mention double dispatch and how you can simulate it with downcasts. But hey, I actually never had to use it ever. So screw it. You use interfaces to group objects together and apply the same algorithms on them. You shouldn't need to distinguish them from there, if you designed your interface properly.
 
@@ -213,9 +213,9 @@ This is why making containers of Containable (which is an empty interface) is go
 Templates
 ---------
 
-The big baddie. So far, templates were simple (in design): a class can declare type parameters. Later, this class must be systematically used by binding these parameters to actual types, in which case all occurences of the parameters in the body of the class are replaced by the given types.
+The big baddie. So far, templates were simple (in design): a class can declare type parameters. Later, this class must be systematically used by binding these parameters to actual types, in which case all occurrences of the parameters in the body of the class are replaced by the given types.
 
-Sadness followed in the compiler's implementation. No limitation means: duplicating code (or rather, AST) for each invocation (or "instantiation") of the template. And I enterred some nasty loops of doom, since template use is not declared (just used when needed), which means that not all classes exist yet during validation, and also that instantiating a template might use new templates, provoking more instantiations, etc.
+Sadness followed in the compiler's implementation. No limitation means: duplicating code (or rather, AST) for each invocation (or "instantiation") of the template. And I entered some nasty loops of doom, since template use is not declared (just used when needed), which means that not all classes exist yet during validation, and also that instantiating a template might use new templates, provoking more instantiations, etc.
 
 Now we have interfaces, and we rule the land of templates with an iron rule: template parameters must be comply with interfaces.
 
@@ -232,7 +232,7 @@ Note: I never know how to distinguish the "parameters" that are declared at the 
 
 Anyhoo. What I mean is that the declaration of type argument is the combination of a name and an interface, which restricts the following use of the template to types that implement the given interface.
 
-I mentionned functionnal programming. That's really it. A template is a function that takes in one or more type arguments, and returns another type. Like a usual function takes in several arguments, and returns an answer. And like usual functions, the types of the arguments and the return are restricted, the types of the types passed to a template should be too. By interfaces.
+I mentioned functional programming. That's really it. A template is a function that takes in one or more type arguments, and returns another type. Like a usual function takes in several arguments, and returns an answer. And like usual functions, the types of the arguments and the return are restricted, the types of the types passed to a template should be too. By interfaces.
 
 Heh, I said it. An interface is, in a way, the type of a type.
 
@@ -247,7 +247,7 @@ we need to add the interface informations, like:
 
 If we stay to something close to what we had, I see no easier solution. Even for one parameter:
 
-	class Class(Interface T) end
+	class Class|(Interface T) end
 
 The good news, however, is that when *using* the template, the syntax can stay the same. Just as we have:
 
@@ -263,7 +263,7 @@ And with a single argument:
 
 	Class|Dog
 
-Hurray! And the best news is that now, the compiler is a lot simpler. Since the type paramaters are "typed" (with interfaces), we can assume that they implement only these exact methods, and check the body of the template with that information only. If you need more functionality from your types, include it in the interface.
+Hurray! And the best news is that now, the compiler is a lot simpler. Since the type parameters are "typed" (with interfaces), we can assume that they implement only these exact methods, and check the body of the template with that information only. If you need more functionality from your types, include it in the interface.
 
 And in the rest of the world, when using a template, the only thing to do is "type checking" the types, that is, check that the classes implement the required interfaces. Easy peasy.
 
@@ -311,6 +311,48 @@ would be the same as
 	race = Race|Runner
 
 Why not. Harmless shortcut.
+
+Interface templates
+-------------------
+
+As I wrote earlier, in some cases it's nice to have type parameters for interfaces as well. Syntactically that's pretty much the same as for classes. You need an interface for anything that can feed your dog? DogFeeder interface. But then you'd need one for cat feeders and cow feeders. Time for a generic Feeder interface.
+
+	interface Feeder|(Animal A)
+		feed(A)
+	end
+
+	class Farmer
+		method feed(Cow c) end
+	end
+
+Hey look, the farmer knows how to feed a cow, automatically, he implements the Feeder|Cow interface. That's cool, now he can apply for a job at the cow convention:
+
+	class CowConvention
+		method interview_for_job(Feeder|Cow f) end
+	end
+
+Of course these examples are stupid, but imagine now you have to organize a dog beauty pageant and you also need to interview dog feeders for the job. Recode the same? Nah:
+
+	class Convention|(Animal A)
+		method interview_for_job(Feeder|A f) end
+	end
+
+And the code for the interview will be the same: when validating the Convention template, and its method `interview_for_job`, you'll know that:
+
+	- `A` is any Animal, so for the sake of validation, you can in fact replace `A` by Animal
+	- passing `A`, which is Animal, as argument to `Feeder` is correct, since it expects an Animal
+	- in the method, `f` is a `Feeder|A`, which is like a `Feeder|Animal`, which answers to `feed(A)`, which is `feed(Animal)`
+	- any call to `f.feed(blah)` must simply check that `blah` is an Animal
+
+And it seems a bit messy, but it should work.
+
+One thing that is not possible, because it would be far too complex, would be to have template parameters in the interface contraints for a template parameter:
+
+	class LolMePlenty|(Interf|T A) end
+
+If `T` is not a class, just complain. We're not doing fancy solving of "if I pass Animal to this, is there a class T for which Interf|T is a valid interface for Animal". No way.
+
+I read somewhere that C++'s template system is Turing complete. I don't even want to know why or how. It's just too scary.
 
 What else?
 ----------

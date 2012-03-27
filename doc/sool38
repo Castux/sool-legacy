@@ -1,7 +1,7 @@
 A take on inheritance
 =====================
 
-Inheritance, we know it, is a cornerstone of object-oriented programming, along with dynamic dispatch, abstraction, encapsulation, and subtype polymorphism (your milage may vary).
+Inheritance, we know it, is a cornerstone of object-oriented programming, along with dynamic dispatch, abstraction, encapsulation, and subtype polymorphism (your mileage may vary).
 
 In particular, the combination of inheritance, dynamic dispatch and subtype polymorphism allow us to flexibly enjoy:
 
@@ -9,11 +9,11 @@ In particular, the combination of inheritance, dynamic dispatch and subtype poly
 - behavior overriding. If a specific class needs to do things a tad differently, it can write its own implementation of a method, and all the rest of the inherited code will still work fine and use these new methods (assuming they are virtual, which I do).
 - to some extent, honoring the "is a" principle, where you can give an object of a child class whenever one of the parent class is needed.
 
-In fact, we've been using OOP as expressed here so much that it feels both natural and normal. There are some quirks, largely discussed on the interwebs, and critiscism, that usually revolves around the terms "too complex". Just open a book about object-oriented design patterns. And in any case, there's always the possibility of shooting oneself in the foot. Too deep an inheritance tree, and you spend all your time jumping from one file to another to see who does what and how ("Now where is that `do_that` method?. Oooooh right, the great-great-great-grandfather class implements it!") And obviously, it's easy do just do it wrong (like putting tags in the objects to know what class they are, and then big switches, and ugly casting all over, instead of having the code in the object themselves and use dynamic dispatch).
+In fact, we've been using OOP as expressed here so much that it feels both natural and normal. There are some quirks, largely discussed on the interwebs, and criticism, that usually revolves around the terms "too complex". Just open a book about object-oriented design patterns. And in any case, there's always the possibility of shooting oneself in the foot. Too deep an inheritance tree, and you spend all your time jumping from one file to another to see who does what and how ("Now where is that `do_that` method?. Oooooh right, the great-great-great-grandfather class implements it!") And obviously, it's easy do just do it wrong (like putting tags in the objects to know what class they are, and then big switches, and ugly casting all over, instead of having the code in the object themselves and use dynamic dispatch).
 
 However, one can argue that it's still better than having to write physics code over and over, or effectively *have* to use switches and casting to simulate this behavior in a non OOP language (GTK+, anyone?)
 
-Now check this out: both Mozilla's Rust and Google's Go, which are recent still-in-dev languages, walk away from traditional OOP. They both *can* be used in an OOP manner by defining methods for types, and they both have some substitute for inheritence, but they are definitely *not* OOP at the core.
+Now check this out: both Mozilla's Rust and Google's Go, which are recent still-in-dev languages, walk away from traditional OOP. They both *can* be used in an OOP manner by defining methods for types, and they both have some substitute for inheritance, but they are definitely *not* OOP at the core.
 
 Coincidence? Are people so tired of C++, Java and other well established OOP languages that they feel the need to create new languages that are in fact not object oriented? Is OOP outdated, a relic of olden and narrow minded times?
 
@@ -119,7 +119,7 @@ In that case, what is recommended is to compose instead of inherit. Make each be
 
 Go proposes the possibility of anonymous subtype. In a struct, if you don't name a member, the forwarding of methods and members is done automatically. In effect, that brings the interface of the subobject to the main object. Modulo name conflicts, you get a form of member inheritance, plus methods inheritance.
 
-By default, a method or member of the container object has priority over those of a subobject, but the subobject can still be entirely accessed by explicitely using its type as a member name.
+By default, a method or member of the container object has priority over those of a subobject, but the subobject can still be entirely accessed by explicitly using its type as a member name.
 
 You can use that to entirely simulate classic inheritance if you want. And more. I have never used it, so I can't really imagine how convenient it can be, but it seems like a nice idea. A bit in the Lua/sool spirit: use existing mechanisms (fields in a struct) through syntactic sugar (automatic access if there is not name conflict), and you have almost-free multiple inheritance.
 
@@ -141,7 +141,7 @@ Also, for structures the inclusion is quite clear. What about objects? Should th
 			member = value
 		end
 	
-	where the classic model would have implied allocating a Parent, then a Child, and then copying the parent in the child. Here, if the `super` member is in fact a regular member, there is one allocation for Parent, and the assignment to `super` is a regular reference assignment, no copy. The "child" allocates memory only for its own fields. Of course, the `super` member would be hidden and probably mentionned by type name, but that's details.
+	where the classic model would have implied allocating a Parent, then a Child, and then copying the parent in the child. Here, if the `super` member is in fact a regular member, there is one allocation for Parent, and the assignment to `super` is a regular reference assignment, no copy. The "child" allocates memory only for its own fields. Of course, the `super` member would be hidden and probably mentioned by type name, but that's details.
 
 I'm seeing at least one other nice advantage of including only a reference: free "static" members! Nothing prevents you to build the objects with a common subobject, so that they all share some memory.
 
@@ -149,7 +149,7 @@ I'm starting to like this. So far, it looks pretty clean. Sure, that's less effi
 
 Note that in Go, you have the choice: the subtype of a struct can be either a value (like another struct) or a pointer to one. Since in sool you have no choice between value or reference (that's decided by the class writer), the simplest would be to have no choice either. If you embed a value class, it's added to the memory layout; if you embed an object class, you get only a reference to it. Exactly like normal members.
 
-At the moment, there is no similar mecanism in Rust. You can always write the method forwarding by hand, but that's not as nice...
+At the moment, there is no similar mechanism in Rust. You can always write the method forwarding by hand, but that's not as nice...
 
 Conclusion
 ----------
