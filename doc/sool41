@@ -1,0 +1,288 @@
+More about generic types
+========================
+
+So, with all we said in the last post, sool now has interfaces, which also defines generic classes that can be used to create generic code, which uses dynamic dispatch to work with every class that implements the interface.
+
+An example with the current syntax
+----------------------------------
+
+Great. To rewrite Go's sorting example:
+
+	interface Sortable
+		blob len()				-- give total length of container
+		bool less(blob,blob)	-- compare elements at given indices
+		swap(blob,blob)			-- swap elements at given indices
+	end
+
+Then, any container that implements these three methods is Sortable. For instance:
+
+	extend #num
+		method blob len()
+			return self.size
+		end
+		
+		method bool less(blob i, blob j)
+			return self[i] < self[j]
+		end
+		
+		method swap(blob i, blob j)
+			self[i],self[j] = self[j],self[i]
+		end
+	end
+
+and tadaa, `#num` becomes sortable. Now we write the generic sorting algorithm, a function that takes a Sortable and sorts it:
+
+	object Sorter
+		selfless sort(Sortable s)
+			-- do the magic using s.len, s.less and s.swap
+		end
+	end
+
+And finally to use it:
+
+	arr = [10.3, 4, 20, num:pi]
+	Sorter:sort(arr)
+
+Nice. But not perfect. A few things are annoying. First, the fact that we need to declare a function that takes a Sortable, instead of a Sortable method, which in turn forces us to create a dummy class that contains a single selfless method. Of course, that method could have been stored anywhere else, but that's the most logical (maybe there's other sorting stuff there too).
+
+Since the algorithm is going to act on a Sortable, it would make sense to write it as a method for Sortable. That would even make the code clearer (remove all the `s.` in the `sort` method, since we would have a `self`).
+
+Methods for generic types
+-------------------------
+
+So how to do that? So far, all methods were defined in classes. Interfaces are not really classes. Where could we logically write methods for generic types?
+
+First possibility, in the `interface` block itself.
+
+	interface Sortable
+		
+		-- First, the requirements
+		blob len()
+		bool less(blob,blob)
+		swap(blob,blob)
+		
+		-- Then, the free goodies you get from them
+		method sort()
+			-- sort self using methods len, less and swap
+			-- self is of type Sortable, which is the magical dynamic vtabley one
+		end
+	end
+
+Well, that's not half bad. Of course, comes the slight awkwardness that the block is called `interface`, but it actually contains an implementation as well. Also, it contains both method declarations and method definitions, which have slightly different syntaxes. It could be renamed `generic` or `abstract`, for a "generic" or "abstract" class. It would say: this is not a real class, you can't instantiate it, but you can cast compatible objects to it.
+
+	abstract MyAbstract
+		-- requirements for compliance
+		-- generic methods
+	end
+
+That would certainly be meaningful. But again, slightly awkward with the interface embedding:
+
+	abstract Other
+		embed MyAbstract
+		-- add some requirements
+		
+		-- make new generic methods
+	end
+
+The embedding is meant to include the requirements. Does it also include the generic methods' implementations? Well not directly, but if MyAbstract defines some method `awesome()`, since Other embeds MyAbstract, any Other will also comply with MyAbstract's requirements, and be entitled to run `awesome()` as well. Not very clear.
+
+Another possibility I see is to reuse `extend`. After all, that's exactly its role: add methods to an existing type:
+
+	extend Sortable
+		method sort()
+			-- blah blah
+		end
+	end
+
+That way, we do keep nicely interface and implementation separate, and remove the embedding awkwardness.
+
+Calling generic methods
+-----------------------
+
+Now how do we use this?
+
+	arr = #num(10)
+	-- fill some values
+	-- we know that #num complies with the Sortable interface, and Sortable has
+	-- been extended with the sort() method. Can I do:
+	
+	arr.sort()
+
+In theory, that would be nice. In practice there are a few mechanisms going on there. The analyzer:
+
+1. doesn't find a `sort` method in `#num`
+2. notices that the Sortable type implements the `sort` method
+3. verifies that `#num` complies to the Sortable interface
+4. inserts a cast for `arr` from `#num` to Sortable (using a vtable)
+5. writes a call for `sort` on the Sortable-casted array
+
+That's totally doable. Point 2 in particular means that the analyzer has to look for *every* generic method there is to see if there is a match, and then if so, check compliance to the interface.
+
+That's a lot of lookup every time we have a call to an unknown method. But why not. There will probably be a global table of methods, with a fast lookup by prototype. The real problem arises if we find several matches in several generic types, and that our object complies with several of the interfaces.
+
+Then how to choose to which generic type we should cast, and therefore to which actual method we bind the call? Possibility one: refuse the call for ambiguity, and request an explicit cast:
+
+	interface Foo
+		foo()
+	end
+	extend Foo
+		method meh() end
+	end
+	interface Bar
+		bar()
+	end
+	extend Bar
+		method meh() end
+	end
+	
+	object FooBar
+		method foo() end
+		method bar() end
+	end
+	
+	-- somewhere else:
+	fb = FooBar
+	fb.meh()
+
+Eeeeeek. FooBar can be both a Foo or a Bar, and both Foo and Bar implement `meh()`. Since we don't know which it is, we complain and require an explicit cast:
+
+	(fb to Foo).meh
+
+Possibility 2, that simplifies the whole process: always require an explicit cast when sending a message to an object as a generic. After all, implicit casting when assigning to a generic type (ie. as argument passing) is natural:
+
+	fb = FooBar
+	blah.here_have_a_foo(fb)	-- this method takes a Foo
+
+What else could happen there than a cast to Foo? Well nothing, so that's fine. But calling
+
+	fb.meh()
+
+when `meh()` is not a method of FooBar is a bit more far fetched. The `meh` method is litterally fetched from pretty far (check all existing `meh:void` methods, check receiver types, check interface compliance).
+
+Far fetched but convenient. If there is a unique generic method applicable to the situation, that's the one. If there are several, demand explicit cast.
+
+Can you see the interesting parallel with embedded objects and method forwarding? When calling an inexistant method on an object, check all embedded objects' methods, and if there is exactly one, forward to it. If there are more, demand explicit sub-object access. Fun.
+
+The complete method lookup algorithm is then as follows:
+
+- check if the class itself implements the method
+- if not, check if exactly one embedded object implements it
+- if not, check if exactly one compatible generic type does
+
+And if for the last two points, if there's more than one, complain about ambiguity. Something like that. Not so bad.
+
+Extending templates
+-------------------
+
+Nowadays, everybody can have type parameters and be a template: classes and interfaces. When defining a method in a class, it naturally works with its possible template parameters. So why not in an extension.
+
+	object Box|(Any T)
+		T value
+	end
+	
+	extend Box|(Any T)
+		method T get()		-- this is a useless method, but just for example
+			return value
+		end
+	end
+
+That would also allow writing methods for generic type templates:
+
+	interface Feeder|(Animal A)
+		feed(A)
+	end
+	
+	extend Feeder|(Animal A)
+		method feed_twice(A a)
+			feed(a)
+			feed(a)
+		end
+	end
+
+Other cool stuffs
+-----------------
+
+In the Box implementation, we use absolutely no method of the type T, only assignment and return, so Any is just fine. Note that we need to access the value explicitly. Real boxing would be nicer, with object embedding, for instance:
+
+	object NumBox
+		embed num
+	end
+	
+	-- later
+	a = NumBox(num = 5)
+	b = a + 4
+	b.print 		-- = 9
+
+Magic method forwarding makes embed a perfect way to box. Now what if I want to box many different types, and can't be bothered to write all the boxings. Can't templates help me?
+
+	object Box|(Any T)
+		embed T
+	end
+
+See what I did there? Now can anyone tell me if that code compiles? Normally, at validation, the type parameter `T` is assumed to implement interface Any, which is nothing. Since there's no methods in the body of object, validation a priori succeeds.
+
+But then at use, the validator needs to be a bit smart.
+
+	object Foo
+		method foo() end
+	end
+	
+	-- later
+	bar = Box|Foo
+	bar.foo()		-- now does that work?
+	
+Foo satisfies the Any interface, so the type Box|Foo is well defined. Then, calling `foo` on it, what happens? The class Box|Foo does not define any method `foo`, so we check embedded objects. Embedded object Foo does in fact implement `foo`, so we provide the shortcut for `bar.Foo.foo()`.
+
+This implies that the analyzer makes proper type substitution during validation. Earlier I wrote that putting interface constraints on type parameters made validation easier, and two-phased: the template, by itself (assume param T is of its interface constraint type). And later the use of the template with actual types (simply check that given types are compatible with the interface constraints).
+
+But it is not so simple. Sadly. Like in this example (fairly complex), but even in a simple one:
+
+	object Array|(Any T)
+		#T data
+		
+		method T [](blob i)
+			return data[i]
+		end
+	end
+
+This is a stupid pseudo-read-only wrapper for the array. Since the index method returns a T, the object's interface vary depending on T. Which means that at validation, we need to take this in account.
+
+I'm stating trivial things, but they will - again - make the compiler not so trivial. To validate:
+
+	a = Array|num
+	b = a[5]
+
+we not only need the "is num an Any?" step for the first line, but also the "does Array|num answer to `[]:blob`, and if so, what is returned" (to which the answer should be yes, and a num).
+
+And implementing that might be a pain. Or it might be simple. My initial idea of "duplicate AST, substitute" is probably bad. There should be less state information, more dynamic "given this as type parameter, do you, template, answer to this message?".
+
+And now I'm talking about classes, but interfaces have the same complexity or more:
+
+	interface Indexable|(Any T)
+		[]=(blob,T)
+		T [](blob)
+	end
+
+Validation for that is trivial (nothing happens, just declarations). Now do something funky like:
+
+	extend Indexable|(Any T)
+		method swap(blob i, blob j)
+			self[i],self[j] = self[j],self[i]
+		end
+	end
+
+Validating it is still fairly easy (we know what T can do, nothing, and what self can do, indexing and setting at index). Now:
+
+	arr = [1.0,2,3,4,5]
+	arr.swap(2,4)
+
+Can the casting from #num to Indexable|num happen automatically? When looking for `swap`, let's say the only one we find is the one in Indexable|(Any T). How do we know it's the num version we need? Should the analyzer have to solve the problem: "find a type T in category Any such that #num implements Indexable|T"?
+
+Unlikely. In fact it's pretty certain that no. A parametric type doesn't really exist until it is "instantiated" into a real one, and type inferrence can only go so far. Lookup of generic methods is done only inside real types. Period. Hence:
+
+	arr = [1.0,2,3,4,5]
+	(arr to Indexable|num).swap(2,4)
+
+Hey, num is an Any, so Indexable|num exists, and #num answers to `[]=(blob,num)` and `num [](blob)`, so #num is an Indexable|num, so the cast succeeds. And Indexable|num happens to answer to `swap(blob,blob)`, so all is well.
+
+The analyzer must be able to ask "do you, interface Indexable, given parameter num, answer to `swap(blob,blob)`?"
