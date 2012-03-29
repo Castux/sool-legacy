@@ -1,5 +1,5 @@
-#ifndef INTERFACEAST_HPP
-#define INTERFACEAST_HPP
+#ifndef AST_HPP
+#define AST_HPP
 
 #include <vector>
 #include <map>
@@ -41,17 +41,29 @@ namespace sool
 		~Member();
 	};
 	
-	class Method : public AST
+	class Prototype : public AST
 	{
 		public:
 		
-		struct Argument
+		class Argument : public AST
 		{
+			public:
+			
 			Type type;
-			std::string name;
-			SourcePos type_pos;
-			SourcePos name_pos;
+			std::string name;		// name is optional, as Prototype is also used by Interface
 		};
+		
+		MultiType				rtype;
+		
+		std::string				name;
+		bool					setter;
+		
+		std::vector<Argument>	args;
+	};
+	
+	class Method : public AST
+	{
+		public:
 		
 		// Interface
 		
@@ -62,40 +74,26 @@ namespace sool
 			k_foreign
 		} Kind;
 		
-		Kind					kind;
-		MultiType				rtype;
-		
-		std::string				name;
-		bool					setter;
-		
-		std::vector<Argument>	args;
-		
-		std::string				signature;
-		
-		// In case it's automaticaly built from a member
-		Member					*member;
+		Kind		kind;
+		Prototype*	proto;
 		
 		// Body
 		// Block *body;
 		
 		// Useful source code positions
 		SourcePos	kind_pos;
-		SourcePos	rtype_pos;
-		SourcePos	name_pos;
-		SourcePos	args_pos;
-		SourcePos	interface_pos;
 		
 		Method();
 		~Method();
 	};
 	
-	typedef std::map<std::string,Member*> MemberMap;
-	typedef std::map<std::string,Method*> MethodMap;
-	
-	// Unified node for classes (object and value) and extensions
-	// It serves for:
-	// - normal classes (object and value)
-	// - templates (in which case the 'params' vector is filled with TypeDecl's)
+	class TemplateParam : public AST
+	{
+		public:
+		
+		std::string		bound;
+		std::string		name;
+	};
 	
 	class Class : public AST
 	{
@@ -109,52 +107,61 @@ namespace sool
 		
 		Kind						kind;		// Value class, or object class?
 		
-		std::string					name;		// In instances, this is the full name
-		std::vector<std::string>	params;		// For templates only: template parameters, owned
+		std::string					name;		// Base name
+		std::vector<TemplateParam>	params;		// Template parameters, may be empty
 		
-		std::vector<Member*> members;	// owned
-		std::vector<Method*> methods;	// owned
-		
-		// Indexing by name or signature
-		MemberMap mem_map;
-		MethodMap meth_map;
+		std::vector<Member*>	members;	// owned
+		std::vector<Method*>	methods;	// owned
+		std::vector<ClassName*>	embeds;
 		
 		// Useful source code positions
 		SourcePos	name_pos;
-		SourcePos	fullname_pos;
-		std::vector<SourcePos> params_pos;
-		SourcePos	parent_pos;
-		
-		// Validation steps
-		bool validating_interface;		// circular inheritance guard
-		bool valid_interface;
-		bool valid_code;
-		
-		// Lookup
-		Member *GetMember(std::string name);
+		SourcePos	fullname_pos;		// includes template parameters
 		
 		Class();
 		~Class();
-		
-		bool IsTemplate();
-		bool IsInstance();
 		
 		std::string KindToString();
 	};
 	
 	typedef std::map<std::string,Class*> ClassMap;
-
+	
 	class Extension : public AST
 	{
 		public:
 		
-		ClassName				*cname;
+		ClassName*				cname;
 		std::vector<Method*>	methods;
 		
 		Extension();
 		~Extension();
 	};
+	
+	class TemplateExtension : public AST
+	{
+		public:
+		
+		std::string					name;
+		std::vector<TemplateParam>	params;		// Template parameters, may NOT be empty (otherwise, use Extension directly)
+		
+		std::vector<Method*>	methods;
+		
+		~TemplateExtension();
+	};
+	
+	class Interface : public AST
+	{
+		public:
+		
+		std::string					name;		// Base name
+		std::vector<TemplateParam>	params;		// Template parameters, may be empty
+		
+		std::vector<ClassName*>		embeds;		// Embedded interfaces
+		std::vector<Prototype*>		protos;		// Owned
+		
+		~Interface();
+	};
 }
 
-#endif // INTERFACEAST_HPP
+#endif // AST_HPP
 

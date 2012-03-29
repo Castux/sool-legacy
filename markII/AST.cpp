@@ -11,26 +11,17 @@ Member::~Member()
 {
 }
 
-Method::Method() : setter(false), member(NULL)
+Method::Method() : proto(NULL)
 {
 }
 
 Method::~Method()
 {
+	delete proto;
 }
 
-Class::Class() :	validating_interface(false),
-					valid_interface(false), valid_code(false)
+Class::Class()
 {
-}
-
-Member *Class::GetMember(std::string name)
-{
-	MemberMap::iterator it = mem_map.find(name);
-	if(it != mem_map.end())
-		return it->second;
-	
-	return NULL;
 }
 
 Class::~Class()
@@ -42,11 +33,6 @@ Class::~Class()
 		delete methods[i];
 }
 
-bool Class::IsTemplate()
-{
-	return(params.size() > 0);
-}
-
 std::string Class::KindToString()
 {
 	std::string res;
@@ -54,9 +40,6 @@ std::string Class::KindToString()
 		res = "value class";
 	else
 		res = "object class";
-	
-	if(IsTemplate())
-		res += " template";
 	
 	return res;
 }
@@ -69,4 +52,16 @@ Extension::~Extension()
 {
 	for(uint i = 0 ; i < methods.size() ; i++)
 		delete methods[i];
+}
+
+TemplateExtension::~TemplateExtension()
+{
+	for(uint i = 0 ; i < methods.size() ; i++)
+		delete methods[i];
+}
+
+Interface::~Interface()
+{
+	for(uint i = 0 ; i < protos.size() ; i++)
+		delete protos[i];
 }

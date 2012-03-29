@@ -16,9 +16,11 @@ bool Parser::Parse()
 {
 	result.classes = new std::vector<Class*>;
 	result.extensions = new std::vector<Extension*>;
+	result.interfaces = new std::vector<Interface*>;
 	
 	Class *c;
 	Extension *e;
+	Interface *i;
 	
 	while(head->kind != Token::t_eof)
 	{
@@ -38,6 +40,13 @@ bool Parser::Parse()
 					return false;
 				else
 					result.classes->push_back(c);
+				break;
+			case Token::t_interface:
+				i = ParseInterface();
+				if(!i)
+					return false;
+				else
+					result.interfaces->push_back(i);
 				break;
 			default:
 				AddError("expected class or extension definition", head->pos);
@@ -68,13 +77,25 @@ Class* Parser::ParseClass()
 	
 	head++;
 	
-	// Class name, split into string and template params
+	// Class name
 	
-	if(!ParseNameOfClass(c))
+	if(!Expect(Token::t_cname))
+	{
+		AddInfo("as class name in class definition started here:", start);
+		delete c;
+		return NULL;
+	}
+	
+	// Template params
+	
+	std::vector<TemplateParam>* params = ParseTemplateParams();
+	if(!params)
 	{
 		delete c;
 		return NULL;
 	}
+	c->params = *params;
+	delete params;
 	
 	// Definitions
 	
@@ -95,7 +116,14 @@ Class* Parser::ParseClass()
 		}
 		else if (head->kind == Token::t_embed )
 		{
-			;
+			std::vector<ClassName*> *embeds = ParseEmbed();
+			if(!embeds)
+			{
+				delete c;
+				return NULL;
+			}
+			c->embeds.insert(c->embeds.end(), embeds->begin(), embeds->end());
+			delete embeds;
 		}
 		else
 		{
@@ -123,103 +151,79 @@ Class* Parser::ParseClass()
 	return c;
 }
 
-bool Parser::ParseNameOfClass(Class *c)
+TemplateParam Parser::ParseTemplateParam()
 {
-	// Built-in
+	// An invalid template param is represented by having two empty strings in it
 	
-	if(head->kind >= Token::t_num && head->kind <= Token::t_blob)
+	TemplateParam res;
+	SourcePos start = head->pos;
+	
+	if(!Expect(Token::t_cname))
 	{
-		c->name = Token::GetTokenString(head->kind);
-		c->name_pos = head->pos;
-		c->fullname_pos = head->pos;
-		head++;
-		return true;
+		AddInfo("as template parameter bound");
+		return res;
 	}
+	res.bound = head[-1].string;
 	
-	// Array type
-	
-	if(head->kind == Token::t_hash)
+	if(!Expect(Token::t_cname))
 	{
-		c->name = "#";
-		c->name_pos = head->pos;
-		head++;
-		
-		if(!Expect(Token::t_cname))
-		{
-			AddError("invalid template parameter", head[-1].pos);
-			return false;
-		}
-		
-		c->params.push_back(head[-1].string);
-		c->params_pos.push_back(head[-1].pos);
-		c->fullname_pos = c->name_pos.To(head[-1].pos);
-		return true;
+		AddInfo("as name for template parameter started here:", head[-1].pos, true);
+		return res;
 	}
+	res.name = head[-1].string;
 	
-	// Last try: CName
-	
-	if(head->kind != Token::t_cname)
-	{
-		AddError("malformed class name", head->pos);
-		return false;
-	}
-	
-	c->name = head->string;
-	c->name_pos = head->pos;
-	head++;
-	
-	// Template parameters
+	res.pos = start.To(head[-1].pos);
+	return res;
+}
+
+std::vector<TemplateParam>* Parser::ParseTemplateParams()
+{
+	std::vector<TemplateParam>* params = new std::vector<TemplateParam>;
 	
 	if(Accept(Token::t_pipe))
 	{
-		if(Accept(Token::t_lparens))
+		SourcePos pipe = head[-1].pos;
+		
+		if(!Expect(Token::t_lparens))
 		{
-			SourcePos lparens = head[-1].pos;
-			
-			// List of types
-			if(!Expect(Token::t_cname))
-			{
-				AddError("as template parameter", head[-1].pos);
-				return false;
-			}
-			
-			c->params.push_back(head[-1].string);
-			c->params_pos.push_back(head[-1].pos);
-			
-			while(Accept(Token::t_comma))
-			{
-				if(!Expect(Token::t_cname))
-				{
-					AddError("as template parameter", head[-1].pos);
-					return false;
-				}
-				
-				c->params.push_back(head[-1].string);
-				c->params_pos.push_back(head[-1].pos);
-			}
-			
-			if(!Expect(Token::t_rparens))
-			{
-				AddInfo("to close template parameters list started here:", lparens, true);
-				return false;
-			}
+			AddInfo("to open template parameter list introduced here:", pipe);
+			delete params;
+			return NULL;
 		}
-		else
+		
+		SourcePos lparens = head[-1].pos;
+		
+		// List of params
+		TemplateParam res = ParseTemplateParam();
+		if(res.bound == "" or res.name == "")
 		{
-			// Single sub type
-			if(!Expect(Token::t_cname))
+			AddInfo("in template parameter list started here:", lparens, true);
+			delete params;
+			return NULL;
+		};
+		params->push_back(res);
+		
+		while(Accept(Token::t_comma))
+		{
+			TemplateParam res = ParseTemplateParam();
+			if(res.bound == "" or res.name == "")
 			{
-				AddInfo("as template parameter", head[-1].pos);
-				return false;
-			}
-			
-			c->params.push_back(head[-1].string);
-			c->params_pos.push_back(head[-1].pos);
+				AddInfo("in template parameter list started here:", lparens, true);
+				delete params;
+				return NULL;
+			};
+			params->push_back(res);
+		}
+		
+		if(!Expect(Token::t_rparens))
+		{
+			AddInfo("to close template parameters list started here:", lparens, true);
+			delete params;
+			return NULL;
 		}
 	}
 	
-	c->fullname_pos = c->name_pos.To(head[-1].pos);
-	return true;
+	return params;
 }
 
 Extension *Parser::ParseExtension()
@@ -395,6 +399,161 @@ Type Parser::ParseType(SourcePos *pos)
 	return Type(cname, opt);
 }
 
+Prototype* Parser::ParsePrototype(bool expect_arg_names)
+{
+	Prototype *p = new Prototype();
+	SourcePos start = head->pos;
+	
+	std::vector<Type> rtypes;
+	
+	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
+	{
+		Type t = ParseType();
+		if(!t.cname)
+		{
+			AddInfo("as return type");
+			delete p;
+			return NULL;
+		}
+		rtypes.push_back(t);
+		
+		while(Accept(Token::t_comma))
+		{
+			Type t = ParseType();
+			if(!t.cname)
+			{
+				AddInfo("as return type");
+				delete p;
+				return NULL;
+			}
+			rtypes.push_back(t);
+		}
+	}
+	
+	p->rtype = MultiType(rtypes);
+	
+	// Name
+	
+	if(head->kind == Token::t_name)
+	{
+		p->name = head->string;
+		head++;
+		if(Accept(Token::t_equal))
+			p->setter = true;
+	}
+	else if(IsBinop(head->kind))
+	{
+		p->name = Token::GetTokenString(head->kind);
+		head++;
+	}
+	else if(head[0].kind == Token::t_lbracket && head[1].kind == Token::t_rbracket)
+	{
+		p->name = "[]";
+		head += 2;
+		if(Accept(Token::t_equal))
+			p->setter = true;
+	}
+	else
+	{
+		AddError("invalid method name", head->pos);
+		AddInfo("expected name, operator or '[]'");
+		delete p;
+		return NULL;
+	}
+	
+	// Arguments
+	
+	SourcePos lparens = head->pos;
+	
+	if(!Expect(Token::t_lparens))
+	{
+		AddInfo("to open argument list in method started here:", start, true);
+		delete p;
+		return NULL;
+	}
+	
+	if(head->kind != Token::t_rparens)
+	{
+		Prototype::Argument arg;
+		SourcePos argstart = head->pos;
+		
+		Type t = ParseType();
+		if(!t.cname)
+		{
+			AddInfo("as argument type in list started here:", lparens, true);
+			delete p;
+			return NULL;
+		}
+		arg.type = t;
+		
+		if(expect_arg_names)
+		{
+			if(!Expect(Token::t_name))
+			{
+				AddInfo("as name for argument started here:", argstart, true);
+				delete p;
+				return NULL;
+			}
+			arg.name = head[-1].string;
+		}
+		else
+		{
+			if(Accept(Token::t_name))
+			{
+				arg.name = head[-1].string;
+			}
+		}
+		arg.pos = argstart.To(head[-1].pos);
+		p->args.push_back(arg);
+		
+		while(Accept(Token::t_comma))
+		{
+			Prototype::Argument arg;
+			SourcePos argstart = head->pos;
+			
+			Type t = ParseType();
+			if(!t.cname)
+			{
+				AddInfo("as argument type in list started here:", lparens, true);
+				delete p;
+				return NULL;
+			}
+			arg.type = t;
+			
+			if(expect_arg_names)
+			{
+				if(!Expect(Token::t_name))
+				{
+					AddInfo("as name for argument started here:", argstart, true);
+					delete p;
+					return NULL;
+				}
+				arg.name = head[-1].string;
+			}
+			else
+			{
+				if(Accept(Token::t_name))
+				{
+					arg.name = head[-1].string;
+				}
+			}
+			arg.pos = argstart.To(head[-1].pos);
+			p->args.push_back(arg);
+		}
+	}
+	
+	if(!Expect(Token::t_rparens))
+	{
+		AddInfo("to close argument list started here:", lparens);
+		delete p;
+		return NULL;
+	}
+	
+	p->pos = start.To(head[-1].pos);
+	
+	return p;
+}
+
 Method* Parser::ParseMethod()
 {
 	Method* m = new Method;
@@ -422,146 +581,17 @@ Method* Parser::ParseMethod()
 	m->kind_pos = head->pos;
 	head++;
 	
-	// Return type(s)
+	// Proto
 	
-	std::vector<Type> rtypes;
-	
-	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
+	Prototype *proto = ParsePrototype(true);	// true to require argument names
+	if(!proto)
 	{
-		Type t = ParseType();
-		if(!t.cname)
-		{
-			AddInfo("as return type for method started here:", start);
-			delete m;
-			return NULL;
-		}
-		rtypes.push_back(t);
-		
-		while(Accept(Token::t_comma))
-		{
-			Type t = ParseType();
-			if(!t.cname)
-			{
-				AddInfo("as return type for method started here:", start);
-				delete m;
-				return NULL;
-			}
-			rtypes.push_back(t);
-		}
-	}
-	
-	m->rtype = MultiType(rtypes);
-	
-	// Name
-	
-	if(head->kind == Token::t_name)
-	{
-		m->name = head->string;
-		m->name_pos = head->pos;
-		head++;
-		if(Accept(Token::t_equal))
-			m->setter = true;
-	}
-	else if(IsBinop(head->kind))
-	{
-		m->name = Token::GetTokenString(head->kind);
-		m->name_pos = head->pos;
-		head++;
-	}
-	else if(head[0].kind == Token::t_lbracket && head[1].kind == Token::t_rbracket)
-	{
-		m->name = "[]";
-		m->name_pos = head->pos.To(head[1].pos);
-		head += 2;
-		if(Accept(Token::t_equal))
-			m->setter = true;
-	}
-	else
-	{
-		AddError("invalid method name", head->pos);
-		AddInfo("expected name, operator or '[]'");
+		AddInfo("for method started here:", start, true);
 		delete m;
 		return NULL;
 	}
 	
-	// Arguments
-	
-	SourcePos lparens = head->pos;
-	
-	if(!Expect(Token::t_lparens))
-	{
-		AddInfo("in method definition started here:", start);
-		delete m;
-		return NULL;
-	}
-	
-	if(head->kind != Token::t_rparens)
-	{
-		SourcePos type_pos;
-		
-		Type t = ParseType(&type_pos);
-		if(!t.cname)
-		{
-			AddInfo("as argument type in method started here:", start);
-			delete m;
-			return NULL;
-		}
-		
-		SourcePos name_pos = head->pos;
-		
-		if(!Expect(Token::t_name))
-		{
-			AddInfo("as argument name in method started here:", start);
-			delete m;
-			return NULL;
-		}
-		
-		Method::Argument arg;
-		arg.type = t;
-		arg.name = head[-1].string;
-		arg.type_pos = type_pos;
-		arg.name_pos = name_pos;
-		m->args.push_back(arg);
-		
-		while(Accept(Token::t_comma))
-		{
-			SourcePos type_pos;
-			
-			Type t = ParseType(&type_pos);
-			if(!t.cname)
-			{
-				AddInfo("as argument type in method started here:", start);
-				delete m;
-				return NULL;
-			}
-			
-			SourcePos name_pos = head->pos;
-			
-			if(!Expect(Token::t_name))
-			{
-				AddInfo("as argument name in method started here:", start);
-				delete m;
-				return NULL;
-			}
-			
-			Method::Argument arg;
-			arg.type = t;
-			arg.name = head[-1].string;
-			arg.type_pos = type_pos;
-			arg.name_pos = name_pos;
-			m->args.push_back(arg);
-		}
-	}
-	
-	if(!Expect(Token::t_rparens))
-	{
-		AddInfo("to close argument list started here:", lparens);
-		delete m;
-		return NULL;
-	}
-	
-	m->args_pos = lparens.To(head[-1].pos);
-	m->interface_pos = start.To(head[-1].pos);
+	m->proto = proto;
 	
 	// Body
 	
@@ -611,6 +641,110 @@ Member* Parser::ParseMember()
 	m->pos = start.To(head[-1].pos);
 	
 	return m;
+}
+
+Interface* Parser::ParseInterface()
+{
+	Interface *i = new Interface;
+	SourcePos start = head->pos;
+	
+	if(head->kind != Token::t_interface)
+		error(std::string("Parser::ParseInterface() - wrong interface token: ") + head->FancyName());
+	
+	head++;
+	
+	// Interface name
+	
+	if(!Expect(Token::t_cname))
+	{
+		AddInfo("as name in interface definition started here:", start);
+		delete i;
+		return NULL;
+	}
+	
+	// Template params
+	
+	std::vector<TemplateParam>* params = ParseTemplateParams();
+	if(!params)
+	{
+		delete i;
+		return NULL;
+	}
+	i->params = *params;
+	delete params;
+	
+	// Content
+	
+	while(head->kind != Token::t_end && head->kind != Token::t_eof)
+	{
+		if(head->kind == Token::t_embed)
+		{
+			std::vector<ClassName*> *embeds = ParseEmbed();
+			if(!embeds)
+			{
+				delete i;
+				return NULL;
+			}
+			i->embeds.insert(i->embeds.end(), embeds->begin(), embeds->end());
+			delete embeds;
+		}
+		else
+		{
+			Prototype *p = ParsePrototype(false);	// false for optional argument names
+			if(!p)
+			{
+				delete i;
+				return NULL;
+			}
+			i->protos.push_back(p);
+		}
+	}
+	
+	// End
+	
+	if(!Expect(Token::t_end))
+	{
+		AddInfo("to close interface definition started here:", start);
+		delete i;
+		return NULL;
+	}
+	
+	i->pos = start.To(head[-1].pos);
+	
+	return i;
+}
+
+std::vector<ClassName*>* Parser::ParseEmbed()
+{
+	SourcePos start = head->pos;
+	
+	if(head->kind != Token::t_embed)
+		error(std::string("Parser::ParseEmbed() - wrong embed token: ") + head->FancyName());
+	
+	head++;
+	
+	std::vector<ClassName*> *classes = new std::vector<ClassName*>;
+	
+	ClassName *c = ParseClassName();
+	if(!c)
+	{
+		AddInfo("in embedding", start, true);
+		return NULL;
+	}
+	classes->push_back(c);
+	
+	while(Accept(Token::t_comma))
+	{
+		ClassName *c = ParseClassName();
+		if(!c)
+		{
+			AddInfo("in embedding", start, true);
+			return NULL;
+		}
+		classes->push_back(c);
+	}
+	
+	return classes;
 }
 
 bool Parser::Expect(Token::Kind k)

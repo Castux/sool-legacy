@@ -8,8 +8,8 @@ btype = ARGUMENTS.get('build','debug')  # Defaults to debug
 if btype == 'debug':
 	env.Append(CXXFLAGS = '-g')
 elif btype == 'release':
-	env.Append(CXXFLAGS = ['-O3','-flto'])
-	env.Append(LINKFLAGS = ['-flto','-fuse-linker-plugin','-s'])
+	env.Append(CXXFLAGS = ['-O3'])
+	env.Append(LINKFLAGS = ['-s'])
 
 print("Build type: " + btype)
 

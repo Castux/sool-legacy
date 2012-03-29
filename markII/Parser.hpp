@@ -12,6 +12,7 @@ namespace sool
 	{
 		std::vector<Class*> 	*classes;
 		std::vector<Extension*>	*extensions;
+		std::vector<Interface*>	*interfaces;
 	};
 	
 	class Parser
@@ -33,12 +34,16 @@ namespace sool
 		private:
 		
 		Class* ParseClass();
-		bool ParseNameOfClass(Class *c);
+		TemplateParam ParseTemplateParam();
+		std::vector<TemplateParam>* ParseTemplateParams();
 		Extension* ParseExtension();
 		Type ParseType(SourcePos *pos = NULL);
 		ClassName* ParseClassName();
+		Prototype* ParsePrototype(bool expect_arg_names);
 		Method* ParseMethod();
 		Member* ParseMember();
+		Interface* ParseInterface();
+		std::vector<ClassName*>* ParseEmbed();
 		
 		bool Expect(Token::Kind k);
 		bool Accept(Token::Kind k);
