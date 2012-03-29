@@ -1,10 +1,10 @@
 syntax "sool" ".*\.sool$"
 
 # Keywords
-color brightblue "\<(object|value|extend|shared|internal|method|selfless|foreign|break|continue|return|do|for|while|if|then|elseif|else|in|as|not|to|and|or|is|isnot|true|false|nil|self|super|with|end)\>"
+color brightblue "\<(object|value|extend|interface|shared|method|selfless|foreign|embed|break|continue|return|do|for|while|if|then|elseif|else|in|as|not|to|and|or|is|isnot|true|false|nil|self|super|with|end)\>"
 
 # Known functions
-color magenta "\<(init)\>"
+color magenta "\<(new)\>"
 
 # Types
 color cyan "\<(num|bool|text|data|blob)\>"
