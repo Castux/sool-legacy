@@ -9,8 +9,22 @@ using namespace sool;
 
 IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false)
 {
-	// No params, name is trivial
+	// No params, just set the name
 	name = ClassName::Build(i->name);
+}
+
+IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params) : v(vali), iface(i), validated(false)
+{
+	// Sanity check
+	if(i->params.size() != params.size())
+		error("IfaceInst::IfaceInst() - param number mismatch");
+	
+	// Build tmap
+	for(uint j = 0 ; j < params.size() ; j++)
+		tmap[i->params[j].name] = params[j];
+	
+	// Build class name
+	name = ClassName::Build(i->name, params);
 }
 
 bool IfaceInst::Validate()
@@ -68,6 +82,22 @@ ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(fals
 	name = ClassName::Build(c->name);
 }
 
+ClassInst::ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params) : v(vali), cl(c), validated(false)
+{
+	// Sanity check
+	if(c->params.size() != params.size())
+		error("ClassInst::ClassInst() - param number mismatch");
+	
+	// Build tmap
+	for(uint j = 0 ; j < params.size() ; j++)
+		tmap[c->params[j].name] = params[j];
+	
+	// Build class name
+	name = ClassName::Build(c->name, params);
+}
+
+
+
 /***************/
 /** Validator **/
 /***************/
@@ -119,6 +149,8 @@ bool Validator::Validate()
 	
 	for(uint i = 0 ; i < cvec.size() ; i++)
 		AddInfo("Class: " + cvec[i]->name->signature);
+	for(uint i = 0 ; i < ivec.size() ; i++)
+		AddInfo("Iface: " + ivec[i]->name->signature);
 	
 	AddInfo("context passed validation");
 	return true;
@@ -283,15 +315,15 @@ bool Validator::ValidateClassName(ClassName *cname, SourcePos pos)
 	}
 	
 	// Instantiate
-	// FIXME: put the subtypes...
+	
 	if(g->IsClass())
 	{
-		ClassInst *inst = new ClassInst(this, (Class*) g);
+		ClassInst *inst = new ClassInst(this, (Class*) g, cname->params);
 		AddClass(inst);
 	}
 	else
 	{
-		IfaceInst *inst = new IfaceInst(this, (Interface*) g);
+		IfaceInst *inst = new IfaceInst(this, (Interface*) g, cname->params);
 		AddIface(inst);
 	}
 	

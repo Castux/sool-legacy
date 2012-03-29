@@ -22,6 +22,7 @@ namespace sool
 		ProtoMap					pmap;		// prototypes indexed by selector	Ditto
 		
 		IfaceInst(Validator *vali, Interface *i);	// No parameter
+		IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params);	// With parameters, given in order
 		bool Validate();
 		void AddProto(Prototype* p);
 		
@@ -40,6 +41,7 @@ namespace sool
 		ClassName*		name;	// Full name
 		
 		ClassInst(Validator *vali, Class *c);	// No parameter
+		ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params);	// With parameters, given in order
 		bool validated;
 	};
 	
