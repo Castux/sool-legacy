@@ -190,16 +190,8 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 		SourcePos lparens = head[-1].pos;
 		
 		// List of params
-		TemplateParam res = ParseTemplateParam();
-		if(res.bound == "" or res.name == "")
-		{
-			AddInfo("in template parameter list started here:", lparens, true);
-			delete params;
-			return NULL;
-		};
-		params->push_back(res);
 		
-		while(Accept(Token::t_comma))
+		do
 		{
 			TemplateParam res = ParseTemplateParam();
 			if(res.bound == "" or res.name == "")
@@ -209,7 +201,8 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 				return NULL;
 			};
 			params->push_back(res);
-		}
+			
+		} while(Accept(Token::t_comma));
 		
 		if(!Expect(Token::t_rparens))
 		{
@@ -324,16 +317,8 @@ ClassName* Parser::ParseClassName()
 			SourcePos lparens = head[-1].pos;
 			
 			// List of types
-			ClassName *sub = ParseClassName();
-			if(!sub)
-			{
-				AddInfo("in template parameters list started here:", lparens, true);
-				return NULL;
-			}
 			
-			params.push_back(sub);
-			
-			while(Accept(Token::t_comma))
+			do
 			{
 				ClassName *sub = ParseClassName();
 				if(!sub)
@@ -342,7 +327,8 @@ ClassName* Parser::ParseClassName()
 					return NULL;
 				}
 				params.push_back(sub);
-			}
+				
+			} while(Accept(Token::t_comma));
 			
 			if(!Expect(Token::t_rparens))
 			{
@@ -404,16 +390,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	
 	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
 	{
-		Type t = ParseType();
-		if(!t.cname)
-		{
-			AddInfo("as return type");
-			delete p;
-			return NULL;
-		}
-		rtypes.push_back(t);
-		
-		while(Accept(Token::t_comma))
+		do
 		{
 			Type t = ParseType();
 			if(!t.cname)
@@ -423,7 +400,8 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 				return NULL;
 			}
 			rtypes.push_back(t);
-		}
+			
+		} while(Accept(Token::t_comma));
 	}
 	
 	p->rtype = MultiType(rtypes);
@@ -470,39 +448,8 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	
 	if(head->kind != Token::t_rparens)
 	{
-		Prototype::Argument arg;
-		SourcePos argstart = head->pos;
 		
-		Type t = ParseType();
-		if(!t.cname)
-		{
-			AddInfo("as argument type in list started here:", lparens, true);
-			delete p;
-			return NULL;
-		}
-		arg.type = t;
-		
-		if(expect_arg_names)
-		{
-			if(!Expect(Token::t_name))
-			{
-				AddInfo("as name for argument started here:", argstart, true);
-				delete p;
-				return NULL;
-			}
-			arg.name = head[-1].string;
-		}
-		else
-		{
-			if(Accept(Token::t_name))
-			{
-				arg.name = head[-1].string;
-			}
-		}
-		arg.pos = argstart.To(head[-1].pos);
-		p->args.push_back(arg);
-		
-		while(Accept(Token::t_comma))
+		do
 		{
 			Prototype::Argument arg;
 			SourcePos argstart = head->pos;
@@ -535,7 +482,8 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 			}
 			arg.pos = argstart.To(head[-1].pos);
 			p->args.push_back(arg);
-		}
+			
+		} while(Accept(Token::t_comma));
 	}
 	
 	if(!Expect(Token::t_rparens))
@@ -721,15 +669,7 @@ std::vector<ClassName*>* Parser::ParseEmbed()
 	
 	std::vector<ClassName*> *classes = new std::vector<ClassName*>;
 	
-	ClassName *c = ParseClassName();
-	if(!c)
-	{
-		AddInfo("in embedding", start, true);
-		return NULL;
-	}
-	classes->push_back(c);
-	
-	while(Accept(Token::t_comma))
+	do
 	{
 		ClassName *c = ParseClassName();
 		if(!c)
@@ -738,7 +678,8 @@ std::vector<ClassName*>* Parser::ParseEmbed()
 			return NULL;
 		}
 		classes->push_back(c);
-	}
+		
+	} while(Accept(Token::t_comma));
 	
 	return classes;
 }
