@@ -20,10 +20,6 @@ Method::~Method()
 	delete proto;
 }
 
-Class::Class()
-{
-}
-
 Class::~Class()
 {
 	for(uint i = 0 ; i < members.size() ; i++)
@@ -42,10 +38,6 @@ std::string Class::KindToString()
 		res = "object class";
 	
 	return res;
-}
-
-Extension::Extension()
-{
 }
 
 Extension::~Extension()

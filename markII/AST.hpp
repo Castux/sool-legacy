@@ -118,7 +118,6 @@ namespace sool
 		SourcePos	name_pos;
 		SourcePos	fullname_pos;		// includes template parameters
 		
-		Class();
 		~Class();
 		
 		std::string KindToString();
@@ -133,7 +132,6 @@ namespace sool
 		ClassName*				cname;
 		std::vector<Method*>	methods;
 		
-		Extension();
 		~Extension();
 	};
 	
