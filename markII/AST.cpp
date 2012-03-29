@@ -40,13 +40,11 @@ std::string Class::KindToString()
 	return res;
 }
 
-Extension::~Extension()
+Extension::Extension() : cname(NULL)
 {
-	for(uint i = 0 ; i < methods.size() ; i++)
-		delete methods[i];
 }
 
-TemplateExtension::~TemplateExtension()
+Extension::~Extension()
 {
 	for(uint i = 0 ; i < methods.size() ; i++)
 		delete methods[i];

@@ -220,19 +220,48 @@ Extension *Parser::ParseExtension()
 	Extension *e = new Extension;
 	SourcePos start = head->pos;
 	
-	Expect(Token::t_extend);
+	if(head->kind != Token::t_extend)
+		error(std::string("Parser::ParseExtension() - wrong interface token: ") + head->FancyName());
 	
-	// Extended type
+	head++;
 	
-	ClassName *cname = ParseClassName();
-	if(!cname)
+	// Two possibilities here:
+	// class-name | CName template-def
+	// Super not LL(1)! Behold, mega look-ahead!
+	
+	if( head + 4 <= &tokens->back() &&
+		head[0].kind == Token::t_cname &&
+		head[1].kind == Token::t_pipe &&
+		head[2].kind == Token::t_lparens &&
+		head[3].kind == Token::t_cname &&
+		head[4].kind == Token::t_cname )
 	{
-		AddInfo("in extension started here:", start);
-		delete e;
-		return NULL;
+		// Template name
+		
+		e->name = head[0].string;
+		head++;
+		
+		// Template params
+		
+		std::vector<TemplateParam>* params = ParseTemplateParams();
+		if(!params)
+		{
+			delete e;
+			return NULL;
+		}
+		e->params = *params;
+		delete params;
 	}
-	
-	e->cname = cname;
+	else
+	{
+		ClassName *cname = ParseClassName();
+		if(!cname)
+		{
+			delete e;
+			return NULL;
+		}
+		e->cname = cname;
+	}
 	
 	// Method definitions
 	

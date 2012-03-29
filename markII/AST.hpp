@@ -129,22 +129,24 @@ namespace sool
 	{
 		public:
 		
-		ClassName*				cname;
-		std::vector<Method*>	methods;
+		// Difficulty here. We can have either an extension for a full fledged class:
+		// extend num
+		// extend Foo
+		// extend Table|(text,Bar)
+		// extend #Bar
 		
-		~Extension();
-	};
-	
-	class TemplateExtension : public AST
-	{
-		public:
+		ClassName*					cname;
+		
+		// or an extension to a class/interface template
+		// extend Name|(Iface1 T, Iface2 U)
 		
 		std::string					name;
-		std::vector<TemplateParam>	params;		// Template parameters, may NOT be empty (otherwise, use Extension directly)
+		std::vector<TemplateParam>	params;
 		
-		std::vector<Method*>	methods;
+		std::vector<Method*>		methods;
 		
-		~TemplateExtension();
+		Extension();
+		~Extension();
 	};
 	
 	class Interface : public AST

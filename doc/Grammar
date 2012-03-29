@@ -12,7 +12,7 @@ iface-def :=	'interface' CName [ template-def ]
 				{ method-proto | 'embed' list-class-name }
 				'end'
 
-extend-def :=	'extend' ( class-name | CName [ template-def ] )
+extend-def :=	'extend' ( class-name | CName template-def )
 				{ method-def }
 				'end'
 
