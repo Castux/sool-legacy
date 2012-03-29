@@ -60,11 +60,26 @@ namespace sool
 		bool					setter;
 		std::vector<Argument>	args;
 		
-		// Computed at parsing
+		SourcePos	rtype_pos;
+		
+		// Computed
 		
 		MultiType				atype;		// Combined argument types
+		std::string				selector;
 		std::string				signature;
+		
+		void ComputeSignature();	// and atype and selector
+		
+		// Comparison (more efficient that comparing strings...)
+		
+		bool SameSelector(Prototype *other);
+		bool operator==(Prototype *other);
+		
+		// Build a new prototype with type substitutions
+		Prototype *ReplaceTemplateParams(ClassNameMap &tmap);
 	};
+	
+	typedef std::map<std::string,Prototype*> ProtoMap;
 	
 	class Method : public AST
 	{

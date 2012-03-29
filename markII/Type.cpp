@@ -98,7 +98,7 @@ ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 	ClassNameMap::iterator it = tmap.find(name);
 	
 	// Found!
-	if(it != map.end())
+	if(it != tmap.end())
 	{
 		ClassName *cl = it->second;
 		
@@ -144,8 +144,24 @@ Type Type::ReplaceTemplateParams(ClassNameMap &tmap)
 	return Type(cl, optional);
 }
 
+bool Type::operator==(const Type& other)
+{
+	return cname == other.cname && optional == other.optional;
+}
+
+bool Type::operator!=(const Type& other)
+{
+	return !(*this == other);
+}
+
 MultiType::MultiType()
 {
+}
+
+MultiType::MultiType(Type t)
+{
+	types.push_back(t);
+	signature = t.signature;
 }
 
 MultiType::MultiType(std::vector<Type> sub)
@@ -174,4 +190,23 @@ MultiType MultiType::ReplaceTemplateParams(ClassNameMap &tmap)
 		subtypes.push_back(types[i].ReplaceTemplateParams(tmap));
 	
 	return MultiType(subtypes);
+}
+
+bool MultiType::operator==(const MultiType& other)
+{
+	if(types.size() != other.types.size())
+		return false;
+	
+	for(uint i = 0 ; i < types.size() ; i++)
+	{
+		if(types[i] != other.types[i])
+			return false;
+	}
+	
+	return true;
+}
+
+bool MultiType::operator!=(const MultiType& other)
+{
+	return !(*this == other);
 }

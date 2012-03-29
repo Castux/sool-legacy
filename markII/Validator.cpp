@@ -2,29 +2,65 @@
 
 using namespace sool;
 
-IfaceInst::IfaceInst(Interface *i) : iface(i)
+/***************/
+/** IfaceInst **/
+/***************/
+
+IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false)
 {
 	// No params, name is trivial
 	name = i->name;
 }
 
+bool IfaceInst::Validate()
+{
+	if(validated)
+		return true;
+	
+	// Interfaces are pretty straightforward. The only thing that can go
+	// wrong is to have two methods with the same selector but a different
+	// return type. On the way, we index prototypes by selector
+	
+	// Remember, we have to take the instmap in account, this could be a template!
+	
+	bool success;
+	
+	for(uint i = 0 ; i < iface->protos.size() ; i++)
+	{
+		// Instantiate template
+		Prototype *p = iface->protos[i]->ReplaceTemplateParams(tmap);
+		
+		// Check types' validity
+		success = v->ValidateType(p->rtype, p->rtype_pos);
+		if(!success)
+			return false;
+		
+		for(uint j = 0 ; j < p->args.size() ; j++)
+		{
+			success = v->ValidateType(p->args[j].type, p->args[j].pos);
+			if(!success)
+				return false;
+		}
+	}
+	
+	
+	validated = true;
+	return true;
+}
 
+void IfaceInst::AddProto(Prototype* p)
+{
+	// Sanity check
+	if(pmap[p->selector])
+		error("IfaceInst::AddProto() - prototype already present");
+	
+	pvec.push_back(p);
+	pmap[p->selector] = p;
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/***************/
+/** Validator **/
+/***************/
 
 Validator::Validator(Context *c) : context(c)
 {
@@ -32,8 +68,8 @@ Validator::Validator(Context *c) : context(c)
 
 Validator::~Validator()
 {
-	for(IfaceInstMap::iterator it = imap.begin() ; it != imap.end() ; it++)
-		delete it->second;
+	for(uint i = 0 ; i < ivec.size() ; i++)
+		delete ivec[i];
 }
 
 void Validator::AddError(std::string message, SourcePos position)
@@ -59,6 +95,17 @@ bool Validator::Validate()
 		return false;
 	
 	InstantiateParameterlessInterfaces();
+	
+	// From there initiate validation of single interfaces. If required,
+	// other instances will be added at the vector's end, and validations
+	// will be launched recursively
+	
+	for(uint i = 0 ; i < ivec.size() ; i++)
+	{
+		success = ivec[i]->Validate();
+		if(!success)
+			return false;
+	}
 	
 	AddInfo("context passed validation");
 	return true;
@@ -168,13 +215,37 @@ void Validator::InstantiateParameterlessInterfaces()
 		if(iface->params.size() != 0)
 			continue;
 		
-		IfaceInst *inst = new IfaceInst(iface);
-		
-		// Sanity check
-		if(imap[inst->name])
-			error("Validator::InstantiateParameterlessInterfaces() - instance already present");
+		IfaceInst *inst = new IfaceInst(this, iface);
 		
 		// Insert new instance
-		imap[inst->name] = inst;
+		AddIface(inst);
 	}
+}
+
+void Validator::AddIface(IfaceInst* iface)
+{
+	// Sanity check
+	if(imap[iface->name])
+		error("Validator::AddIface() - instance already present");
+	
+	ivec.push_back(iface);
+	imap[iface->name] = iface;
+}
+
+bool Validator::ValidateType(Type &t, SourcePos pos)
+{
+	AddInfo("lol me plenty " + t.signature);
+	
+	return true;
+}
+
+bool Validator::ValidateType(MultiType &t, SourcePos pos)
+{
+	for(uint i = 0 ; i < t.types.size() ; i++)
+	{
+		if(!ValidateType(t.types[i], pos))
+			return false;
+	}
+	
+	return true;
 }

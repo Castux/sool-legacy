@@ -77,3 +77,39 @@ Context::~Context()
 	for(uint i = 0 ; i < extensions.size() ; i++)
 		delete extensions[i];
 }
+
+void Prototype::ComputeSignature()
+{
+	std::vector<Type> atypes;
+	for(uint i = 0 ; i < args.size() ; i++)
+		atypes.push_back(args[i].type);
+	
+	atype = MultiType(atypes);
+	selector = name + (setter ? "=" : "") + ":" + atype.signature;
+	signature = rtype.signature + ":" + selector;
+}
+
+bool Prototype::SameSelector(Prototype *other)
+{
+	return (name == other->name &&
+			setter == other->setter &&
+			atype == other->atype);
+}
+
+bool Prototype::operator==(Prototype *other)
+{
+	return (rtype == other->rtype) && SameSelector(other);
+}
+
+Prototype* Prototype::ReplaceTemplateParams(ClassNameMap &tmap)
+{
+	Prototype *p = new Prototype(*this);
+	
+	p->rtype = rtype.ReplaceTemplateParams(tmap);
+	
+	for(uint i = 0 ; i < args.size() ; i++)
+		p->args[i].type = args[i].type.ReplaceTemplateParams(tmap);
+	
+	p->ComputeSignature();
+	return p;
+}

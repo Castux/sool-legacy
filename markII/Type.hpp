@@ -62,6 +62,9 @@ namespace sool
 		
 		// Replace class name in place by replacing occurences of the keys in the tmap by their values
 		Type ReplaceTemplateParams(ClassNameMap &tmap);
+		
+		bool operator==(const Type& other);
+		bool operator!=(const Type& other);
 	};
 	
 	class MultiType
@@ -73,10 +76,14 @@ namespace sool
 		std::string signature;
 		
 		MultiType();
+		MultiType(Type t);
 		MultiType(std::vector<Type> subtypes);
 		
 		// Replace class name in place by replacing occurences of the keys in the tmap by their values
 		MultiType ReplaceTemplateParams(ClassNameMap &tmap);
+		
+		bool operator==(const MultiType& other);
+		bool operator!=(const MultiType& other);
 	};
 
 }

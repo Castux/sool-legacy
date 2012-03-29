@@ -425,7 +425,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	{
 		do
 		{
-			Type t = ParseType();
+			Type t = ParseType(&p->rtype_pos);
 			if(!t.cname)
 			{
 				AddInfo("as return type for method");
@@ -481,7 +481,6 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	
 	if(head->kind != Token::t_rparens)
 	{
-		
 		do
 		{
 			Prototype::Argument arg;
@@ -527,15 +526,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	}
 	
 	p->pos = start.To(head[-1].pos);
-	
-	// Build argument multitype and signature
-	
-	std::vector<Type> atypes;
-	for(uint i = 0 ; i < p->args.size() ; i++)
-		atypes.push_back(p->args[i].type);
-	
-	p->atype = MultiType(atypes);
-	p->signature = p->rtype.signature + ":" + p->name + (p->setter ? "=" : "") + ":" + p->atype.signature;
+	p->ComputeSignature();
 	
 	return p;
 }
