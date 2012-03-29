@@ -595,6 +595,12 @@ Member* Parser::ParseMember()
 	Member *m = new Member;
 	SourcePos start = head->pos;
 	
+	if(Accept(Token::t_shared))
+	{
+		m->shared = true;
+		m->shared_pos = head[-1].pos;
+	}
+	
 	Type t = ParseType(&m->type_pos);
 	if(!t.cname)
 	{

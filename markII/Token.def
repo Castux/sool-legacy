@@ -11,6 +11,7 @@ KEYWORD(method)
 KEYWORD(selfless)
 KEYWORD(foreign)
 KEYWORD(embed)
+KEYWORD(shared)
 
 // Types
 KEYWORD(num)

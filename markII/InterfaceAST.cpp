@@ -4,7 +4,7 @@
 
 using namespace sool;
 
-Member::Member()
+Member::Member() : shared(false)
 {
 }
 

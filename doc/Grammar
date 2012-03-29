@@ -1,8 +1,8 @@
 -- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
 
-chunk :=		{ class-def | iface-def }
+chunk :=		{ class-def | iface-def | extend-def }
 
-class-def :=	( 'object' | 'value' | 'extend' )
+class-def :=	( 'object' | 'value' )
 				CName
 				[ template-def ]
 				class-body
@@ -12,22 +12,26 @@ iface-def :=	'interface' CName [ template-def ]
 				{ method-proto | 'embed' list-class-name }
 				'end'
 
-class-name :=	( ( CName | 'num' | 'bool' | 'text' | 'blob' | 'data' )
-				[ type-params ] ) |
+extend-def :=	'extend' ( class-name | CName [ template-def ] )
+				{ method-def }
+				'end'
+
+class-name :=	CName [ class-params ] |
+				'num' | 'bool' | 'text' | 'blob' | 'data' |
 				'#' class-name
 
-type-params := 	'|' ( class-name | '(' list-class-name ')' )
+class-params := 	'|' ( class-name | '(' list-class-name ')' )
 
-template-def :=	'|' '(' list-type-param-def ')'
+template-def :=		'|' '(' list-class-param-def ')'
 
-type-param-def :=	CName CName
+class-param-def :=	CName CName
 
 type :=			class-name [ '?' ]
 
 class-body :=	{ member-def | method-def | foreign-def |
 				'embed' list-class-name }
 
-member-def :=	type Name
+member-def :=	[ 'shared' ] type Name
 				[ '=' exp ]
 
 method-def :=	( 'method' | 'selfless' )

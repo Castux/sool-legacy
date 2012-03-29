@@ -25,6 +25,7 @@ namespace sool
 	{
 		public:
 		
+		bool		shared;
 		Type		type;
 		std::string	name;
 		
@@ -32,6 +33,7 @@ namespace sool
 		// Expr *init;
 		
 		// Useful source code positions
+		SourcePos	shared_pos;
 		SourcePos	type_pos;
 		SourcePos	name_pos;
 		
