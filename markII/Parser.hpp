@@ -4,7 +4,7 @@
 #include "common.hpp"
 #include "Report.hpp"
 #include "Token.hpp"
-#include "InterfaceAST.hpp"
+#include "AST.hpp"
 
 namespace sool
 {

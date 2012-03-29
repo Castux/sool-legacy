@@ -1,5 +1,4 @@
-#include "InterfaceAST.hpp"
-#include "Validator.hpp"
+#include "AST.hpp"
 #include "Type.hpp"
 
 using namespace sool;
@@ -12,7 +11,7 @@ Member::~Member()
 {
 }
 
-Method::Method() : selfless(false), foreign(false), setter(false), member(NULL)
+Method::Method() : setter(false), member(NULL)
 {
 }
 
@@ -20,7 +19,7 @@ Method::~Method()
 {
 }
 
-Class::Class() :	value(false), validating_interface(false),
+Class::Class() :	validating_interface(false),
 					valid_interface(false), valid_code(false)
 {
 }
@@ -48,10 +47,10 @@ bool Class::IsTemplate()
 	return(params.size() > 0);
 }
 
-std::string Class::Kind()
+std::string Class::KindToString()
 {
 	std::string res;
-	if(value)
+	if(kind == k_value)
 		res = "value class";
 	else
 		res = "object class";

@@ -57,9 +57,10 @@ Class* Parser::ParseClass()
 	switch(head->kind)
 	{
 		case Token::t_object:
+			c->kind = Class::k_object;
 			break;
 		case Token::t_value:
-			c->value = true;
+			c->kind = Class::k_value;;
 			break;
 		default:
 			error(std::string("Parser::ParseClass() - wrong class token: ") + head->FancyName());
@@ -73,23 +74,6 @@ Class* Parser::ParseClass()
 	{
 		delete c;
 		return NULL;
-	}
-	
-	// Class parent
-	
-	if(Accept(Token::t_colon))
-	{
-		SourcePos pstart = head->pos;
-		
-		c->pname = ParseClassName();
-		if(!c->pname)
-		{
-			AddInfo("as parent class for class started here:", start, true);
-			delete c;
-			return NULL;
-		}
-		
-		c->parent_pos = pstart.To(head[-1].pos);
 	}
 	
 	// Definitions
@@ -108,6 +92,10 @@ Class* Parser::ParseClass()
 				return NULL;
 			}
 			c->methods.push_back(m);
+		}
+		else if (head->kind == Token::t_embed )
+		{
+			;
 		}
 		else
 		{
@@ -417,13 +405,13 @@ Method* Parser::ParseMethod()
 	switch(head->kind)
 	{
 		case Token::t_method:
+			m->kind = Method::k_normal;
 			break;
 		case Token::t_selfless:
-			m->selfless = true;
-			m->selfless_pos = head->pos;
+			m->kind = Method::k_selfless;
 			break;
 		case Token::t_foreign:
-			m->foreign = true;
+			m->kind = Method::k_foreign;
 			break;
 		default:
 			AddError("malformed method definition", head->pos);
@@ -431,6 +419,7 @@ Method* Parser::ParseMethod()
 			delete m;
 			return NULL;
 	}
+	m->kind_pos = head->pos;
 	head++;
 	
 	// Return type(s)

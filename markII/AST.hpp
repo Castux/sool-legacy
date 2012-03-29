@@ -55,9 +55,14 @@ namespace sool
 		
 		// Interface
 		
-		bool					selfless;
-		bool					foreign;
+		typedef enum
+		{
+			k_normal,
+			k_selfless,
+			k_foreign
+		} Kind;
 		
+		Kind					kind;
 		MultiType				rtype;
 		
 		std::string				name;
@@ -74,7 +79,7 @@ namespace sool
 		// Block *body;
 		
 		// Useful source code positions
-		SourcePos	selfless_pos;
+		SourcePos	kind_pos;
 		SourcePos	rtype_pos;
 		SourcePos	name_pos;
 		SourcePos	args_pos;
@@ -96,12 +101,16 @@ namespace sool
 	{
 		public:
 		
-		bool	value;		// Value class, or normal object class?
+		typedef enum
+		{
+			k_value,
+			k_object
+		} Kind;
+		
+		Kind						kind;		// Value class, or object class?
 		
 		std::string					name;		// In instances, this is the full name
 		std::vector<std::string>	params;		// For templates only: template parameters, owned
-		
-		ClassName	*pname;		// Parent's name
 		
 		std::vector<Member*> members;	// owned
 		std::vector<Method*> methods;	// owned
@@ -130,7 +139,7 @@ namespace sool
 		bool IsTemplate();
 		bool IsInstance();
 		
-		std::string Kind();
+		std::string KindToString();
 	};
 	
 	typedef std::map<std::string,Class*> ClassMap;
