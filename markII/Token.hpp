@@ -2,7 +2,7 @@
 #define TOKEN_HPP
 
 #include "common.hpp"
-#include "SourcePos.hpp"
+#include "SourceFile.hpp"
 
 namespace sool
 {

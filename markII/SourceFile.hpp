@@ -3,16 +3,32 @@
 
 #include <vector>
 
-#include "SourcePos.hpp"
+#include "common.hpp"
 
 namespace sool
 {
-	class SourcePos;
+	class SourceFile;
 	
 	struct LineCol
 	{
 		uint line;
 		uint col;
+	};
+	
+	class SourcePos
+	{
+		public:
+		
+		SourceFile *file;
+		uint begin;
+		uint end;
+		
+		SourcePos();
+		SourcePos(SourceFile *f, uint b, uint e);
+		SourcePos To(SourcePos other);
+		std::string Text();
+		
+		void ToLineCol(LineCol *b, LineCol *e);
 	};
 	
 	class SourceFile

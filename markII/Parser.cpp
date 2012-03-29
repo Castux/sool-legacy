@@ -10,6 +10,7 @@ Parser::Parser(std::vector<Token> *t) : tokens(t), noinfo(false)
 Parser::~Parser()
 {
 	delete tokens;
+	delete context;
 }
 
 bool Parser::Parse()
@@ -17,6 +18,8 @@ bool Parser::Parse()
 	Class *c;
 	Extension *e;
 	Interface *i;
+	
+	context = new Context();
 	
 	while(head->kind != Token::t_eof)
 	{
@@ -27,7 +30,7 @@ bool Parser::Parse()
 				if(!e)
 					return false;
 				else
-					context.extensions.push_back(e);
+					context->extensions.push_back(e);
 				break;
 			case Token::t_object:
 			case Token::t_value:
@@ -35,14 +38,14 @@ bool Parser::Parse()
 				if(!c)
 					return false;
 				else
-					context.classes.push_back(c);
+					context->classes.push_back(c);
 				break;
 			case Token::t_interface:
 				i = ParseInterface();
 				if(!i)
 					return false;
 				else
-					context.interfaces.push_back(i);
+					context->interfaces.push_back(i);
 				break;
 			default:
 				AddError("expected class or extension definition", head->pos);

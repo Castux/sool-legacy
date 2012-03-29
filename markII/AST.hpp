@@ -5,7 +5,7 @@
 #include <map>
 
 #include "common.hpp"
-#include "SourcePos.hpp"
+#include "SourceFile.hpp"
 #include "Type.hpp"
 
 // Here we define the AST objects for the interfaces

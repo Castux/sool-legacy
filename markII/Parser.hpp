@@ -13,7 +13,7 @@ namespace sool
 		public:
 		
 		Report report;
-		Context context;
+		Context *context;
 		
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned

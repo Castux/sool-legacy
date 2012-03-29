@@ -2,7 +2,6 @@
 
 #include "error.hpp"
 #include "SourceFile.hpp"
-#include "Diagnostic.hpp"
 #include "Report.hpp"
 #include "Token.hpp"
 #include "Lexer.hpp"

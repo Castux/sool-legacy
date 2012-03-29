@@ -2,12 +2,42 @@
 #define REPORT_HPP
 
 #include <vector>
-#include "Diagnostic.hpp"
+#include "SourceFile.hpp"
 
 // The report is basically a list of diagnostics, with statistics added...
 
 namespace sool
 {
+	class Diagnostic
+	{
+		public:
+		
+		typedef enum
+		{
+			Info,
+			Warning,
+			Error
+		} Severity;
+		
+		std::string emitter;
+		Severity severity;
+		std::string message;
+		SourcePos position;
+		
+		Diagnostic(std::string e, Severity s, std::string m, SourcePos p = SourcePos());
+		
+		// Pretty print the diagnostic with colors and all!
+		std::string ToString();
+		
+		private:
+		
+		// Colorize with ANSI escapes, from column begin to end
+		// Defaults to the whole string
+		// Cd is for the dark colors
+		static std::string C(std::string s, uint color, uint begin = 1, uint end = 0);
+		static std::string Cd(std::string s, uint color, uint begin = 1, uint end = 0);
+	};
+	
 	class Report
 	{
 		private:
