@@ -13,11 +13,13 @@ namespace sool
 		public:
 		
 		Report report;
-		Context *context;
 		
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned
 		Token					*head;
+		Context					*context;	// not owned, will be passed to analyzer
+		
+		public:
 		
 		Parser(std::vector<Token> *t);
 		~Parser();

@@ -6,6 +6,8 @@
 #include "Token.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
+#include "Validator.hpp"
+
 
 using namespace sool;
 
@@ -28,7 +30,7 @@ int main(int argc, char **argv)
 	}
 	
 	Lexer lex(&file);
-	lex.Lex();
+	success = lex.Lex();
 	
     /*
 	for(uint i = 0 ; i < lex.tokens->size() ; i++)
@@ -45,16 +47,26 @@ int main(int argc, char **argv)
 	
 	lex.report.Print();
 	
-	if(lex.report.numerror > 0)
+	if(!success)
 		return 1;
 	
 	Parser parser(lex.tokens);
-	parser.Parse();
+	success = parser.Parse();
 	
 	parser.report.Print();
 	
-	if(parser.report.numerror > 0)
+	if(!success)
 		return 1;
+	
+	Validator validator(parser.context);
+	success = validator.Validate();
+	
+	validator.report.Print();
+	
+	if(!success)
+		return 1;
+	
+	delete validator.context;
 	
 	ClassName::Clear();
 	

@@ -10,7 +10,6 @@ Parser::Parser(std::vector<Token> *t) : tokens(t), noinfo(false)
 Parser::~Parser()
 {
 	delete tokens;
-	delete context;
 }
 
 bool Parser::Parse()
@@ -84,6 +83,8 @@ Class* Parser::ParseClass()
 		delete c;
 		return NULL;
 	}
+	c->name = head[-1].string;
+	c->name_pos = head[-1].pos;
 	
 	// Template params
 	
@@ -427,7 +428,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 			Type t = ParseType();
 			if(!t.cname)
 			{
-				AddInfo("as return type");
+				AddInfo("as return type for method");
 				delete p;
 				return NULL;
 			}
@@ -526,6 +527,15 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	}
 	
 	p->pos = start.To(head[-1].pos);
+	
+	// Build argument multitype and signature
+	
+	std::vector<Type> atypes;
+	for(uint i = 0 ; i < p->args.size() ; i++)
+		atypes.push_back(p->args[i].type);
+	
+	p->atype = MultiType(atypes);
+	p->signature = p->rtype.signature + ":" + p->name + (p->setter ? "=" : "") + ":" + p->atype.signature;
 	
 	return p;
 }
@@ -637,6 +647,8 @@ Interface* Parser::ParseInterface()
 		delete i;
 		return NULL;
 	}
+	i->name = head[-1].string;
+	i->name_pos = head[-1].pos;
 	
 	// Template params
 	

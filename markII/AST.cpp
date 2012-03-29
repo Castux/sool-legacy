@@ -40,6 +40,11 @@ std::string Class::KindToString()
 	return res;
 }
 
+std::string Class::FancyName()
+{
+	return KindToString() + " " + name;
+}
+
 Extension::Extension() : cname(NULL)
 {
 }
@@ -48,6 +53,11 @@ Extension::~Extension()
 {
 	for(uint i = 0 ; i < methods.size() ; i++)
 		delete methods[i];
+}
+
+std::string Interface::FancyName()
+{
+	return std::string("interface ") + name;
 }
 
 Interface::~Interface()

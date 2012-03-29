@@ -53,12 +53,17 @@ namespace sool
 			std::string name;		// name is optional, as Prototype is also used by Interface
 		};
 		
-		MultiType				rtype;
+		// Parsed
 		
+		MultiType				rtype;
 		std::string				name;
 		bool					setter;
-		
 		std::vector<Argument>	args;
+		
+		// Computed at parsing
+		
+		MultiType				atype;		// Combined argument types
+		std::string				signature;
 	};
 	
 	class Method : public AST
@@ -95,7 +100,19 @@ namespace sool
 		std::string		name;
 	};
 	
-	class Class : public AST
+	class Global : public AST
+	{
+		public:
+		
+		std::string					name;		// Base name
+		std::vector<TemplateParam>	params;		// Template parameters, may be empty
+		
+		SourcePos	name_pos;
+		
+		virtual std::string FancyName() = 0;
+	};
+	
+	class Class : public Global
 	{
 		public:
 		
@@ -105,22 +122,23 @@ namespace sool
 			k_object
 		} Kind;
 		
-		Kind						kind;		// Value class, or object class?
+		Kind					kind;		// Value class, or object class?
 		
-		std::string					name;		// Base name
-		std::vector<TemplateParam>	params;		// Template parameters, may be empty
+		// name and parameters are inherited from Global
 		
 		std::vector<Member*>	members;	// owned
 		std::vector<Method*>	methods;	// owned
 		std::vector<ClassName*>	embeds;
 		
 		// Useful source code positions
-		SourcePos	name_pos;
+		
 		SourcePos	fullname_pos;		// includes template parameters
 		
 		~Class();
 		
 		std::string KindToString();
+		
+		std::string FancyName();
 	};
 	
 	typedef std::map<std::string,Class*> ClassMap;
@@ -149,18 +167,23 @@ namespace sool
 		~Extension();
 	};
 	
-	class Interface : public AST
+	typedef std::map<std::string,Extension*> ExtensionMap;
+	
+	class Interface : public Global
 	{
 		public:
 		
-		std::string					name;		// Base name
-		std::vector<TemplateParam>	params;		// Template parameters, may be empty
+		// name and parameters are inherited from Global
 		
 		std::vector<ClassName*>		embeds;		// Embedded interfaces
 		std::vector<Prototype*>		protos;		// Owned
 		
 		~Interface();
+		
+		std::string FancyName();
 	};
+	
+	typedef std::map<std::string,Interface*> InterfaceMap;
 	
 	struct Context
 	{
