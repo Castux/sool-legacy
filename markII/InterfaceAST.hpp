@@ -25,9 +25,6 @@ namespace sool
 	{
 		public:
 		
-		bool		shared;
-		bool		internal;
-		
 		Type		type;
 		std::string	name;
 		
@@ -35,8 +32,6 @@ namespace sool
 		// Expr *init;
 		
 		// Useful source code positions
-		SourcePos	shared_pos;
-		SourcePos	internal_pos;
 		SourcePos	type_pos;
 		SourcePos	name_pos;
 		
@@ -58,7 +53,6 @@ namespace sool
 		
 		// Interface
 		
-		bool					internal;
 		bool					selfless;
 		bool					foreign;
 		
@@ -78,7 +72,6 @@ namespace sool
 		// Block *body;
 		
 		// Useful source code positions
-		SourcePos	internal_pos;
 		SourcePos	selfless_pos;
 		SourcePos	rtype_pos;
 		SourcePos	name_pos;

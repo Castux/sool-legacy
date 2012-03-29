@@ -99,12 +99,7 @@ Class* Parser::ParseClass()
 		// Methods
 		if( head->kind == Token::t_method ||
 			head->kind == Token::t_selfless ||
-			head->kind == Token::t_foreign ||
-			( head[0].kind == Token::t_internal && (
-				head[1].kind == Token::t_method ||
-				head[1].kind == Token::t_selfless ||
-				head[1].kind == Token::t_foreign ))
-			)
+			head->kind == Token::t_foreign )
 		{
 			Method *m = ParseMethod();
 			if(!m)
@@ -419,12 +414,6 @@ Method* Parser::ParseMethod()
 	
 	// Attributes
 	
-	if(Accept(Token::t_internal))
-	{
-		m->internal = true;
-		m->internal_pos = head[-1].pos;
-	}
-	
 	switch(head->kind)
 	{
 		case Token::t_method:
@@ -605,18 +594,6 @@ Member* Parser::ParseMember()
 {
 	Member *m = new Member;
 	SourcePos start = head->pos;
-	
-	if(Accept(Token::t_shared))
-	{
-		m->shared = true;
-		m->shared_pos = head[-1].pos;
-	}
-	
-	if(Accept(Token::t_internal))
-	{
-		m->internal = true;
-		m->internal_pos = head[-1].pos;
-	}
 	
 	Type t = ParseType(&m->type_pos);
 	if(!t.cname)

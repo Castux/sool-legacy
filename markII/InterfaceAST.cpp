@@ -4,7 +4,7 @@
 
 using namespace sool;
 
-Member::Member() : shared(false), internal(false)
+Member::Member()
 {
 }
 
@@ -12,7 +12,7 @@ Member::~Member()
 {
 }
 
-Method::Method() : internal(false), selfless(false), foreign(false), setter(false), member(NULL)
+Method::Method() : selfless(false), foreign(false), setter(false), member(NULL)
 {
 }
 
