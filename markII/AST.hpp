@@ -161,7 +161,20 @@ namespace sool
 		
 		~Interface();
 	};
+	
+	struct Context
+	{
+		public:
+		
+		std::vector<Class*> 		classes;
+		std::vector<Extension*>		extensions;
+		std::vector<Interface*>		interfaces;
+		
+		~Context();
+	};
 }
+
+
 
 #endif // AST_HPP
 

@@ -8,19 +8,12 @@
 
 namespace sool
 {
-	struct ParseResult
-	{
-		std::vector<Class*> 	*classes;
-		std::vector<Extension*>	*extensions;
-		std::vector<Interface*>	*interfaces;
-	};
-	
 	class Parser
 	{
 		public:
 		
 		Report report;
-		ParseResult result;
+		Context context;
 		
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned

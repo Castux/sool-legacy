@@ -14,10 +14,6 @@ Parser::~Parser()
 
 bool Parser::Parse()
 {
-	result.classes = new std::vector<Class*>;
-	result.extensions = new std::vector<Extension*>;
-	result.interfaces = new std::vector<Interface*>;
-	
 	Class *c;
 	Extension *e;
 	Interface *i;
@@ -31,7 +27,7 @@ bool Parser::Parse()
 				if(!e)
 					return false;
 				else
-					result.extensions->push_back(e);
+					context.extensions.push_back(e);
 				break;
 			case Token::t_object:
 			case Token::t_value:
@@ -39,14 +35,14 @@ bool Parser::Parse()
 				if(!c)
 					return false;
 				else
-					result.classes->push_back(c);
+					context.classes.push_back(c);
 				break;
 			case Token::t_interface:
 				i = ParseInterface();
 				if(!i)
 					return false;
 				else
-					result.interfaces->push_back(i);
+					context.interfaces.push_back(i);
 				break;
 			default:
 				AddError("expected class or extension definition", head->pos);

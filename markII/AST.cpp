@@ -65,3 +65,15 @@ Interface::~Interface()
 	for(uint i = 0 ; i < protos.size() ; i++)
 		delete protos[i];
 }
+
+Context::~Context()
+{
+	for(uint i = 0 ; i < classes.size() ; i++)
+		delete classes[i];
+	
+	for(uint i = 0 ; i < interfaces.size() ; i++)
+		delete interfaces[i];
+	
+	for(uint i = 0 ; i < extensions.size() ; i++)
+		delete extensions[i];
+}

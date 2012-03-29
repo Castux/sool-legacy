@@ -1,5 +1,7 @@
 env = Environment()
 
+#env['CXX'] = 'g++'
+#env.Append(CXXFLAGS = ['-Wall'])
 env['CXX'] = 'clang++'
 env.Append(CXXFLAGS = ['-Wall','-fcolor-diagnostics'])
 
