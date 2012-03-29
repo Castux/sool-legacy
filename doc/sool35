@@ -282,7 +282,7 @@ headache.
 One last related issue in programming is naming strings. When I talk 
 about the string "Hello", does it include its double quotes? When I 
 write about the string, should I say `Hello` or `"Hello"`? Or did I 
-really mean `""Hello""`. Is is clearer if I write `<"Hello">`? A 
+really mean `""Hello""`? Is is clearer if I write `<"Hello">`? A 
 programming language normally defines clearly how to write literal 
 strings and how to escape characters in them. But that is also a source 
 of tremendous headaches, bugs, and security holes (PHP, JavaScript, 

@@ -32,7 +32,7 @@ as basis:
 	let oldpoint = {x: 10f, y: 20f};
 	let newpoint = {x: 0f with oldpoint};
 
-That could make an interesting shortcut in sool, where struct are 
+That could make an interesting shortcut in sool, where structs are 
 mutable:
 
 	oldpoint = Point(20,30)
@@ -51,9 +51,9 @@ syntax `with` exists already, it's the object/struct member initializer:
 
 Well, it's interesting, but not enough to make a feature.
 
-The power of Rust's type system also comes from enums, that are basically 
-a way to group different types together, and feels very much like 
-functional programming (I think of Caml for instance).
+The power of Rust's type system also comes from enums, that are 
+basically a way to group different types together, and feels very 
+much like functional programming (I think of Caml for instance).
 
 	enum shape {
 		circle(point, float),
@@ -111,16 +111,17 @@ passed around between variables, which would be unset afterwards.
 	let x = ~10;
 	let y <- x;
 
-Box the integer 10 into a single box, and then pass it to variable `y`. 
-`x` doesn't exist after that statement. That's even more powerful than 
-the mechanism I had proposed for sool, which was impractical to apply 
-systematically. Indeed, in my system, the ownership transfer `y <- x` 
-simply set `x` to nil. In Rust, there are no NULL pointers. The compiler 
-ensures that pointers are always initialized. All the mechanisms that 
-use nil in Lua or sool are replaced by the complex type system in Rust, 
-in particular the `option<T>` type. If no pointers are ever NULL, there 
-is certainly no nil-check ever, which sounds like a pretty good deal. 
-I'd have to dig deeper to see how well that works, but it sounds fun.
+Box the integer 10 into a single box, and then pass it to variable 
+`y`. `x` just doesn't exist anymore after that statement. That's 
+even more powerful than the mechanism I had proposed for sool, which 
+was impractical to apply systematically. Indeed, in my system, the 
+ownership transfer `y <- x` simply set `x` to nil. In Rust, there 
+are no NULL pointers. The compiler ensures that pointers are always 
+initialized. All the mechanisms that use nil in Lua or sool are 
+replaced by the complex type system in Rust, in particular the 
+`option<T>` type. If no pointers are ever NULL, there is certainly 
+no nil-check ever, which sounds like a pretty good deal. I'd have to 
+dig deeper to see how well that works, but it sounds fun.
 
 The reason for these two different boxings in Rust is that apparently, 
 it's meant to be a very concurrent language. Each thread (or "task" as 
@@ -128,10 +129,10 @@ they call it) has its own heap, and shared boxed cannot leave a task.
 Unique boxes can safely be passed to another task, since the giver 
 forgets about it.
 
-And if I read correctly, there has been a lot of reflexion to design the 
-whole language around these tasks. For instance that's why records are 
-immutable by default. It means they can be efficiently shared by 
-reference between tasks, even though they are value types.
+And if I read correctly, there has been a lot of reflexion to design 
+the whole language around these tasks. For instance that's why 
+records are immutable by default. It means they can be efficiently 
+shared by reference between tasks, even though they are value types.
 
 Functions
 ---------
@@ -230,7 +231,7 @@ That and a gazillion more things make Rust a fairly complex and exotic
 looking language. It's still in development, but it already shows some 
 interesting concepts. It's very far from what I envisioned for sool, 
 obviously, but it's always fun to see that some concepts are very 
-similar to things I thought about during the designing of sool..
+similar to things I thought about during the designing of sool.
 
 Funny detail: the Rust compiler is implemented in Rust itself. To 
 bootstrap it, you need a pre-compiled compiler, and they don't explain 

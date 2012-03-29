@@ -37,8 +37,8 @@ called a structure anyway").
 
 Wiktionary defines class as:
 
-	A group, collection, category or set sharing characteristics or 
-	attributes.
+> A group, collection, category or set sharing characteristics or 
+> attributes.
 
 That applies to both: all structs of a same kind share attributes and 
 behavior, they form a class, just as much as objects that share 
@@ -162,7 +162,7 @@ Some ambiguities are trickier:
 
 Yikes. What `nil` is that? A nil num or a nil blob? A poor 
 implementation would simply pick the first one in the list that matches 
-the call. That would be random, that would be bad. I mentionned already 
+the call. That would be random, that would be bad. I mentioned already 
 that classes may have a built-in selfless `nilval` method that would be 
 used only to type an expression:
 
@@ -193,7 +193,7 @@ need to make the difference between an absence of number and an absence
 of blob. When in doubt, just write them all down.
 
 Unfortunately, that means a bit more work for the analyzer, which will 
-have to internally generate all protoypes corresponding to missing 
+have to internally generate all prototypes corresponding to missing 
 arguments:
 
 	method foo(num n, num? m, text? t, data? d) end

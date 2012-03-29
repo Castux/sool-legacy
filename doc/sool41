@@ -116,9 +116,7 @@ In theory, that would be nice. In practice there are a few mechanisms going on t
 4. inserts a cast for `arr` from `#num` to Sortable (using a vtable)
 5. writes a call for `sort` on the Sortable-casted array
 
-That's totally doable. Point 2 in particular means that the analyzer has to look for *every* generic method there is to see if there is a match, and then if so, check compliance to the interface.
-
-That's a lot of lookup every time we have a call to an unknown method. But why not. There will probably be a global table of methods, with a fast lookup by prototype. The real problem arises if we find several matches in several generic types, and that our object complies with several of the interfaces.
+That's totally doable. Point 2 in particular means that the analyzer has to look for *every* generic method there is to see if there is a match, and then if so, check compliance to the interface. That's a lot of lookup every time we have a call to an unknown method. But why not. There will probably be a global table of methods, with a fast lookup by prototype. The real problem arises if we find several matches in several generic types, and that our object complies with several of the interfaces.
 
 Then how to choose to which generic type we should cast, and therefore to which actual method we bind the call? Possibility one: refuse the call for ambiguity, and request an explicit cast:
 
@@ -157,11 +155,11 @@ What else could happen there than a cast to Foo? Well nothing, so that's fine. B
 
 	fb.meh()
 
-when `meh()` is not a method of FooBar is a bit more far fetched. The `meh` method is litterally fetched from pretty far (check all existing `meh:void` methods, check receiver types, check interface compliance).
+when `meh()` is not a method of FooBar is a bit more far fetched. The `meh` method is literally fetched from pretty far (check all existing `meh:void` methods, check receiver types, check interface compliance).
 
 Far fetched but convenient. If there is a unique generic method applicable to the situation, that's the one. If there are several, demand explicit cast.
 
-Can you see the interesting parallel with embedded objects and method forwarding? When calling an inexistant method on an object, check all embedded objects' methods, and if there is exactly one, forward to it. If there are more, demand explicit sub-object access. Fun.
+Can you see the interesting parallel with embedded objects and method forwarding? When calling an inexistent method on an object, check all embedded objects' methods, and if there is exactly one, forward to it. If there are more, demand explicit sub-object access. Fun.
 
 The complete method lookup algorithm is then as follows:
 
@@ -202,7 +200,7 @@ That would also allow writing methods for generic type templates:
 Other cool stuffs
 -----------------
 
-In the Box implementation, we use absolutely no method of the type T, only assignment and return, so Any is just fine. Note that we need to access the value explicitly. Real boxing would be nicer, with object embedding, for instance:
+In the Box implementation, we use absolutely no method of the type T, only assignment and return, so the Any constraint is just fine. Note that we need to access the value in the box explicitly. Real boxing would be nicer, with object embedding, for instance:
 
 	object NumBox
 		embed num
@@ -235,7 +233,7 @@ Foo satisfies the Any interface, so the type Box|Foo is well defined. Then, call
 
 This implies that the analyzer makes proper type substitution during validation. Earlier I wrote that putting interface constraints on type parameters made validation easier, and two-phased: the template, by itself (assume param T is of its interface constraint type). And later the use of the template with actual types (simply check that given types are compatible with the interface constraints).
 
-But it is not so simple. Sadly. Like in this example (fairly complex), but even in a simple one:
+But it is not so simple. Sadly. Other example:
 
 	object Array|(Any T)
 		#T data
@@ -245,16 +243,12 @@ But it is not so simple. Sadly. Like in this example (fairly complex), but even 
 		end
 	end
 
-This is a stupid pseudo-read-only wrapper for the array. Since the index method returns a T, the object's interface vary depending on T. Which means that at validation, we need to take this in account.
-
-I'm stating trivial things, but they will - again - make the compiler not so trivial. To validate:
+This is a stupid pseudo-read-only wrapper for the array. Since the index method returns a T, the object's interface vary depending on T. Which means that at validation, we need to take this in account. I'm stating trivial things, but they will - again - make the compiler not so trivial. To validate:
 
 	a = Array|num
 	b = a[5]
 
-we not only need the "is num an Any?" step for the first line, but also the "does Array|num answer to `[]:blob`, and if so, what is returned" (to which the answer should be yes, and a num).
-
-And implementing that might be a pain. Or it might be simple. My initial idea of "duplicate AST, substitute" is probably bad. There should be less state information, more dynamic "given this as type parameter, do you, template, answer to this message?".
+we not only need the "is num an Any?" step for the first line, but also the "does Array|num answer to `[]:blob`, and if so, what is returned" (to which the answer should be yes, and a num). And implementing that might be a pain. Or it might be simple. My initial idea of "duplicate AST, substitute" is probably bad. There should be less state information, more dynamic "given this as type parameter, do you, template, answer to this message?".
 
 And now I'm talking about classes, but interfaces have the same complexity or more:
 
@@ -278,7 +272,7 @@ Validating it is still fairly easy (we know what T can do, nothing, and what sel
 
 Can the casting from #num to Indexable|num happen automatically? When looking for `swap`, let's say the only one we find is the one in Indexable|(Any T). How do we know it's the num version we need? Should the analyzer have to solve the problem: "find a type T in category Any such that #num implements Indexable|T"?
 
-Unlikely. In fact it's pretty certain that no. A parametric type doesn't really exist until it is "instantiated" into a real one, and type inferrence can only go so far. Lookup of generic methods is done only inside real types. Period. Hence:
+Unlikely. In fact it's pretty certain that no. A parametric type doesn't really exist until it is "instantiated" into a real one, and type inference can only go so far. Lookup of generic methods is done only inside real types. Period. Hence:
 
 	arr = [1.0,2,3,4,5]
 	(arr to Indexable|num).swap(2,4)
@@ -286,3 +280,5 @@ Unlikely. In fact it's pretty certain that no. A parametric type doesn't really 
 Hey, num is an Any, so Indexable|num exists, and #num answers to `[]=(blob,num)` and `num [](blob)`, so #num is an Indexable|num, so the cast succeeds. And Indexable|num happens to answer to `swap(blob,blob)`, so all is well.
 
 The analyzer must be able to ask "do you, interface Indexable, given parameter num, answer to `swap(blob,blob)`?"
+
+Implementing this is gonna be a walk in the park. Ahem.
