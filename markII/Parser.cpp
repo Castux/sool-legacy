@@ -38,6 +38,7 @@ bool Parser::Parse()
 					return false;
 				else
 					context->classes.push_back(c);
+					context->globals.push_back(c);
 				break;
 			case Token::t_interface:
 				i = ParseInterface();
@@ -45,6 +46,7 @@ bool Parser::Parse()
 					return false;
 				else
 					context->interfaces.push_back(i);
+					context->globals.push_back(i);
 				break;
 			default:
 				AddError("expected class or extension definition", head->pos);
@@ -158,12 +160,13 @@ TemplateParam Parser::ParseTemplateParam()
 	TemplateParam res;
 	SourcePos start = head->pos;
 	
-	if(!Expect(Token::t_cname))
+	ClassName *c = ParseClassName();
+	if(!c)
 	{
 		AddInfo("as template parameter bound");
 		return res;
 	}
-	res.bound = head[-1].string;
+	res.bound = c;
 	
 	if(!Expect(Token::t_cname))
 	{
@@ -198,7 +201,7 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 		do
 		{
 			TemplateParam res = ParseTemplateParam();
-			if(res.bound == "" or res.name == "")
+			if(res.bound == NULL)
 			{
 				AddInfo("in template parameter list started here:", lparens, true);
 				delete params;
@@ -232,6 +235,8 @@ Extension *Parser::ParseExtension()
 	// Two possibilities here:
 	// class-name | CName template-def
 	// Super not LL(1)! Behold, mega look-ahead!
+	
+	// FIXME, this is broken, because the bound can be the application of a template itself
 	
 	if( head + 4 <= &tokens->back() &&
 		head[0].kind == Token::t_cname &&
@@ -419,13 +424,15 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	Prototype *p = new Prototype();
 	SourcePos start = head->pos;
 	
-	std::vector<Type> rtypes;
-	
 	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
 	{
+		std::vector<Type> rtypes;
+		
+		SourcePos rtype_start = head->pos;
+		
 		do
 		{
-			Type t = ParseType(&p->rtype_pos);
+			Type t = ParseType();
 			if(!t.cname)
 			{
 				AddInfo("as return type for method");
@@ -435,9 +442,10 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 			rtypes.push_back(t);
 			
 		} while(Accept(Token::t_comma));
+		
+		p->rtype = MultiType(rtypes);
+		p->rtype_pos = rtype_start.To(head[-1].pos);
 	}
-	
-	p->rtype = MultiType(rtypes);
 	
 	// Name
 	

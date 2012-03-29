@@ -24,7 +24,7 @@ class-params := 	'|' ( class-name | '(' list-class-name ')' )
 
 template-def :=		'|' '(' list-class-param-def ')'
 
-class-param-def :=	CName CName
+class-param-def :=	class-name CName
 
 type :=			class-name [ '?' ]
 

@@ -111,8 +111,12 @@ namespace sool
 	{
 		public:
 		
-		std::string		bound;
+		ClassName*		bound;
 		std::string		name;
+		
+		TemplateParam() : bound(NULL)
+		{
+		}
 	};
 	
 	class Global : public AST
@@ -125,7 +129,15 @@ namespace sool
 		SourcePos	name_pos;
 		
 		virtual std::string FancyName() = 0;
+		virtual bool IsClass() = 0;
+		
+		bool IsInterface()
+		{
+			return !IsClass();
+		}
 	};
+	
+	typedef std::map<std::string,Global*> GlobalMap;
 	
 	class Class : public Global
 	{
@@ -152,6 +164,10 @@ namespace sool
 		~Class();
 		
 		std::string KindToString();
+		bool IsClass()
+		{
+			return true;
+		};
 		
 		std::string FancyName();
 	};
@@ -196,6 +212,10 @@ namespace sool
 		~Interface();
 		
 		std::string FancyName();
+		bool IsClass()
+		{
+			return false;
+		};
 	};
 	
 	typedef std::map<std::string,Interface*> InterfaceMap;
@@ -207,6 +227,8 @@ namespace sool
 		std::vector<Class*> 		classes;
 		std::vector<Extension*>		extensions;
 		std::vector<Interface*>		interfaces;
+		
+		std::vector<Global*>		globals;		// For the sake of knowing in what order they appeared
 		
 		~Context();
 	};

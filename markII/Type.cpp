@@ -10,6 +10,12 @@ ClassName::ClassName()
 
 ClassNameMap ClassName::map;
 
+ClassName *ClassName::Build(std::string name)
+{
+	std::vector<ClassName*> params;
+	return Build(name, params);
+}
+
 ClassName *ClassName::Build(std::string name, std::vector<ClassName*> params)
 {
 	// Build signature
@@ -156,6 +162,7 @@ bool Type::operator!=(const Type& other)
 
 MultiType::MultiType()
 {
+	signature = "void";
 }
 
 MultiType::MultiType(Type t)

@@ -16,11 +16,10 @@ namespace sool
 		
 		Interface*		iface;		// The interface template
 		ClassNameMap	tmap;		// Maps template parameters to their actual binding (can be empty)
-		std::string		name;		// The full name, with template arguments
+		ClassName*		name;		// The full name, with template arguments
 		
 		std::vector<Prototype*>		pvec;		// the instance's prototypes		Don't write! Use AddProto!
 		ProtoMap					pmap;		// prototypes indexed by selector	Ditto
-		
 		
 		IfaceInst(Validator *vali, Interface *i);	// No parameter
 		bool Validate();
@@ -30,7 +29,22 @@ namespace sool
 		bool validated;
 	};
 	
-	typedef std::map<std::string,IfaceInst*> IfaceInstMap;
+	class ClassInst
+	{
+		public:
+		
+		Validator*		v;
+		
+		Class*			cl;		// Class template
+		ClassNameMap	tmap;	// Type parameters map
+		ClassName*		name;	// Full name
+		
+		ClassInst(Validator *vali, Class *c);	// No parameter
+		bool validated;
+	};
+	
+	typedef std::map<ClassName*,IfaceInst*> IfaceInstMap;
+	typedef std::map<ClassName*,ClassInst*> ClassInstMap;
 	
 	class Validator
 	{
@@ -47,26 +61,28 @@ namespace sool
 		
 		// Reindexing of AST nodes
 		
-		ClassMap				rawcmap;		// Indexing by name of raw classes (which are all considered templates)
-		InterfaceMap			rawimap;		// Indexing by name of raw interfaces (which are all considered templates)
-		std::vector<Global*>	globals;		// Shortcut list of all classes and interfaces
+		GlobalMap				global_map;		// Indexing by name of globals
 		
 		// Validator owned in-the-middle helper objects: the "real" classes and interfaces
 		// Don't write to them! Use AddIface() instead.
 		
 		std::vector<IfaceInst*>	ivec;			// Linear storage of interface instances
-		IfaceInstMap			imap;			// Indexing by full name of interface instances
+		IfaceInstMap			imap;			// Indexing by full name (as ClassName) of interface instances
+		
+		std::vector<ClassInst*> cvec;			// Linear storage of class instances
+		ClassInstMap			cmap;			// Indexing by ClassName of class instances
 		
 		bool CheckGlobalNames();
 		bool CheckTemplateParams();
 		void InstantiateParameterlessInterfaces();
 		
+		bool ValidateClassName(ClassName *cname, SourcePos pos = SourcePos());
 		bool ValidateType(Type &t, SourcePos pos = SourcePos());
 		bool ValidateType(MultiType &t, SourcePos pos = SourcePos());
 		
 		// Helpers
-		Global* LookupGlobal(std::string name);		// check both classes and interfaces in cmap and imap
 		void AddIface(IfaceInst* iface);			// add to both vector and name map
+		void AddClass(ClassInst* cl);				// add to both vector and name map
 		
 		
 		void AddError(std::string message, SourcePos position = SourcePos());

@@ -1,3 +1,4 @@
+#include <sstream>
 #include "Validator.hpp"
 
 using namespace sool;
@@ -9,7 +10,7 @@ using namespace sool;
 IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false)
 {
 	// No params, name is trivial
-	name = i->name;
+	name = ClassName::Build(i->name);
 }
 
 bool IfaceInst::Validate()
@@ -43,7 +44,6 @@ bool IfaceInst::Validate()
 		}
 	}
 	
-	
 	validated = true;
 	return true;
 }
@@ -56,6 +56,16 @@ void IfaceInst::AddProto(Prototype* p)
 	
 	pvec.push_back(p);
 	pmap[p->selector] = p;
+}
+
+/***************/
+/** ClassInst **/
+/***************/
+
+ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(false)
+{
+	// No params, name is trivial
+	name = ClassName::Build(c->name);
 }
 
 /***************/
@@ -107,6 +117,9 @@ bool Validator::Validate()
 			return false;
 	}
 	
+	for(uint i = 0 ; i < cvec.size() ; i++)
+		AddInfo("Class: " + cvec[i]->name->signature);
+	
 	AddInfo("context passed validation");
 	return true;
 }
@@ -115,41 +128,21 @@ bool Validator::Validate()
 
 bool Validator::CheckGlobalNames()
 {
-	// First classes
-	
-	for(uint i = 0 ; i < context->classes.size() ; i++)
+	for(uint i = 0 ; i < context->globals.size() ; i++)
 	{
-		Class *c = context->classes[i];
+		Global *g = context->globals[i];
 		
-		Class *prev = rawcmap[c->name];
+		Global *prev = global_map[g->name];
 		if(prev)
 		{
-			AddError(c->FancyName() + " was already defined", c->name_pos);
+			AddError(prev->FancyName() + " was already defined", g->name_pos);
 			AddInfo("here:", prev->name_pos);
 			return false;
 		}
 		
-		rawcmap[c->name] = c;
-		globals.push_back(c);
+		global_map[g->name] = g;
 	}
 	
-	// Then interfaces
-	
-	for(uint i = 0 ; i < context->interfaces.size() ; i++)
-	{
-		Interface *iface = context->interfaces[i];
-		
-		Global *g = LookupGlobal(iface->name);
-		if(g)
-		{
-			AddError(g->FancyName() + " was already defined", iface->name_pos);
-			AddInfo("here:", g->name_pos);
-			return false;
-		}
-		
-		rawimap[iface->name] = iface;
-		globals.push_back(iface);
-	}
 	
 	return true;
 }
@@ -158,16 +151,16 @@ bool Validator::CheckGlobalNames()
 
 bool Validator::CheckTemplateParams()
 {
-	for(uint i = 0 ; i < globals.size() ; i++)
+	for(uint i = 0 ; i < context->globals.size() ; i++)
 	{
-		Global *g = globals[i];
+		Global *g = context->globals[i];
 		
 		for(uint j = 0 ; j < g->params.size() ; j++)
 		{
 			// Conflict with global name
 			
 			TemplateParam *p = &g->params[j];
-			Global *other = LookupGlobal(p->name);
+			Global *other = global_map[p->name];
 			if(other)
 			{
 				AddError("template parameter shadows " + other->FancyName(), p->pos);
@@ -191,19 +184,6 @@ bool Validator::CheckTemplateParams()
 	}
 	
 	return true;
-}
-
-Global* Validator::LookupGlobal(std::string name)
-{
-	Interface *prev = rawimap[name];
-	if(prev)
-		return prev;
-	
-	Class *cl = rawcmap[name];
-	if(cl)
-		return cl;
-	
-	return NULL;
 }
 
 void Validator::InstantiateParameterlessInterfaces()
@@ -232,9 +212,88 @@ void Validator::AddIface(IfaceInst* iface)
 	imap[iface->name] = iface;
 }
 
+void Validator::AddClass(ClassInst* cl)
+{
+	// Sanity check
+	if(cmap[cl->name])
+		error("Validator::AddClass() - instance already present: " + cl->name->signature);
+	
+	cvec.push_back(cl);
+	cmap[cl->name] = cl;
+}
+
 bool Validator::ValidateType(Type &t, SourcePos pos)
 {
-	AddInfo("lol me plenty " + t.signature);
+	// It's really more about the ClassName inside
+	return ValidateClassName(t.cname, pos);
+}
+
+bool Validator::ValidateClassName(ClassName *cname, SourcePos pos)
+{
+	// First check if it already exists, as a class or interface
+	
+	ClassInst *c = cmap[cname];
+	if(c)
+		return true;
+	
+	IfaceInst *iface = imap[cname];
+	if(iface)
+		return true;
+	
+	// It doesn't. Now check that the base name exists
+	
+	Global *g = global_map[cname->name];
+	if(!g)
+	{
+		AddError("unknown class " + cname->name, pos);
+		return false;
+	}
+	
+	// Check that the number of params matches
+	
+	uint needed_num_params = g->params.size();
+	uint provided_num_params = cname->params.size();
+	
+	std::stringstream needed_s, provided_s;
+	needed_s << needed_num_params;
+	provided_s << provided_num_params;
+	
+	if(needed_num_params != provided_num_params)
+	{
+		SourcePos p;
+		if(needed_num_params == 0)
+			p = g->name_pos;
+		else
+			p = g->params.front().pos.To(g->params.back().pos);
+		
+		AddError(g->FancyName() + " used with " + provided_s.str() + " template parameter" + (provided_num_params != 1 ? "s" : ""), pos);
+		AddInfo("but declared with " + needed_s.str(), p);
+		return false;
+	}
+	
+	// Check that the given classes comply with the interfaces
+	// TODO
+	
+	// Recursively validate classnames
+	
+	for(uint i = 0 ; i < cname->params.size() ; i++)
+	{
+		if(!ValidateClassName(cname->params[i], pos))
+			return false;
+	}
+	
+	// Instantiate
+	// FIXME: put the subtypes...
+	if(g->IsClass())
+	{
+		ClassInst *inst = new ClassInst(this, (Class*) g);
+		AddClass(inst);
+	}
+	else
+	{
+		IfaceInst *inst = new IfaceInst(this, (Interface*) g);
+		AddIface(inst);
+	}
 	
 	return true;
 }

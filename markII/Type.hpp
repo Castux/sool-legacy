@@ -35,6 +35,7 @@ namespace sool
 		std::string signature;	// The full canonical name of the class, with '|' and parameters
 		
 		// Build an internized ClassName
+		static ClassName *Build(std::string name);
 		static ClassName *Build(std::string name, std::vector<ClassName*> params);
 		// Get a ClassName by signature
 		static ClassName *Get(std::string sig);
