@@ -1,8 +1,6 @@
 #include <sstream>
 
 #include "Type.hpp"
-#include "InterfaceAST.hpp"
-#include "Validator.hpp"
 
 using namespace sool;
 
@@ -94,7 +92,7 @@ void ClassName::Clear()
 		delete it->second;
 }
 
-ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &	tmap)
+ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 {
 	// Look for base name in replacement map
 	ClassNameMap::iterator it = tmap.find(name);

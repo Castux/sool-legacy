@@ -1,39 +1,47 @@
 -- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
 
-chunk :=	{ class-def }
+chunk :=		{ class-def | iface-def | extend-def }
 
-class-def :=	( 'object' | 'value' | 'extend' )
-				class-name
-				[ ':' class-name ]
-				composite-body
+class-def :=	( 'object' | 'value' )
+				CName
+				[ template-def ]
+				class-body
 				'end'
 
-class-name :=	( ( CName | 'num' | 'bool' | 'text' | 'blob' | 'data' )
-				[ template ] ) |
+iface-def :=	'interface' CName [ template-def ]
+				{ method-proto | 'embed' list-class-name }
+				'end'
+
+extend-def :=	'extend' ( class-name | CName template-def )
+				{ method-def }
+				'end'
+
+class-name :=	CName [ class-params ] |
+				'num' | 'bool' | 'text' | 'blob' | 'data' |
 				'#' class-name
 
-template := 	'|' ( class-name | '(' list-class-name ')' )
+class-params := 	'|' ( class-name | '(' list-class-name ')' )
+
+template-def :=		'|' '(' list-class-param-def ')'
+
+class-param-def :=	CName CName
 
 type :=			class-name [ '?' ]
 
-class-body :=	{ member-def | method-def | foreign-def }
+class-body :=	{ member-def | method-def | foreign-def |
+				'embed' list-class-name }
 
-member-def :=	[ 'shared' ] [ 'internal' ]
-				type Name
+member-def :=	[ 'shared' ] type Name
 				[ '=' exp ]
 
-method-def :=	[ 'internal' ]
-				( 'method' | 'selfless' )
-				[ list-type ]
-				method-name
-				'(' [ list-arg-def ] ')'
+method-def :=	( 'method' | 'selfless' )
+				method-proto
 				block
 				'end'
 
-foreign-def :=	[ 'internal' ] 'foreign'
-				[ type ]
-				Name
-				'(' [ list-arg-def ] ')'
+foreign-def :=	'foreign' method-proto
+
+method-proto :=	[ list-type ] method-name '(' [ list-arg-def ] ')'
 
 method-name :=	Name [ '=' ] |
 				binop | 
@@ -44,7 +52,7 @@ binop :=		'+' | '-' | '*' | '/' | '%' |
 				'~' | '<~' | '==' | '~=' | 'and' |
 				'or' | 'is' | 'isnot'
 
-arg-def :=		type Name
+arg-def :=		type [ Name ]
 
 block :=		{ statement }
 				[ final-statement ]
@@ -71,7 +79,7 @@ if-stat :=		'if' exp [ 'as' Name ] 'then' block
 
 assignment :=	list-left-value '=' list-exp
 
-left-value :=	[ class-name ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name ) ]
+left-value :=	[ class-name ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name | '.' class-name ) ]
 
 call-stat :=	method-call { exp-tail }
 
@@ -90,7 +98,7 @@ basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
 				{ exp-tail }
 
 atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
-				'self' | 'super'
+				'self'
 
 vec-cons :=		'<' list-basic-exp '>'
 
@@ -102,9 +110,9 @@ table-cons-pair :=	exp ':' exp
 
 object-cons :=	class-name [ array-cons | table-cons | with-cons | call-arg ]
 
-with-cons :=	'with' list-with-cons-pair 'end'
+with-cons :=	'(' list-with-cons-pair ')'
 
-with-cons-pair :=	Name '=' exp
+with-cons-pair :=	( Name | class-name ) '=' exp
 
 call-arg	:=	'(' [ list-exp ] ')' | String
 
@@ -112,4 +120,4 @@ exp-tail :=		indexing | message-sending
 
 indexing :=		'[' list-exp ']'
 
-message-sending := 	'.' Name [ call-arg ]
+message-sending := 	'.' ( Name [ call-arg ] | class-name )

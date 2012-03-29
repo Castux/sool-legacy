@@ -4,15 +4,14 @@
 KEYWORD(object)
 KEYWORD(value)
 KEYWORD(extend)
+KEYWORD(interface)
 
-// Member/method attributes
-KEYWORD(shared)
-KEYWORD(internal)
-
-// Methods
+// Class components
 KEYWORD(method)
 KEYWORD(selfless)
 KEYWORD(foreign)
+KEYWORD(embed)
+KEYWORD(shared)
 
 // Types
 KEYWORD(num)
@@ -50,10 +49,8 @@ KEYWORD(true)
 KEYWORD(false)
 KEYWORD(nil)
 KEYWORD(self)
-KEYWORD(super)
 
 // Miscellaneous
-KEYWORD(with)
 KEYWORD(end)
 
 // Punctuation

@@ -4,22 +4,16 @@
 #include "common.hpp"
 #include "Report.hpp"
 #include "Token.hpp"
-#include "InterfaceAST.hpp"
+#include "AST.hpp"
 
 namespace sool
 {
-	struct ParseResult
-	{
-		std::vector<Class*> 	*classes;
-		std::vector<Extension*>	*extensions;
-	};
-	
 	class Parser
 	{
 		public:
 		
 		Report report;
-		ParseResult result;
+		Context context;
 		
 		// Parsing context
 		std::vector<Token>		*tokens;	//owned
@@ -33,12 +27,16 @@ namespace sool
 		private:
 		
 		Class* ParseClass();
-		bool ParseNameOfClass(Class *c);
+		TemplateParam ParseTemplateParam();
+		std::vector<TemplateParam>* ParseTemplateParams();
 		Extension* ParseExtension();
 		Type ParseType(SourcePos *pos = NULL);
 		ClassName* ParseClassName();
+		Prototype* ParsePrototype(bool expect_arg_names);
 		Method* ParseMethod();
 		Member* ParseMember();
+		Interface* ParseInterface();
+		std::vector<ClassName*>* ParseEmbed();
 		
 		bool Expect(Token::Kind k);
 		bool Accept(Token::Kind k);

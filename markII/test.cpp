@@ -7,7 +7,6 @@
 #include "Token.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
-#include "Validator.hpp"
 
 using namespace sool;
 
@@ -58,14 +57,6 @@ int main(int argc, char **argv)
 	if(parser.report.numerror > 0)
 		return 1;
 	
-	Validator validator;
-	validator.Validate(parser.result);
-	
-	validator.report.Print();
-	
-	// For now
-	
-	delete validator.context;
 	ClassName::Clear();
 	
 	return 0;
