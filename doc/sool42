@@ -1,0 +1,204 @@
+Generics vs. template, round 2
+==============================
+
+Sitrep: we have interfaces, which simply define method sets. Interfaces are used:
+
+1. as bounds for template parameters (requiring compliance with the interface)
+2. as generic types (to which can be casted any compliant class)
+
+The major difference being that in templates, a given parameter is bound to a single class, allowing code regeneration and static binding, while generic types can hold instances of all compliant classes, and are dynamically bounded with virtual tables.
+
+Generic types have advantages (shorter and more elegant code, no need for parameters, smaller binaries), and drawbacks (dynamic dispatch is slower, value classes need to be boxed). Templates are the symmetrical opposite: they require defining full classes, explicit use of parameters, they can be a bit awkward, and they generate more machine code. But the early binding make the final code much faster.
+
+And in certain cases, it is impossible to do without templates, because generics just don't have enough expressive power. In particular, one cannot downcast from a generic to its original class, which restricts their use. Casting to a generic gives a class new features, but removes all the others. That's fine when applying algorithms to existing data, but for instance it's a very bad idea to store things as generics.
+
+This balance in features and usability is what makes both generics and templates useful. Like classes of characters in a video game: the scout is very fast, but poorly protected and armed, whereas the tank is very slow but powerful and heavily armored. We need both, because they each fit a different need and situation.
+
+Now, however, from a coder's point of view, the important things (at first sight) are:
+
+- ease of coding
+- performance
+
+In our modern world where family computers come with 8 GB of RAM and hard drives of 2 TB, memory is less of a problem than 20 years ago. Therefore, small binary size could be put to a lower priority for a while.
+
+How can we combine the generics' ease of coding with the performance of templates?
+
+An example
+----------
+
+Let's take back our sorting example. Whether we want templates or generics, we'll have to define an interface:
+
+	interface Sortable
+		uint len()
+		bool less(uint,uint)
+		swap(uint,uint)
+	end
+
+With appropriate wrapping, an array of numbers (for instance) would comply with this interface and be a good candidate. This require writing some extensions to #num:
+
+	extend #num
+		method bool less(uint i, uint j)
+			return self[i] < self[j]
+		end
+		-- etc
+	end
+
+Now let's write the algorithm as a generic. Thanks to awesomeness, we can directly write a method for the generic class Sortable:
+
+	extend Sortable
+		method quicksort()
+			-- do things with len(), less() and swap()
+			-- called directly as methods to self
+		end
+		
+		method mergesort()
+			--
+		end
+		
+		method bogosort()
+			--
+		end
+	end
+
+And then, by the magic of generic types, I can write directly things such as:
+
+	arr = [num:pi, 2.34, 1000, -6e4]
+	arr.quicksort
+
+And we know that this will be translated to:
+
+	(arr to Sortable).quicksort
+
+where the cast builds a virtual table that gathers the `len`, `less` and `swap` methods of `#num`. Beautiful. But perhaps a bit slow, because of dynamic dispatch. The good sorting algorithms are in `O(n*log(n))`, so that's something like `n*log(n)` dynamic calls. Well.
+
+Suppose it's in a critical part of your program, and it's not fast enough. We decide to write it with templates instead. First, the only thing can be parametrized is classes. Therefore, we need to write a full class.
+
+The first solution is to write the algorithms as selfless methods (ie. functions), that take the container as parameter, and sorts it "externally" by calling methods on it. This requires a bogus class to hold them, since functions cannot exist globally:
+
+	object Sorter|(Sortable T)
+		
+		selfless quicksort(T t)
+			-- sort by using t.len, t.less, t.swap
+		end
+		
+		selfless bogosort(T t) end
+		
+	end
+
+And it's used as selfless method calls (note that again, #num will need to be extended to comply with the interface, no change there):
+
+	arr = [num:pi, 5.0, 2^1.2]
+	Sorter|#num:bogosort(arr)
+
+Far less pretty, much faster at runtime.
+
+Second solution: build a new class, dependent on a parameter, which is *itself* the sortable, so that we can write the methods on it:
+
+	value Sorter|(Sortable T)
+		embed T
+		
+		method sort()
+			-- since we embed T, and T is Sortable, we get the fancy
+			-- shortcuts to T's methods:
+			-- we can use len(), swap() and less() directly on self
+		end
+	end
+
+And to use:
+
+	arr = [3,4,2,5]
+	sorter = Sorter|#num(#num = arr)	-- embed array in the sorter
+	sorter.sort
+
+Of course, `arr` being an array, the data is shared, and the intended effect is reached: `arr` is sorted. If you lose `arr`, you can even get it back: `arr = sorter.#num`.
+
+Note that I used a value class, and not an object class. That is simply to avoid one additional level of dereference. In C terms, `sorter` is a struct, and therefore contains directly the reference to the array, access is `sorter.embedded[i];`. If it was an object class, the instantiation `sorter = Sorter|#num(...)` would have allocated a bit of memory on the heap, containing only the array reference, and then array access would have been (in C terms) `sorter->embedded[i];`.
+
+Note also that for the previous version, the dummy class Sorter can be either value or object, it doesn't matter. We only use the selfless methods, so nothing is instantiated.
+
+In any case, both the template version look clumsy. That's the price for speed. The generic version looks much better, but involves dynamic dispatch, which is slower.
+
+Could there be a compromise?
+
+Generic to template promotion
+-----------------------------
+
+Take our good old Runner interface:
+
+	interface Runner
+		run()
+	end
+
+And imagine an unrelated object that uses the generic type Runner:
+
+	object Unrelated
+		num i
+		method run_i_times(Runner r)
+			for k in i do
+				r.run
+			end
+		end
+	end
+
+Normally, when the backend writes the `void:run_i_times:Runner` method, it assumes that `r` is of generic type Runner, ie. a pointer to the object, and a virtual table with a pointer to its implementation of `void:run:void`. And the `r.run` call is written `r.vtable[index_of_run_method](r.object)`.
+
+But imagine that this code appears somewhere:
+
+	unr = Unrelated(i = 5)
+	cat = Cat		-- Cat complies with Runner
+	unr.run_i_times(cat)
+
+Normally, `cat` would be casted to a generic Runner. But semantically, does it really need to? After all, in `run_i_times`, the only thing that happens to `r` is being call `run` upon. And from the outer code, we *know* for a fact that `cat` is a Cat.
+
+We *could* generate a specific version of `run_i_times` for Cats, and call this one. In that case, everything would be statically bound. Best of both worlds: the method is written for a generic, but it's used as a template, generating early bound code. Magic!
+
+I see two ways this could happen:
+
+1. like other languages' function templates: the method is in fact a template, and using it instantiate it for a given class, and relevant code is generated
+2. as a form of inlining: especially for small functions, the high-level code could be included in the calling method, which would have more type information, and be able to statically bind
+
+What are the conditions for this? See a more general example:
+
+	method make_run(Runner a, Runner b)
+		a.run
+		b.run
+	end
+
+1. only if all the generic arguments are known to be of the same type, like if you call `obj.make_run(cat1,cat2)`. Then the compiler generate an "only Cat" version of `make_run`
+2. fully templated: every generic argument is turned into a parameter, and you can call `make_run(cat,dog)`, `make_run(dog,cat)`, `make_run(horse,lion)` and the compiler will generate code for each: `make_run:Cat,Dog`, `make_run:Dog,Cat`, `make_run:Horse,Lion`. With M classes that comply with Runner, that's potentially M*M template instantiations. With three generic parameters, M cubed.
+
+Every other case would fall back to the normal use of generic types and dynamic dispatch. Option 1 is fairly restrictive, but it works well for all methods that take a single generic argument. Option 2 is more flexible, but like anything with templates, it can grow out of control very fast. If the method is a very well used one, with many different combinations of types, you end up with a gigantic bloated binary. Fast, but big. Always the same compromise.
+
+Maybe a reasonable middle point would be to allow automatic template generation if and only if exactly one argument is generic. In any case, there could be a compiler option to control that (`-fno-template-promotion` or something).
+
+Maybe a better reasonable middle point would be to limit it to inlining cases. If the method is small enough, inline it, and while you're at it, statically bind what you can. I had not envisioned writing inlining for my compiler, hoping that LLVM would gladly do it in the back-end. But why not.
+
+Note also that when I write "one argument", it could also be the message receiver. After all, `self` is an argument, albeit special.
+
+	interface Runner
+		run()
+	end
+	
+	extend Runner
+		method run_twice()
+			run
+			run
+		end
+	end
+
+`run_twice` is a generic method, expecting `self` to be generic, but the same argument applies: if the caller code knows the type, it could be statically bound by using it as a template:
+
+	cat = Cat()
+	cat.run_twice
+	
+	-- is normally:
+	(cat to Runner).run_twice
+	
+	-- could be:
+	cat.cat_version_of_run_twice
+
+Sooooo yeah. Interesting possibility. Semantically it is absolutely equivalent, since the generic objects cannot be casted back to their original type. So, whatever happens in these methods stays in these methods anyway.
+
+Like I said, it's more of an optimization problem, that applies only to specific situations. Some things cannot be written with generic types, and even the template system is a restrictive  which makes some problems not solvable with it either. In any case, optimization will come *after* the compiler is functional. I'm writing this just because it's interesting.
+
+In the end, some things will always require writing more code. But the examples speak for themselves. Generics are elegant to write, so if in certain cases they can be made as efficient as templates, I'm all for it.
