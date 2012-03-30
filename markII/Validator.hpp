@@ -18,7 +18,7 @@ namespace sool
 		ClassNameMap	tmap;		// Maps template parameters to their actual binding (can be empty)
 		ClassName*		name;		// The full name, with template arguments
 		
-		std::vector<Prototype*>				pvec;		// the instance's prototypes		Only own very own, not the embedded!
+		std::vector<Prototype*>				pvec;		// the instance's prototypes		DONT WRITE (use AddProto)
 		ProtoMap							pmap;		// prototypes indexed by selector	DONT WRITE (use AddProto)
 		std::map<Prototype*,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones) DONT WRITE (use AddProto)
 		
