@@ -27,10 +27,30 @@ IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> para
 	name = ClassName::Build(i->name, params);
 }
 
+std::vector<IfaceInst*> IfaceInst::validation_stack;
+
 bool IfaceInst::Validate()
 {
 	if(validated)
 		return true;
+	
+	if(validating)
+	{
+		v->AddError("self embedding of interface " + name->signature + " detected");
+		
+		std::string tmp;
+		for(uint i = 0 ; i < validation_stack.size() ; i++)
+			tmp += validation_stack[i]->name->signature + " embeds ";
+		
+		tmp += name->signature;
+		
+		v->AddInfo(tmp);
+		
+		return false;
+	}
+	
+	validating = true;
+	validation_stack.push_back(this);
 	
 	// Interfaces are pretty straightforward. The only thing that can go
 	// wrong is to have two methods with the same selector but a different
@@ -40,9 +60,68 @@ bool IfaceInst::Validate()
 	
 	bool success;
 	
+	// Deal with embedding. We simply add the method set and check for selector conflicts.
+	// This requires the other interfaces to have been validated first
+	// Hence recursive call, and self-embedding guard.
+	
+	for(uint i = 0 ; i < iface->embeds.size() ; i++)
+	{
+		// Apply template parameters
+		ClassName *cn = iface->embeds[i]->ReplaceTemplateParams(tmap);
+		
+		// Make sure instance exists
+		success = v->ValidateClassName(cn, iface->embed_pos[i]);
+		if(!success)
+			return false;
+		
+		// Get instance
+		IfaceInst *inst = v->imap[cn];
+		if(!inst)
+		{
+			// It's probably not an interface, then
+			ClassInst *cinst = v->cmap[cn];
+			if(cinst)
+			{
+				v->AddError("cannot embed class in interface", iface->embed_pos[i]);
+				v->AddInfo(cinst->name->signature + " declared a class here:", cinst->cl->pos.To(cinst->cl->name_pos));
+				return false;
+			}
+			else
+				error("IfaceInst::Validate() - no instance found");
+		}
+		
+		// Validate it first
+		success = inst->Validate();
+		if(!success)
+			return false;
+		
+		// Retrieve method set!
+		std::vector<Prototype*> *protos = &inst->pvec;
+		
+		// Add them with conflict check
+		for(uint j = 0 ; j < protos->size() ; j++)
+		{
+			Prototype *proto = (*protos)[j];
+			
+			Prototype *other = pmap[proto->selector];
+			if(other && proto->rtype != other->rtype)
+			{
+				v->AddError("cannot embed interface " + inst->name->signature + " in " + name->signature, iface->embed_pos[i]);
+				v->AddInfo("method " + proto->selector + " was already declared with a different return type", proto->pos);
+				v->AddInfo("here:", other->pos);
+				return false;
+			}
+			
+			if(!other)
+				AddProto(proto);
+		}
+	}
+	
+	// Then own methods
+	
 	for(uint i = 0 ; i < iface->protos.size() ; i++)
 	{
-		// Instantiate template
+		// Instantiate prototype template
 		Prototype *p = iface->protos[i]->ReplaceTemplateParams(tmap);
 		
 		// Check types' validity
@@ -56,9 +135,23 @@ bool IfaceInst::Validate()
 			if(!success)
 				return false;
 		}
+		
+		// Check selector conflicts
+		Prototype *other = pmap[p->selector];
+		if(other && p->rtype != other->rtype)
+		{
+			v->AddError("method " + p->selector + " was already declared with a different return type", p->pos);
+			v->AddInfo("here:", other->pos);
+			return false;
+		}
+		
+		if(!other)
+			AddProto(p);
 	}
 	
 	validated = true;
+	validating = false;
+	validation_stack.pop_back();
 	return true;
 }
 
@@ -150,7 +243,11 @@ bool Validator::Validate()
 	for(uint i = 0 ; i < cvec.size() ; i++)
 		AddInfo("Class: " + cvec[i]->name->signature);
 	for(uint i = 0 ; i < ivec.size() ; i++)
-		AddInfo("Iface: " + ivec[i]->name->signature);
+	{
+		AddInfo("------\nIface: " + ivec[i]->name->signature);
+		for(uint j = 0 ; j < ivec[i]->pvec.size() ; j++)
+			AddInfo("\t" + ivec[i]->pvec[j]->signature);
+	}
 	
 	AddInfo("context passed validation");
 	return true;
@@ -304,7 +401,8 @@ bool Validator::ValidateClassName(ClassName *cname, SourcePos pos)
 	}
 	
 	// Check that the given classes comply with the interfaces
-	// TODO
+	// FIXME: we might need to do it at a later phase, when interfaces are full (just don't forget)
+    // For instance when checking the class itself?
 	
 	// Recursively validate classnames
 	

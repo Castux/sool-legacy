@@ -209,6 +209,8 @@ namespace sool
 		std::vector<ClassName*>		embeds;		// Embedded interfaces
 		std::vector<Prototype*>		protos;		// Owned
 		
+		std::vector<SourcePos>		embed_pos;
+		
 		~Interface();
 		
 		std::string FancyName();

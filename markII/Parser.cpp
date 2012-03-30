@@ -666,12 +666,20 @@ Interface* Parser::ParseInterface()
 	{
 		if(head->kind == Token::t_embed)
 		{
+			SourcePos embed_start = head->pos;
+			
 			std::vector<ClassName*> *embeds = ParseEmbed();
 			if(!embeds)
 			{
 				delete i;
 				return NULL;
 			}
+			
+			SourcePos embed_pos = embed_start.To(head[-1].pos);
+			
+			for(uint k = 0 ; k < embeds->size() ; k++)
+				i->embed_pos.push_back(embed_pos);
+			
 			i->embeds.insert(i->embeds.end(), embeds->begin(), embeds->end());
 			delete embeds;
 		}

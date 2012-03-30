@@ -26,8 +26,10 @@ namespace sool
 		bool Validate();
 		void AddProto(Prototype* p);
 		
-		// Overwork guard
+		// Guards
 		bool validated;
+		bool validating;
+		static std::vector<IfaceInst*> validation_stack;
 	};
 	
 	class ClassInst
