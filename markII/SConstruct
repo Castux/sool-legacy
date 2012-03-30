@@ -1,12 +1,14 @@
 env = Environment()
 
-#env['CXX'] = 'g++'
-#env.Append(CXXFLAGS = ['-Wall'])
-env['CXX'] = 'clang++'
-env.Append(CXXFLAGS = ['-Wall','-fcolor-diagnostics'])
+cc = ARGUMENTS.get('cc','clang++')
+if cc == 'clang++':
+	env['CXX'] = 'clang++'
+	env.Append(CXXFLAGS = ['-Wall','-fcolor-diagnostics'])
+elif cc == 'g++':
+	env['CXX'] = 'g++'
+	env.Append(CXXFLAGS = ['-Wall'])
 
 btype = ARGUMENTS.get('build','debug')  # Defaults to debug
-
 if btype == 'debug':
 	env.Append(CXXFLAGS = '-g')
 elif btype == 'release':

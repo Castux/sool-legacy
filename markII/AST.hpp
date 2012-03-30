@@ -60,7 +60,7 @@ namespace sool
 		bool					setter;
 		std::vector<Argument>	args;
 		
-		SourcePos	rtype_pos;
+		SourcePos				rtype_pos;
 		
 		// Computed
 		

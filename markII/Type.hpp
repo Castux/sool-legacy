@@ -20,8 +20,7 @@ namespace sool
 	
 	class ClassName
 	{
-		// private: FIXME
-		public:
+		private:
 		
 		static ClassNameMap map;	// The map used for internizing: indexed by signature
 		

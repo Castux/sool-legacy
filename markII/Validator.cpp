@@ -27,6 +27,12 @@ IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> para
 	name = ClassName::Build(i->name, params);
 }
 
+IfaceInst::~IfaceInst()
+{
+	for(uint i = 0 ; i < pvec.size() ; i++)
+		delete pvec[i];
+}
+
 std::vector<IfaceInst*> IfaceInst::validation_stack;
 
 bool IfaceInst::Validate()
@@ -123,6 +129,7 @@ bool IfaceInst::Validate()
 	{
 		// Instantiate prototype template
 		Prototype *p = iface->protos[i]->ReplaceTemplateParams(tmap);
+		pvec.push_back(p);
 		
 		// Check types' validity
 		success = v->ValidateType(p->rtype, p->rtype_pos);
@@ -162,7 +169,6 @@ void IfaceInst::AddProto(Prototype* p, IfaceInst* origin)
 	if(pmap[p->selector])
 		error("IfaceInst::AddProto() - prototype already present");
 	
-	pvec.push_back(p);
 	pmap[p->selector] = p;
 	porigin[p] = origin ? origin : this;
 }
@@ -205,6 +211,9 @@ Validator::~Validator()
 {
 	for(uint i = 0 ; i < ivec.size() ; i++)
 		delete ivec[i];
+		
+	for(uint i = 0 ; i < cvec.size() ; i++)
+		delete cvec[i];
 }
 
 void Validator::AddError(std::string message, SourcePos position)
