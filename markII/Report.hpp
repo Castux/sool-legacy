@@ -29,8 +29,6 @@ namespace sool
 		// Pretty print the diagnostic with colors and all!
 		std::string ToString();
 		
-		private:
-		
 		// Colorize with ANSI escapes, from column begin to end
 		// Defaults to the whole string
 		// Cd is for the dark colors

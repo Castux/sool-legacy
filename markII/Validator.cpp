@@ -7,13 +7,13 @@ using namespace sool;
 /** IfaceInst **/
 /***************/
 
-IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false)
+IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false), validating(false)
 {
 	// No params, just set the name
 	name = ClassName::Build(i->name);
 }
 
-IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params) : v(vali), iface(i), validated(false)
+IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params) : v(vali), iface(i), validated(false), validating(false)
 {
 	// Sanity check
 	if(i->params.size() != params.size())
@@ -82,7 +82,7 @@ bool IfaceInst::Validate()
 			ClassInst *cinst = v->cmap[cn];
 			if(cinst)
 			{
-				v->AddError("cannot embed class in interface", iface->embed_pos[i]);
+				v->AddError("cannot embed class in interface", this, iface->embed_pos[i]);
 				v->AddInfo(cinst->name->signature + " declared a class here:", cinst->cl->pos.To(cinst->cl->name_pos));
 				return false;
 			}
@@ -106,14 +106,14 @@ bool IfaceInst::Validate()
 			Prototype *other = pmap[proto->selector];
 			if(other && proto->rtype != other->rtype)
 			{
-				v->AddError("cannot embed interface " + inst->name->signature + " in " + name->signature, iface->embed_pos[i]);
-				v->AddInfo("method " + proto->selector + " was already declared with a different return type", proto->pos);
-				v->AddInfo("here:", other->pos);
+				v->AddError("cannot embed interface " + inst->name->signature + " in " + name->signature, this, iface->embed_pos[i]);
+				v->AddInfo("method " + proto->signature + " was already declared with a different return type (" + other->rtype.signature + ")", inst, proto->pos);
+				v->AddInfo("here:", porigin[other], other->pos);
 				return false;
 			}
 			
 			if(!other)
-				AddProto(proto);
+				AddProto(proto, inst);
 		}
 	}
 	
@@ -140,8 +140,8 @@ bool IfaceInst::Validate()
 		Prototype *other = pmap[p->selector];
 		if(other && p->rtype != other->rtype)
 		{
-			v->AddError("method " + p->selector + " was already declared with a different return type", p->pos);
-			v->AddInfo("here:", other->pos);
+			v->AddError("method " + p->signature + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
+			v->AddInfo("here:", porigin[other], other->pos);
 			return false;
 		}
 		
@@ -152,10 +152,11 @@ bool IfaceInst::Validate()
 	validated = true;
 	validating = false;
 	validation_stack.pop_back();
+	
 	return true;
 }
 
-void IfaceInst::AddProto(Prototype* p)
+void IfaceInst::AddProto(Prototype* p, IfaceInst* origin)
 {
 	// Sanity check
 	if(pmap[p->selector])
@@ -163,19 +164,20 @@ void IfaceInst::AddProto(Prototype* p)
 	
 	pvec.push_back(p);
 	pmap[p->selector] = p;
+	porigin[p] = origin ? origin : this;
 }
 
 /***************/
 /** ClassInst **/
 /***************/
 
-ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(false)
+ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(false), validating(false)
 {
 	// No params, name is trivial
 	name = ClassName::Build(c->name);
 }
 
-ClassInst::ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params) : v(vali), cl(c), validated(false)
+ClassInst::ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params) : v(vali), cl(c), validated(false), validating(false)
 {
 	// Sanity check
 	if(c->params.size() != params.size())
@@ -215,6 +217,54 @@ void Validator::AddInfo(std::string message, SourcePos position)
 	report.Add("validator", Diagnostic::Info, message, position);
 }
 
+void Validator::AddInfo(std::string message, IfaceInst *inst, SourcePos position)
+{
+	// If inst happens to be a template instantiation, it can be usefull to remind it
+	if(!inst->tmap.empty())
+	{
+		std::string tmp = " [" + inst->name->signature + " instance of interface template " + inst->iface->name + "]";
+		message += Diagnostic::C(tmp,0);
+	}
+	
+	AddInfo(message, position);
+}
+
+void Validator::AddInfo(std::string message, ClassInst *inst, SourcePos position)
+{
+	// If inst happens to be a template instantiation, it can be usefull to remind it
+	if(!inst->tmap.empty())
+	{
+		std::string tmp = " [" + inst->name->signature + " instance of class template " + inst->cl->name + "]";
+		message += Diagnostic::C(tmp,0);
+	}
+	
+	AddInfo(message, position);
+}
+
+void Validator::AddError(std::string message, IfaceInst *inst, SourcePos position)
+{
+	// If inst happens to be a template instantiation, it can be usefull to remind it
+	if(!inst->tmap.empty())
+	{
+		std::string tmp = " [" + inst->name->signature + " instance of interface template " + inst->iface->name + "]";
+		message += Diagnostic::C(tmp,0);
+	}
+	
+	AddError(message, position);
+}
+
+void Validator::AddError(std::string message, ClassInst *inst, SourcePos position)
+{
+	// If inst happens to be a template instantiation, it can be usefull to remind it
+	if(!inst->tmap.empty())
+	{
+		std::string tmp = " [" + inst->name->signature + " instance of class template " + inst->cl->name + "]";
+		message += Diagnostic::C(tmp,0);
+	}
+	
+	AddError(message, position);
+}
+
 bool Validator::Validate()
 {
 	bool success;
@@ -244,7 +294,7 @@ bool Validator::Validate()
 		AddInfo("Class: " + cvec[i]->name->signature);
 	for(uint i = 0 ; i < ivec.size() ; i++)
 	{
-		AddInfo("------\nIface: " + ivec[i]->name->signature);
+		AddInfo("------Iface: " + ivec[i]->name->signature);
 		for(uint j = 0 ; j < ivec[i]->pvec.size() ; j++)
 			AddInfo("\t" + ivec[i]->pvec[j]->signature);
 	}

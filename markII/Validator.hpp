@@ -18,13 +18,14 @@ namespace sool
 		ClassNameMap	tmap;		// Maps template parameters to their actual binding (can be empty)
 		ClassName*		name;		// The full name, with template arguments
 		
-		std::vector<Prototype*>		pvec;		// the instance's prototypes		Don't write! Use AddProto!
-		ProtoMap					pmap;		// prototypes indexed by selector	Ditto
+		std::vector<Prototype*>				pvec;		// the instance's prototypes		Don't write! Use AddProto!
+		ProtoMap							pmap;		// prototypes indexed by selector	Ditto
+		std::map<Prototype*,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
 		
 		IfaceInst(Validator *vali, Interface *i);	// No parameter
 		IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params);	// With parameters, given in order
 		bool Validate();
-		void AddProto(Prototype* p);
+		void AddProto(Prototype* p, IfaceInst* origin = NULL);		// Insert prototype in all the different indexings of it. By default, origin is oneself
 		
 		// Guards
 		bool validated;
@@ -45,6 +46,7 @@ namespace sool
 		ClassInst(Validator *vali, Class *c);	// No parameter
 		ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params);	// With parameters, given in order
 		bool validated;
+		bool validating;
 	};
 	
 	typedef std::map<ClassName*,IfaceInst*> IfaceInstMap;
@@ -91,6 +93,11 @@ namespace sool
 		
 		void AddError(std::string message, SourcePos position = SourcePos());
 		void AddInfo(std::string message, SourcePos position = SourcePos());
+		void AddError(std::string message, ClassInst *inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
+		void AddError(std::string message, IfaceInst *inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
+		void AddInfo(std::string message, ClassInst *inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
+		void AddInfo(std::string message, IfaceInst *inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
+		
 	};
 };
 
