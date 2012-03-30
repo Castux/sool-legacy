@@ -176,6 +176,21 @@ void IfaceInst::AddProto(Prototype* p, IfaceInst* origin)
 	porigin[p] = origin ? origin : this;
 }
 
+bool IfaceInst::Contains(Prototype *p)
+{
+	if(!validated)
+		error("IfaceInst::Contains() - iface not validated");
+	
+	Prototype *own = pmap[p->selector];
+	if(!own)
+		return false;
+	
+	if(own->rtype == p->rtype)
+		return true;
+	
+	return false;
+}
+
 /***************/
 /** ClassInst **/
 /***************/
@@ -200,7 +215,155 @@ ClassInst::ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params) 
 	name = ClassName::Build(c->name, params);
 }
 
+ClassInst::~ClassInst()
+{
+	for(uint i = 0 ; i < members.size() ; i++)
+		delete members[i];
+		
+	for(uint i = 0 ; i < pvec.size() ; i++)
+		delete pvec[i];
+}
 
+std::vector<ClassInst*> ClassInst::validation_stack;
+
+bool ClassInst::Validate()
+{
+	if(validated)
+		return true;
+	
+	if(validating)
+	{
+		v->AddError("self embedding of class " + name->signature + " detected");
+		
+		std::string tmp;
+		for(uint i = 0 ; i < validation_stack.size() ; i++)
+			tmp += validation_stack[i]->name->signature + " embeds ";
+		
+		tmp += name->signature;
+		
+		v->AddInfo(tmp);
+		
+		return false;
+	}
+	
+	validating = true;
+	validation_stack.push_back(this);
+	
+	// Validating classes is also pretty easy, because lots of shadowing
+	// is allowed: embeds are really just members, and if there are name
+	// conflicts, the top level ones win. We don't even have to check here,
+	// that's done by the Answers() lookup. Badass.
+	
+	// And always convert types, we have to assume that we're dealing with
+	// a template
+	
+	bool success;
+	
+	// Check that we don't embed a same class multiple times
+	
+	for(uint i = 0 ; i < cl->embeds.size() ; i++)
+	{
+		// Apply template parameters
+		ClassName *cn = cl->embeds[i]->ReplaceTemplateParams(tmap);
+		
+		// Make sure instance exists
+		success = v->ValidateClassName(cn, cl->embed_pos[i]);
+		if(!success)
+			return false;
+		
+		// Get instance
+		GlobalInst *inst = v->GetGlobal(cn);
+		if(!inst)
+			error("ClassInst::Validate() - no instance found");
+		
+		// Make sure it's valid
+		success = inst->Validate();
+		if(!success)
+			return false;
+		
+		Type type = Type(cn,false);		// false for non optional
+		
+		// Prevent multiple embedding of same class
+		// As of now there are only embeddings, so a type check is enough
+		for(uint j = 0 ; j < members.size() ; j++)
+		{
+			if(members[j]->type == type)
+			{
+				v->AddError("attempting to embed class " + cn->signature + " several times", this, cl->embed_pos[i]);
+				v->AddInfo("previous embedding was here:", this, cl->embed_pos[j]);		// Embeds are added in the same order as they appears, so 'j' should be fine
+				return false;
+			}
+		}
+		
+		// Fine, embed.
+		Member *m = new Member;
+		m->type = type;
+		m->name = cn->signature;
+		m->pos = cl->embed_pos[i];
+		m->type_pos = cl->embed_pos[i];
+		m->name_pos = cl->embed_pos[i];
+		
+		AddMember(m);
+	}
+	
+	// Now deal with the regular members
+	
+	
+	
+	
+	validated = true;
+	validating = false;
+	validation_stack.pop_back();
+	
+	return true;
+}
+
+void ClassInst::AddMember(Member *m)
+{
+	members.push_back(m);
+	
+	// Getter
+	Prototype *p = new Prototype;
+	
+	p->rtype = m->type;
+	p->name = m->name;
+	p->setter = false;
+	
+	p->pos = m->pos;
+	p->rtype_pos = m->type_pos;
+
+	p->ComputeSignature();
+	
+	AddProto(p);
+	
+	// Setter
+	p = new Prototype;
+	
+	p->rtype = MultiType();		// void
+	p->name = m->name;
+	p->setter = true;
+	
+	Prototype::Argument arg;
+	arg.type = m->type;
+	arg.pos = m->pos;
+	p->args.push_back(arg);
+
+	p->pos = m->pos;
+
+	p->ComputeSignature();
+	
+	AddProto(p);
+}
+
+void ClassInst::AddProto(Prototype *p)
+{
+	// Sanity check
+	if(pmap[p->selector])
+		error("ClassInst::AddProto() - prototype already present: " + p->selector);
+	
+	pvec.push_back(p);
+	pmap[p->selector] = p;
+}
 
 /***************/
 /** Validator **/
@@ -289,21 +452,20 @@ bool Validator::Validate()
 	if(!success)
 		return false;
 	
-	InstantiateParameterlessInterfaces();
-	
-	// From there initiate validation of single interfaces. If required,
-	// other instances will be added at the vector's end, and validations
-	// will be launched recursively
-	
-	for(uint i = 0 ; i < ivec.size() ; i++)
-	{
-		success = ivec[i]->Validate();
-		if(!success)
-			return false;
-	}
+	success = ValidateParameterlessInterfaces();
+	if(!success)
+		return false;
+		
+	success = ValidateParameterlessClasses();
+	if(!success)
+		return false;
 	
 	for(uint i = 0 ; i < cvec.size() ; i++)
-		AddInfo("Class: " + cvec[i]->name->signature);
+	{
+		AddInfo("------Class: " + cvec[i]->name->signature);
+		for(uint j = 0 ; j < cvec[i]->pvec.size() ; j++)
+			AddInfo("\t" + cvec[i]->pvec[j]->signature);
+	}
 	for(uint i = 0 ; i < ivec.size() ; i++)
 	{
 		AddInfo("------Iface: " + ivec[i]->name->signature);
@@ -333,7 +495,6 @@ bool Validator::CheckGlobalNames()
 		
 		global_map[g->name] = g;
 	}
-	
 	
 	return true;
 }
@@ -377,8 +538,10 @@ bool Validator::CheckTemplateParams()
 	return true;
 }
 
-void Validator::InstantiateParameterlessInterfaces()
+bool Validator::ValidateParameterlessInterfaces()
 {
+	// First instantiate them
+	
 	for(uint i = 0 ; i < context->interfaces.size() ; i++)
 	{
 		Interface *iface = context->interfaces[i];
@@ -391,6 +554,59 @@ void Validator::InstantiateParameterlessInterfaces()
 		// Insert new instance
 		AddIface(inst);
 	}
+	
+	// From there initiate validation of single interfaces. If required,
+	// other instances will be added at the vector's end, and validations
+	// will be launched recursively
+	
+	bool success;
+	
+	for(uint i = 0 ; i < ivec.size() ; i++)
+	{
+		success = ivec[i]->Validate();
+		if(!success)
+			return false;
+	}
+	
+	return true;
+}
+
+bool Validator::ValidateParameterlessClasses()
+{
+	// First instantiate the ones that haven't been yet
+	// (the previous validation of interfaces may have created some already)
+	
+	for(uint i = 0 ; i < context->classes.size() ; i++)
+	{
+		Class *c = context->classes[i];
+		
+		if(c->params.size() != 0)
+			continue;
+		
+		ClassInst *prev = cmap[ClassName::Build(c->name)];
+		if(prev)
+			continue;
+		
+		ClassInst *inst = new ClassInst(this, c);
+		
+		// Insert new instance
+		AddClass(inst);
+	}
+	
+	// From there initiate validation of single classes. If required,
+	// other classes will be added at the vector's end, and validations
+	// will be launched recursively
+	
+	bool success;
+	
+	for(uint i = 0 ; i < cvec.size() ; i++)
+	{
+		success = cvec[i]->Validate();
+		if(!success)
+			return false;
+	}
+	
+	return true;
 }
 
 void Validator::AddIface(IfaceInst* iface)
@@ -411,6 +627,19 @@ void Validator::AddClass(ClassInst* cl)
 	
 	cvec.push_back(cl);
 	cmap[cl->name] = cl;
+}
+
+GlobalInst* Validator::GetGlobal(ClassName *name)
+{
+	IfaceInst *i = imap[name];
+	if(i)
+		return i;
+	
+	ClassInst *c = cmap[name];
+	if(c)
+		return c;
+	
+	return NULL;
 }
 
 bool Validator::ValidateType(Type &t, SourcePos pos)

@@ -159,7 +159,8 @@ namespace sool
 		
 		// Useful source code positions
 		
-		SourcePos	fullname_pos;		// includes template parameters
+		SourcePos				fullname_pos;		// includes template parameters
+		std::vector<SourcePos>	embed_pos;
 		
 		~Class();
 		
