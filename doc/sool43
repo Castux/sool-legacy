@@ -1,0 +1,166 @@
+Original interface, enhenced interface
+======================================
+
+One tiny thing bugged me while I was taking a shower this morning, about my big new shiny interface system. Basically, a class implements a few methods.
+
+	object Foo
+		method bar() end
+	end
+	
+	-- call:
+	foo = Foo
+	foo.bar()
+
+Then, above that there is the nice embedding shortcut: if self doesn't implement a method, but exactly one embedded object does, then we can call this method directly on self:
+
+	object Other
+		embed Foo
+	end
+	
+	other = Other
+	other.bar()		-- is in fact other.Foo.bar()
+
+And finally, if the object complies with an interface, and a method was defined for this interface's associated generic class, we can call it directly on the object too:
+
+	interface Meh
+		meh()
+	end
+	
+	extend Meh
+		method doit() end
+	end
+	
+	object Foo
+		method meh() end
+	end
+	
+	foo = Foo
+	foo.doit()	-- is in fact (foo to Meh).doit()
+
+My question is: are these "shortcut" methods part of the object's set of methods? The question is not only semantic, it has low-level implications.
+
+	interface Runner
+		run()
+	end
+	
+	object Legs
+		method run() end
+	end
+	
+	object Body
+		embed Legs
+	end
+
+Legs implements `run()` and therefore complies with interface Runner. Body embeds Legs, so we can call `run()` on Body. Does it mean that Body itself complies with interface Runner?
+
+At first sight, it would seem so. Anywhere you need a Runner, you can put a Body, since `body.run()` is a valid call. Except for one tiny issue: `body.run()` does not resolve to a simple static method call. It resolves to `body.Legs.run()`. Therefore, it's no problem if we can insert code, but it becomes one if, for instance, we need a pointer to the method itself.
+
+And where do we need a pointer to the method? When casting to a generic type:
+
+	body = Body
+	runner = body to Runner
+
+Aha. In theory, Body can `run()`, but the basic idea behind casting to generics is to build a virtual table of the required methods. However, there is no method `run` that can be called directly on a Body reference. Woops.
+
+Again, two ways to solve this:
+
+1.	Consider only the "original" set of methods of a class when checking for interface compliance. Shortcuts do not count. This highly reduces the expressive power, and the way to counter it is to manually implement the shortcuts as "original" methods:
+	
+		object Body
+			embed Legs
+			method run()
+				self.Legs.run()		-- stuuuuupeeeed.
+			end
+		end
+	
+2.	Quite simply, whenever the compiler needs an *actual* method to call, it fills it in by itself, in secret. Again, this should happen only when casting to generic objects, subject to dynamic dispatch.
+
+The question 'are these "shortcut" methods part of the object's set of methods?' is also very semantic. For instance, does a shortcut method count when checking compliance with another interface? Well it really should. Two examples:
+
+1. A embeds B which complies with interface I. Then A complies with I.
+2. A complies with interface I, which was extended with method `meth`. Interface J requires method `meth`. Then A complies with J.
+
+Point 1 is really natural (you have legs, you can run). Point 2 is a bit more far fetched, but semantically it should be so. However the manner, if you can call the right set of methods on an object, then it should comply with any interface that requires them.
+
+By the way, examples 1 and 2 could really be merged into a single one. "A embeds B which complies with interface I. Then A complies with I. Interface I was extended with method `meth`. Interface J requires method `meth`. Then A complies with J."
+
+Sure, it is just an example, probably exaggerated, but it shows also the extent of what the semantic analyzer can expect. Hopefully, this big recursiveness can be naturally coded, and automatically resolved. To the question "does A comply with J", the analyzer answers:
+
+- J requires method `meth`. Does A answer to `meth`?
+- A does not implement `meth`. Does its embedded object B answer to `meth`?
+- B does not implement `meth`. B does not have any embedded objects.
+- Is there an interface compatible with B that implements `meth`?
+- Generic class I implements `meth`. B is compatible with I.
+- Therefore B answers to `meth`.
+- Therefore A answers to `meth`.
+- Therefore A complies with J.
+
+Calling `obj.meth` on an instance of A is really:
+
+	(obj.B to I).meth		-- well, we were a few shortcuts away!
+
+By transitivity, classes acquire the properties of the generic classes they are compatible with, which might give them more methods, and therefore make them compatible with more generic classes, and confer them more methods, etc.
+
+The very big question, to me, is how am I going to cleanly implement the analyzer? I see two ways:
+
+1. build some kind of "inheritance graph" from all the embedding and complying to interfaces, and propagate methods down the links. Each class then ends up with a big-o list of all the methods they can answer.
+2. do like the example above, keep as little info as possible in each node, and do recursive lookup based on the simple rules we defined. If afraid of efficiency, memoize the results in the analyzer (but not in the nodes themselves).
+
+In the existing prototypes, I went more the first way, and got a bit lost in the big inheritance thing. Is this method mine, is it inherited, should I store them the same way or not, etc. I tend to believe that the second option might be better. The analyzer could have a few functions like:
+
+	DoesClassAnswerTo(class, method)
+	DoesClassComplyWith(class, interface)
+
+and each class (real ones or generics) would know only about their own original methods. The lookup functions would just navigate the class space and select stuff according to the rules. Like I said, the results could be memoized to avoid always looking up the same thing, and more information could be kept on the way (like how does the class answer to a certain message: either natively, or through a shortcut, and which kind).
+
+Implementing templates
+----------------------
+
+That was also a big difficulty in the prototypes, and it seems hard to get right. Basic idea was "duplicate the AST node and substitute types". Then each "instance" of a template is a class on its own and can be validated and used by itself. Only there was the problem that instantiating a template sometimes created new classes:
+
+	object Foo|T
+		Bar|T member
+	end
+
+When using Foo|num, it needs Bar|num, and if the latter doesn't exist yet, it would have to be instantiated from the template. Which in turn might create more classes. My solution was to visit the whole syntax tree, noting every class name used, and instantiating the new ones on the fly, and iterating until the list of classes stopped changing. I suppose that would have worked, but it felt iffy, and I never got very far in implementing it.
+
+What seems to be the solution? In the spirit of keeping as little state as possible, the analyzer should be able to validate "just by looking", like we'd do by reading the code. Substituting on the fly. I'm thinking that the class nodes will *all* have type parameters, just potentially empty:
+
+	object Foo end
+	-- is really:
+	object Foo|() end
+
+The class doesn't depend on type parameters. But to make things simple, assume it's a special case. Therefore, all functions that use the class nodes in the AST must provide the specific set of type arguments they're interested in, systematically. So that given:
+
+	object Foo|(Runner T)
+		embed Something|T
+		T member
+		
+		method make_them_run(T other)
+			member.run_with(other)
+		end
+	end
+
+the corresponding AST node could answer to:
+
+	type = classnode->TypeOfMember(member_name, type_param_set);
+	truth = classnode->ImplementsMethod(method_sig, type_param_set);
+	classes = classnode->ReturnEmbeddedClasses(type_param_set);
+
+and would lookup members, find the one with the right name, see that its type is bound to a type parameter, and substitute from `type_param_set`. Or when checking if it contains an implementation of a certain method, go through its list of methods, use the `type_param_set` to substitute, and answer if it has the right one.
+
+The class nodes need only do very low-level raw lookup, but every operation there should depend on type parameters binding. Then above that the analyzer can do the rest.
+
+However, now that I think of it, every subnode in the class will need to know the list of parameter bindings. That's a lot of passing `type_param_set` around. We could imagine having an external object that keeps it as a member, and acts as a middleman between the raw classes (which are all assumed to be templates) and the analyzer. This middle object would be created with a reference to a class node and a set of type parameters, and do all the lookup for it. That way, no need to duplicate the class model, but also no need to pass around type parameters all the time.
+
+That's like a lightweight template instantiation. That is a Good Thing.
+
+So, as implementation guidelines:
+
+- the analyzer's job is only to validate that the code is correct, and should not do any more effort than that
+- the analyzer only "looks" at the syntax tree: the AST is not modified after parsing, or very little
+- all information coming from analysis is stored in the analyzer, if it really needs to keep it for later (or to avoid repeating lookups)
+- duplicate information as little as possible
+- temporary middle objects can be used to keep some info about AST nodes and perform operations on them (no need to keep them beyond their useful lifetime): for instance one to hold type parameters when treating a class, or one holding locals in the scope while treating a block
+
+Quick, to the codemobile!
