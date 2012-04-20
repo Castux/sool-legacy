@@ -1,0 +1,122 @@
+More about extending templates
+==============================
+
+For design testing purposes, I was writing a mockup of some future standard classes, and trying to strain the template and interface system.
+
+I got into an interesting situation that suggests that we might need to be able to extend templates with different bounds for the parameters.
+
+Explanation through example. We make an Array container, that can contain just about anything, hence the Any interface bound for the type parameter:
+
+	object Array|(Any T)
+		#T data
+		
+		method insert(uint index, T value)
+			--
+		end
+		
+		-- etc
+	end
+
+So far, classic stuff. One interesting function in Lua is `table.concat`, which converts all contained elements to strings and concatenate them (optionally with a separator string).
+
+Suppose I want to put that in my Array class:
+
+	method text concat()
+		res = ""
+		for v in self do
+			res = res ~ v.totext
+		end
+		return res
+	end
+
+Trivial iteration, convert to text and concatenate. Except *eeeek*, expression `v` of type `T`, which complies to interface Any does not answer to method `totext`. Any is the empty interface, to which every type complies. But it can do nothing (just be copied around).
+
+Shoot. We need an interface for stuff that can be turned into text:
+
+	interface Printable
+		text totext()
+	end
+
+For fun we define a `print` method that dumps a printable to the standard output:
+
+	extend Printable
+		method print()
+			io:write(totext)
+		end
+	end
+
+Good. Except that now, for that `concat` method to work, the bound on `T` must be Printable:
+
+	class Array|(Printable T)
+		-- etc
+	end
+
+But we don't want that! We want our container to be as generic as possible, and also work on stuff that doesn't happen to be printable (like GameEntities). Yikes. I certainly don't want to repeat all the array logic in another class ArrayOfPrintables. That would suck anyway, as most of the time we'd forget to use it instead of the normal array.
+
+Hmm. We could make another class, to be used only for temporary variables (just a gizmo to ensure type safety and make the compiler happy):
+
+	value ArrayOfPrintables|(Printable T)
+		embed Array|T
+		
+		method concat()
+			-- here, v.totext would work, since T is Printable
+		end
+	end
+
+And to use it:
+
+	-- somewhere else
+	method foobar()
+		arr = Array|num[1,2,3,4,5]		-- num is Printable
+		arr2 = ArrayOfPrintables|num(Array|num = arr)	-- embed arr
+		result = arr2.concat
+	end
+
+Meh, ain't that ugly. It works, because num is Printable, and num is Any. And that middle object actually requires no allocation or overhead, because it's a value class that embeds the array. With compiler optimization and inlining, there's not even the method forwarding due to the embedding. This `arr2` instantiation does strictly *nothing* in low level, it is a pure language artifact for the type system. And it is just ugly. Binding our beautiful code to make the compiler happy.
+
+And well. Look at this "ArrayOfPrintables" class name. That looks exactly like what a template should look like. We know we could use a generic type Array|Printable, but that would be unpractical (have to convert every element of the array into a generic Printable, which is slow and dumb), so we really want a template in this case.
+
+Using `object Array|(Printable T)` restricts the use of the Array for printables. We don't want that either.
+
+The beautiful solution would be to be able to extend the Array template, but only for a subset of type parameters, the Printables:
+
+	extend Array|(Printable T)
+		method text concat()
+			-- do it			
+		end
+	end
+
+We mentionned extending templates before, but actually never specified the conditions. Implicitely, I assumed that it would mean having the same template parameter: if you defined `object Array|(Any T)`, then you must extend with `extend Array|(Any T)`.
+
+But as we see, that might be a bit restrictive. After all, we can extend fully specialized templates:
+
+	extend Array|num
+		method num total()
+			--
+		end
+	end
+
+So why not "partially specialized" one, that only apply an interface restriction to the type parameters?
+
+	extend Array|(Printable T)
+
+"We extend all Array of Printables". Semantically, it's a concept that feels very natural. More accurately that is "we extend all Arrays of classes that comply with the Printable interface". Otherwise we might be thinking of Array|Printable, which is something else.
+
+Naturally, the more flexible the language, the more difficult the analysis will be. We will need to keep these "extension templates" separate, and at template instantiation, go through the list and check which ones match the current set of parameters, to add their methods to the instance.
+
+But look how pretty it is:
+
+	arr1 = [1,2,3,4,5]		-- Array|uint
+	arr1.print
+	
+	arr2 = [2.3, num:pi, 1.234^23]	-- Array|num
+	arr2.print
+	
+	arr3 = [Foo,Foo,Foo]	-- Array|Foo, with Foo printable
+	arr3.print
+	
+	-- and for funsies, an Array|Printable
+	arr4 = [1 to Printable, num:pi to Printable, Foo to Printable]
+	arr4.print
+
+Code reuse, beibey!
