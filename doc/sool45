@@ -1,0 +1,275 @@
+Chickens and eggs
+=================
+
+As we know, using nil is a little bit heavy in sool: optional variables must be "casted back" to non optionals using the `if as` syntax, or the boolean operator `or`. I was trying to write a simple linked list class without using nils, just for the sake of it, and realized it was simply impossible.
+
+A non optional member must always be initialized, and if it is an object class, that means that it must point at an existing object. Which implies that an object class may *never* have a non optional member of its own class. Indeed, how would you ever build the first one?
+
+That's too bad. There are legitimate uses of objects pointing at other objects of the same class, in which these references are always valid (never nil). For instance, a circular linked list: the last one always points at the first one. Or even a simple linked list, where you mark the last element by making it point at itself. Trees may want to do the same for their leaves.
+
+Even though we *know* for certain that these references will eventually all be filled with valid objects, the simple fact that objects are created one after another forces us to make some references optional, for the time span between the object creation and the references' initialization.
+
+Could there be a magical workaround? Certainly. A trivial way would be through a default initializer. In an object class Foo, a member of class Foo that is not explicitly initialized can be set to point at the object itself:
+
+	object Foo
+		Foo member
+	end
+	
+	-- elsewhere
+	foo = Foo				-- implicitly does foo.member = foo
+	bar = Foo(member = Foo) -- normal explicit initialization
+
+Of course, we could never do that before, because the instantiation syntax is a normal expression, and in this expression, variable `foo` doesn't exist yet:
+
+	foo = Foo(member = foo)	-- what, I don't know any "foo"!
+
+ There could be a special keyword, to avoid the implicit stuff (implicit means slightly equivalent to black magic, which is bad):
+
+	foo = Foo(member = this)	-- yay, C++ keyword
+
+But too many keywords is bad, and this is a really special case. Further more, it does not solve mutual references. Indeed, the problem is more general. If an object refers to an object of its own class through any number of non optional references, it cannot be created, because none of the objects on the loop can be created in the first place.
+
+	object A
+		B b
+	end
+	
+	object B
+		C c
+	end
+	
+	object C
+		A a
+	end
+
+And here, the "point at itself" trick will not work, nor a hypothetical "the object being created" keyword. To make anything like this work, we would need a magical "simultaneous instantiation" system, in which we could use special names to refer to the objects being created. Something like:
+
+	make a,b,c with A(b = b),B(c = c),C(a = a) end
+
+In fact, maybe simply this would be enough, provided that the compiler "registers" the names `a`, `b` and `c` as available for the right hand side expression:
+
+	a,b,c = A(b = b),B(c = c),C(a = a)
+
+That is highly irregular and weird. However, if we only have a chain of objects, only one special name (pointing back to the outer object) is required:
+
+	a = A(b = B(c = C(a = SPECIAL)))
+
+Then again, that really solves only the chain situation, and no other: there could be graphs of objects of different classes pointing at each other:
+
+	object A
+		B b
+		C c
+	end
+	
+	object B
+		C c
+		D d
+	end
+	
+	object C
+		A a
+		C c
+	end
+	
+	object D
+		C c
+		B b
+		A a
+	end
+
+Good luck with that one. There, only a fancy simultaneous instantiation would do, with some kind of name reserving. It would need to:
+
+- declare local names with their future types
+- run initialization methods with "placeholders" values where we don't have objects yet
+- resolve the placeholders by filling in the actual references after the memory is allocated and we get pointers
+
+Sadly, this is completely crazy. Then again, having a graph of different objects that all point non optionally to each other may not be a good idea in the first place either.
+
+Conclusion: a linked list without nil is impossible in sool. Adding the "initialize member to self" feature would be really just a hack to make this specific case possible, but it wouldn't solve the general issue.
+
+In any case, even with objects that point at themselves, you simply replace nil check with self checks, or comparison with a dummy object. Not sure it's a useful tradeoff.
+
+Having to explicitly to nil checks, and name a new local variable to take the valid reference might seem heavy, but it is a necessary evil. After all, in Rust (the inspiration for this feature), you need to do the same:
+
+Optional types are defined as enums:
+
+	enum option<T>
+	{
+		none,
+		some(T)
+	}
+
+And used with the pattern destructuring thing:
+
+	/* var is our variable of optional type */
+	
+	alt var
+	{
+		none
+		{
+			/* the nil case */
+		}
+		some(x)
+		{
+			/* the non-nil case, use x */
+		}
+	}
+
+You need to use a new local name to match the enum and "catch" the value in the `some` case. Heavyer syntax is the price for memory safety. And I think it's a price worth paying.
+
+Like in Lua, where locals in for loops often take the same names:
+
+	for i,v in ipairs(tab) do
+	for k,v in pairs(tab) do
+
+one can imagine that habits will come in sool for naming the non-optional promoted variable:
+
+	if opt as x then
+	if opt as nopt then
+	
+	x = opt or Foo
+	nopt = opt or Foo
+
+In any case, this should remind us that optionals are expensive, and should be used with care and moderation.
+
+Update on generic fors
+----------------------
+
+Still trying to write a hypothetical linked list class, I came across the question of the iterator function, so that my list works with the built-in generic for.
+
+If you recall, I had decided that the generic for would work somewhat like in Lua, with:
+
+	for elem in expr do
+		-- block
+	end
+
+being replaced by something like:
+
+	do
+		obj = expr
+		iter = nil
+		while true do
+			iter,elem = obj.next(iter)
+			if not iter then
+				break
+			end
+			
+			-- block
+		end
+	end
+
+with `iter` some kind of hidden variable. It starts at nil, and it's passed to the object's `next` method, which increments it (whatever that means for the given class), returns the next one, and the associated value.
+
+This is a nice "all in one" mechanism, where the `next` function has to deal with every case:
+
+- if the iterator is nil, set it to the first valid "index"
+- if it's not nil, increment it
+- if it's still valid, return it and the associated value. If not, return nil
+
+The last "return nil" thing would signal to the loop that the job is done.
+
+That's semantically nice, but in practice, I see a few annoying things:
+
+- the big "all in one" function will have lots of nil tests and branching, which might make it look bulky or unclear.
+- additionally, this single method combines different tasks (initialization, incrementation, final test) which are in a way "selected" at each invocation depending on arguments. This results in more testing and branching at each iteration than a traditional for.
+- during the last iteration, once the index becomes invalid, we *still* have to return a (dummy) value, even though it won't be used (the loop will break right after). That didn't happen in Lua, where you can return a different number of values at at invocation, but it appears here, where types are static.
+
+I had a look at D's generic for: `foreach`. Not only is it built-in for every possible interesting type, but it also works on user defined classes, as long as they follow a certain interface:
+
+	foreach (e; range) { ... }
+
+translates to:
+
+	for (auto __r = range; !__r.empty; __r.popFront())
+	{
+		auto e = __r.front;
+		...
+	}
+
+That looks a lot more like a traditional for, in C or C++. It uses a separate object, here called `range`, which reads the data from the outside, and keeps the state of the iteration. In sool, we could have something like this:
+
+	interface Iterator|(Any T)
+		bool	done()
+		T		current()
+				next()
+	end
+
+All the collections that want to work with the generic for would need to have a helper class that implements these methods. Then,
+
+	for elem in obj do
+		-- block
+	end
+
+would be:
+
+	do
+		iter = obj.iter
+		while not iter.done do
+			elem = iter.current
+			-- block
+			
+			iter.next
+		end
+	end
+
+with the `iter` variable hidden, as usual. As we discussed before, in order to have several different iterations possible, the loop could skip the `iter = obj.iter` step if the given expression is already compliant with the Iterator interface. That way you could have a default iterator, and the others accessible with methods:
+
+	for elem in obj.rev_iter do
+
+and also, there could be several element variables, if the iterator needs to return several:
+
+	interface Iterator2|(Any T, Any U)
+		bool	done()
+		T,U		current()
+				next()
+	end
+	
+	for i,v in somearray do end
+
+I wrote these interfaces using the language syntax, but they do not need to be actual sool-side interfaces, since the iterator variables are hidden anyway. When validating code, the analyzer will simply check:
+
+- does the expression answer to `current()`?
+- if yes, does the number of return values match the number of local names provided?
+- does it also answer to `next()` and `bool done()`?
+- if it fails for any of these, check if the expression answers to `iter()`
+- if yes, check the same conditions for the return type of `iter`
+- if not, complain
+
+And now, oh joy, the three methods are always statically bound, each does only exactly its task, and if these tasks are smallish, they will likely be inlined, and we end up with something *exactly* as efficient as classic C++ for loops, even for built-in types and arrays. Just remember to use value classes for the iterators, so that they end up being strictly equivalent to local variables holding the state of the iteration.
+
+Now we can happily have nice helper classes like ranges:
+	
+	value Range
+		uint current
+		uint stop
+		
+		method bool done()
+			return start == stop
+		end
+		
+		method next()
+			current = current + 1
+		end
+	end
+	
+	extend uint
+		method Range ~(uint other)
+			return Range(start = this, stop = other)
+		end
+		
+		method Range iter()
+			return Range(start = 1, stop = this)
+		end
+	end
+		
+	
+	-- elsewhere
+	
+	for v in 2 ~ 10 do
+		-- fuubar from 2 to 10
+	end
+	
+	for v in 20 do
+		-- fuubar from 1 to 20
+	end
+
+Pretty!
