@@ -82,7 +82,11 @@ The beautiful solution would be to be able to extend the Array template, but onl
 
 	extend Array|(Printable T)
 		method text concat()
-			-- do it			
+			-- do it
+		end
+		
+		method text totext()	-- a wrapper to comply with Printable ourselves
+			return concat
 		end
 	end
 
@@ -96,7 +100,7 @@ But as we see, that might be a bit restrictive. After all, we can extend fully s
 		end
 	end
 
-So why not "partially specialized" one, that only apply an interface restriction to the type parameters?
+So why not "partially specialized" ones, that only apply an interface restriction to the type parameters?
 
 	extend Array|(Printable T)
 

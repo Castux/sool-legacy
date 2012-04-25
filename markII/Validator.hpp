@@ -81,7 +81,7 @@ namespace sool
 			AnswerMode	mode;
 			union
 			{
-				Member*		member;
+				Member*		member;		// Points at the member this is an accessor for
 				ClassName*	target;		// Contains the name of the embedded member or the generic class
 			};
 			
