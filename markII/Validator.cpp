@@ -216,9 +216,6 @@ std::string ClassInst::AnswerInfo::ToString()
 		case a_self:
 			tmp += "self implemented";
 			break;
-		case a_selfopt:
-			tmp += "shortcut to self implemented";
-			break;
 		case a_selfless:
 			tmp += "selfless method in the class";
 			break;
@@ -233,6 +230,9 @@ std::string ClassInst::AnswerInfo::ToString()
 			break;
 		case a_generic:
 			tmp += "generic class implements";
+			break;
+		case a_shortcut:
+			tmp += "shortcut to method with optionals";
 			break;
 	}
 	
@@ -409,39 +409,117 @@ bool ClassInst::Validate()
 		}
 		
 		// Check selector conflict
-		AnswerInfo info = answers[p->selector];
-		switch(info.mode)
+		AnswerInfo other = answers[p->selector];
+		switch(other.mode)
 		{
 			case a_member:
 			case a_shared_member:
 				v->AddError("method " + p->selector + " shadows accessor of member", this, p->pos);
-				v->AddInfo("defined here:", this, info.member->pos);
+				v->AddInfo("defined here:", this, other.member->pos);
 				delete p;
 				return false;
 			case a_self:
 			case a_selfless:
 				v->AddError("method " + p->selector + " was already declared", this, p->pos);
-				v->AddInfo("here:", this, pmap[p->selector]->pos);
+				v->AddInfo("here:", this, other.proto->pos);
 				delete p;
 				return false;
 			case a_not:
 				// fine
 				break;
 			default:
-				error("Other kinds of information should not be there yet");
+				error("Other kinds of answer information should not be there yet");
 		}
 		
 		AddProto(p);
 		
-		AnswerInfo info2;
-		info2.mode = cl->methods[i]->kind == Method::k_normal ? a_self : a_selfless;
-		info2.rtype = p->rtype;
-		answers[p->selector] = info2;
+		AnswerInfo info;
+		info.mode = cl->methods[i]->kind == Method::k_normal ? a_self : a_selfless;
+		info.proto = p;
+		info.rtype = p->rtype;
+		answers[p->selector] = info;
 	}
+	
+	success = CheckShortcutConflicts();
+	if(!success)
+		return false;
 	
 	validated = true;
 	validating = false;
 	validation_stack.pop_back();
+	
+	return true;
+}
+
+bool ClassInst::CheckShortcutConflicts()
+{
+	for(uint i = 0 ; i < pvec.size() ; i++)
+	{
+		Prototype *p = pvec[i];
+		
+		Prototype *curr = p;
+		
+		while(true)
+		{
+			Prototype *prev = curr;		// for memory cleanup
+			
+			// Check if last argument is optional
+			if(curr->args.size() > 0 && curr->args.back().type.optional)
+			{
+				// Yes! Make shortcut
+				Prototype *shortcut = new Prototype(*curr);
+				shortcut->args.pop_back();
+				shortcut->ComputeSignature();
+				
+				// Check conflict
+				AnswerInfo other = answers[shortcut->selector];
+				switch(other.mode)
+				{
+					case a_member:
+					case a_shared_member:
+						v->AddError("optional argument makes shorcut " + shortcut->selector + " shadow accessor of member", this, p->pos);
+						v->AddInfo("defined here:", this, other.member->pos);
+						delete shortcut;
+						return false;
+					case a_self:
+					case a_selfless:
+						v->AddError("optional argument makes shorcut " + shortcut->selector + " shadow method", this, p->pos);
+						v->AddInfo("defined here:", this, other.proto->pos);
+						delete shortcut;
+						return false;
+					case a_shortcut:
+						v->AddError("optional argument makes shorcut " + shortcut->selector + " conflict", this, p->pos);
+						v->AddInfo("with shortcut for:", this, other.proto->pos);
+						delete shortcut;
+						return false;
+					case a_not:
+						// fine
+						break;
+					default:
+						error("Other kinds of answer information should not be there yet");
+				}
+				
+				// No conflict, add
+				
+				AnswerInfo info;
+				info.mode = a_shortcut;
+				info.proto = p;
+				info.rtype = p->rtype;
+				answers[shortcut->selector] = info;
+				
+				curr = shortcut;
+				
+				if(prev != p)
+					delete prev;
+			}
+			else
+			{
+				if(prev != p)
+					delete prev;
+				break;
+			}
+		}
+	}
 	
 	return true;
 }
@@ -600,8 +678,8 @@ bool Validator::Validate()
 	for(uint i = 0 ; i < cvec.size() ; i++)
 	{
 		AddInfo("------Class: " + cvec[i]->name->signature);
-		for(uint j = 0 ; j < cvec[i]->pvec.size() ; j++)
-			AddInfo("\t" + cvec[i]->pvec[j]->signature);
+		//for(uint j = 0 ; j < cvec[i]->pvec.size() ; j++)
+		//	AddInfo("\t" + cvec[i]->pvec[j]->signature);
 		for(std::map<std::string,ClassInst::AnswerInfo>::iterator j = cvec[i]->answers.begin() ; j != cvec[i]->answers.end() ; j++)
 			AddInfo("\tanswers to " + j->first + " -> " + j->second.ToString());
 	}

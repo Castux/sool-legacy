@@ -67,12 +67,12 @@ namespace sool
 		{
 			a_not,				// We don't answer to this selector
 			a_self,				// We implement it ourself
-			a_selfopt,			// Shortcut for own method with optional final arguments
 			a_selfless,			// We have a selfless method for it
 			a_member,			// It is an accessor for a member
 			a_shared_member,	// It is an accessor for a shared member
 			a_embed,			// We can forward it to an embedded member
-			a_generic			// We comply with an interface extended with it
+			a_generic,			// We comply with an interface extended with it
+			a_shortcut			// We answer to a method with optional arguments which fits
 		} AnswerMode;
 		
 		class AnswerInfo
@@ -84,6 +84,7 @@ namespace sool
 			{
 				Member*		member;		// Points at the member this is an accessor for
 				ClassName*	target;		// Contains the name of the embedded member or the generic class
+				Prototype*	proto;		// Contains the actual prototype for self, selfless and shortcuts
 			};
 			MultiType		rtype;
 			
@@ -125,6 +126,7 @@ namespace sool
 		~ClassInst();
 		
 		bool Validate();
+		bool CheckShortcutConflicts();
 		void AddMember(Member *m);		// This takes care of adding the accessors' prototypes
 		void AddProto(Prototype *p);	// This adds to both pvec and pmap
 		
