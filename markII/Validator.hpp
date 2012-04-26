@@ -79,16 +79,19 @@ namespace sool
 		{
 			public:
 			
-			AnswerMode	mode;
+			AnswerMode		mode;
 			union
 			{
 				Member*		member;		// Points at the member this is an accessor for
 				ClassName*	target;		// Contains the name of the embedded member or the generic class
 			};
+			MultiType		rtype;
 			
 			AnswerInfo() : mode(a_not), member(NULL)
 			{
 			}
+			
+			std::string ToString();
 		};
 		
 		
@@ -112,7 +115,7 @@ namespace sool
 		std::vector<Prototype*>	pvec;			// the instance's prototypes (owned)
 		ProtoMap				pmap;			// prototypes indexed by selector
 		
-		// Memoization of what do we answer to
+		// Memoization of what do we answer to, indexed by selector
 		
 		std::map<std::string,AnswerInfo>	answers;
 		

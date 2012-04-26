@@ -201,6 +201,42 @@ bool IfaceInst::Contains(Prototype *p)
 /** ClassInst **/
 /***************/
 
+std::string ClassInst::AnswerInfo::ToString()
+{
+	std::string tmp = rtype.signature + " (";
+	
+	switch(mode)
+	{
+		case a_not:
+			tmp += "no answer";
+			break;
+		case a_self:
+			tmp += "self implemented";
+			break;
+		case a_selfopt:
+			tmp += "shortcut to self implemented";
+			break;
+		case a_selfless:
+			tmp += "selfless method in the class";
+			break;
+		case a_member:
+			tmp += "accessor for member";
+			break;
+		case a_shared_member:
+			tmp += "accessor for shared member";
+			break;
+		case a_embed:
+			tmp += "embeded class answers";
+			break;
+		case a_generic:
+			tmp += "generic class implements";
+			break;
+	}
+	
+	tmp += ")";
+	return tmp;
+}
+
 ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(false), validating(false)
 {
 	// No params, name is trivial
@@ -345,6 +381,8 @@ bool ClassInst::Validate()
 	}
 	
 	
+	
+	
 	validated = true;
 	validating = false;
 	validation_stack.pop_back();
@@ -373,7 +411,8 @@ void ClassInst::AddMember(Member *m)
 	AnswerInfo info;
 	info.mode = m->shared ? a_shared_member : a_member;
 	info.member = m;
-	answers[p->signature] = info;
+	info.rtype = p->rtype;
+	answers[p->selector] = info;
 	
 	// Setter
 	p = new Prototype;
@@ -392,7 +431,9 @@ void ClassInst::AddMember(Member *m)
 	p->ComputeSignature();
 	
 	AddProto(p);
-	answers[p->signature] = info;
+	
+	info.rtype = p->rtype;
+	answers[p->selector] = info;
 }
 
 void ClassInst::AddProto(Prototype *p)
@@ -505,6 +546,8 @@ bool Validator::Validate()
 		AddInfo("------Class: " + cvec[i]->name->signature);
 		for(uint j = 0 ; j < cvec[i]->pvec.size() ; j++)
 			AddInfo("\t" + cvec[i]->pvec[j]->signature);
+		for(std::map<std::string,ClassInst::AnswerInfo>::iterator j = cvec[i]->answers.begin() ; j != cvec[i]->answers.end() ; j++)
+			AddInfo("\tanswers to " + j->first + " -> " + j->second.ToString());
 	}
 	for(uint i = 0 ; i < ivec.size() ; i++)
 	{
