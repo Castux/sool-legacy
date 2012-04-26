@@ -221,15 +221,15 @@ bool IfaceInst::AnswersTo(std::string selector, MultiType *rtype)
 
 std::string ClassInst::AnswerInfo::ToString()
 {
+	if(mode == a_not)
+		return "does not answer";
+	
 	std::string tmp = rtype.signature + " (";
 	
 	switch(mode)
 	{
 		case a_unknown:
 			tmp += "unknown";
-			break;
-		case a_not:
-			tmp += "no answer";
 			break;
 		case a_self:
 			tmp += "self implemented";
@@ -251,6 +251,8 @@ std::string ClassInst::AnswerInfo::ToString()
 			break;
 		case a_shortcut:
 			tmp += "shortcut to method with optionals";
+			break;
+		default:
 			break;
 	}
 	
@@ -622,6 +624,11 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 	
 	//for(uint i = 0 ; i
 	
+	// 3. exactly one extension to an interface we comply to
+	
+	// Everything failed, memoize
+	
+	answers[selector].mode = a_not;
 	
 	return false;
 }
