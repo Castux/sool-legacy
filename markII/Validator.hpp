@@ -15,7 +15,7 @@ namespace sool
 	{
 		public:
 		
-		bool AnswersToShite();
+		virtual bool AnswersTo(std::string selector, MultiType *rtype = NULL) = 0;
 		virtual bool Validate() = 0;
 	};
 	
@@ -50,6 +50,7 @@ namespace sool
 		// first round of validations, and we might have forgotten to do it
 		
 		bool Contains(Prototype *p);
+		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
 		
 		// Recursion guards
 		bool validated;
@@ -65,6 +66,7 @@ namespace sool
 		
 		typedef enum
 		{
+			a_unknown,			// Not yet checked (default value when accessing map)
 			a_not,				// We don't answer to this selector
 			a_self,				// We implement it ourself
 			a_selfless,			// We have a selfless method for it
@@ -88,19 +90,12 @@ namespace sool
 			};
 			MultiType		rtype;
 			
-			AnswerInfo() : mode(a_not), member(NULL)
+			AnswerInfo() : mode(a_unknown), member(NULL)
 			{
 			}
 			
 			std::string ToString();
 		};
-		
-		
-		
-		
-		
-		
-		
 		
 		Validator*		v;
 		
@@ -116,7 +111,7 @@ namespace sool
 		std::vector<Prototype*>	pvec;			// the instance's prototypes (owned)
 		ProtoMap				pmap;			// prototypes indexed by selector
 		
-		// Memoization of what do we answer to, indexed by selector
+		// Memoization of what we answer to, indexed by selector
 		
 		std::map<std::string,AnswerInfo>	answers;
 		
@@ -129,6 +124,10 @@ namespace sool
 		bool CheckShortcutConflicts();
 		void AddMember(Member *m);		// This takes care of adding the accessors' prototypes
 		void AddProto(Prototype *p);	// This adds to both pvec and pmap
+		
+		// Lookup
+		
+		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
 		
 		// Recursion guards
 		bool validated;

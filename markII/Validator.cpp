@@ -200,6 +200,21 @@ bool IfaceInst::Contains(Prototype *p)
 	return false;
 }
 
+bool IfaceInst::AnswersTo(std::string selector, MultiType *rtype)
+{
+	if(!validated)
+		error("IfaceInst::AnswersTo() - iface not validated");
+	
+	Prototype *own = pmap[selector];
+	if(!own)
+		return false;
+	
+	if(rtype)
+		*rtype = own->rtype;
+	
+	return true;
+}
+
 /***************/
 /** ClassInst **/
 /***************/
@@ -210,6 +225,9 @@ std::string ClassInst::AnswerInfo::ToString()
 	
 	switch(mode)
 	{
+		case a_unknown:
+			tmp += "unknown";
+			break;
 		case a_not:
 			tmp += "no answer";
 			break;
@@ -424,7 +442,7 @@ bool ClassInst::Validate()
 				v->AddInfo("here:", this, other.proto->pos);
 				delete p;
 				return false;
-			case a_not:
+			case a_unknown:
 				// fine
 				break;
 			default:
@@ -492,7 +510,7 @@ bool ClassInst::CheckShortcutConflicts()
 						v->AddInfo("with shortcut for:", this, other.proto->pos);
 						delete shortcut;
 						return false;
-					case a_not:
+					case a_unknown:
 						// fine
 						break;
 					default:
@@ -578,6 +596,34 @@ void ClassInst::AddProto(Prototype *p)
 	
 	pvec.push_back(p);
 	pmap[p->selector] = p;
+}
+
+bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
+{
+	if(!validated)
+		error("ClassInst::AnswersTo() - classinst not validated");
+	
+	// 1. memoized result (includes own methods, members and shortcuts from the start)
+	
+	AnswerInfo info = answers[selector];
+	switch(info.mode)
+	{
+		case a_not:
+			return false;
+		case a_unknown:
+			break;
+		default:
+			if(rtype)
+				*rtype = info.rtype;
+			return true;
+	}
+	
+	// 2. exactly one embedded object
+	
+	//for(uint i = 0 ; i
+	
+	
+	return false;
 }
 
 /***************/
