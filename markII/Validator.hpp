@@ -67,6 +67,7 @@ namespace sool
 		{
 			a_not,				// We don't answer to this selector
 			a_self,				// We implement it ourself
+			a_selfopt,			// Shortcut for own method with optional final arguments
 			a_selfless,			// We have a selfless method for it
 			a_member,			// It is an accessor for a member
 			a_shared_member,	// It is an accessor for a shared member

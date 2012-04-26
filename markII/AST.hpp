@@ -39,6 +39,9 @@ namespace sool
 		
 		Member();
 		~Member();
+		
+		// Build new member with type substitution
+		Member *ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
 	class Prototype : public AST

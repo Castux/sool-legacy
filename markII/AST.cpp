@@ -11,6 +11,14 @@ Member::~Member()
 {
 }
 
+Member *Member::ReplaceTemplateParams(ClassNameMap &tmap)
+{
+	Member *m = new Member(*this);
+	m->type = type.ReplaceTemplateParams(tmap);
+	
+	return m;
+}
+
 Method::Method() : proto(NULL)
 {
 }

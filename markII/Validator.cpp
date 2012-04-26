@@ -147,15 +147,21 @@ bool IfaceInst::Validate()
 		
 		// Check selector conflicts
 		Prototype *other = pmap[p->selector];
-		if(other && p->rtype != other->rtype)
+		if(other)
 		{
-			v->AddError("method " + p->signature + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
-			v->AddInfo("here:", porigin[other], other->pos);
-			return false;
+			if(p->rtype != other->rtype)
+			{
+				v->AddError("method " + p->signature + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
+				v->AddInfo("here:", porigin[other], other->pos);
+				delete p;
+				return false;
+			}
+			delete p;
 		}
-		
-		if(!other)
+		else
+		{
 			AddProto(p);
+		}
 	}
 	
 	validated = true;
@@ -297,6 +303,7 @@ bool ClassInst::Validate()
 		
 		// Fine, embed.
 		Member *m = new Member;
+		m->shared = false;
 		m->type = type;
 		m->name = cn->signature;
 		m->pos = cl->embed_pos[i];
@@ -308,7 +315,34 @@ bool ClassInst::Validate()
 	
 	// Now deal with the regular members
 	
-	
+	for(uint i = 0 ; i < cl->members.size() ; i++)
+	{
+		// Apply template parameters
+		Member *m = cl->members[i]->ReplaceTemplateParams(tmap);
+		
+		// Make sure instance exists
+		success = v->ValidateClassName(m->type.cname, m->type_pos);
+		if(!success)
+		{
+			delete m;
+			return false;
+		}
+		
+		// Now check name collisions
+		for(uint j = 0 ; j < members.size() ; j++)
+		{
+			if(members[j]->name == m->name)
+			{
+				v->AddError("member " + m->name + " was already defined", this, m->name_pos);
+				v->AddInfo("here:", this, members[j]->name_pos);
+				delete m;
+				return false;
+			}
+		}
+		
+		// Fine, add
+		AddMember(m);
+	}
 	
 	
 	validated = true;
@@ -336,6 +370,11 @@ void ClassInst::AddMember(Member *m)
 	
 	AddProto(p);
 	
+	AnswerInfo info;
+	info.mode = m->shared ? a_shared_member : a_member;
+	info.member = m;
+	answers[p->signature] = info;
+	
 	// Setter
 	p = new Prototype;
 	
@@ -353,6 +392,7 @@ void ClassInst::AddMember(Member *m)
 	p->ComputeSignature();
 	
 	AddProto(p);
+	answers[p->signature] = info;
 }
 
 void ClassInst::AddProto(Prototype *p)
