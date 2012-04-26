@@ -215,6 +215,28 @@ bool IfaceInst::AnswersTo(std::string selector, MultiType *rtype)
 	return true;
 }
 
+bool IfaceInst::CompliesWith(IfaceInst *iface)
+{
+	if(!validated)
+		error("IfaceInst::AnswersTo() - iface not validated");
+	
+	std::map<IfaceInst*,bool>::iterator memo = complies.find(iface);
+	if(memo != complies.end())
+		return memo->second;
+		
+	for(uint i = 0 ; i < iface->pvec.size() ; i++)
+	{
+		if(!Contains(iface->pvec[i]))
+		{
+			complies[iface] = false;
+			return false;
+		}
+	}
+	
+	complies[iface] = true;
+	return true;
+}
+
 /***************/
 /** ClassInst **/
 /***************/
@@ -370,6 +392,7 @@ bool ClassInst::Validate()
 		m->name_pos = cl->embed_pos[i];
 		
 		AddMember(m);
+		embeds.push_back(m);
 	}
 	
 	// Now deal with the regular members
@@ -622,7 +645,45 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 	
 	// 2. exactly one embedded object
 	
-	//for(uint i = 0 ; i
+	Member *candidate = NULL;
+	MultiType cand_type;
+	
+	for(uint i = 0 ; i < embeds.size() ; i++)
+	{
+		GlobalInst *inst = v->GetGlobal(embeds[i]->type.cname);
+		if(!inst)
+			error("ClassInst::AnswersTo() - no instance found");
+		
+		if(inst->AnswersTo(selector, &cand_type))
+		{
+			if(!candidate)
+			{
+				candidate = embeds[i];
+			}
+			else
+			{
+				// We already had one, meaning there's conflict
+				// TODO: could return some kind of info about it
+				candidate = NULL;
+				break;
+			}
+		}
+	}
+	
+	if(candidate)
+	{
+		// Memoize
+		AnswerInfo res;
+		res.mode = a_embed;
+		res.member = candidate;
+		res.rtype = cand_type;
+		
+		answers[selector] = res;
+		
+		if(rtype)
+			*rtype = cand_type;
+		return true;
+	}
 	
 	// 3. exactly one extension to an interface we comply to
 	
@@ -631,6 +692,37 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 	answers[selector].mode = a_not;
 	
 	return false;
+}
+
+bool ClassInst::AnswersTo(Prototype *proto)
+{
+	MultiType rtype;
+	
+	return AnswersTo(proto->selector, &rtype) && rtype == proto->rtype;
+}
+
+bool ClassInst::CompliesWith(IfaceInst *iface)
+{
+	if(!validated)
+		error("ClassInst::CompliesWith() - classinst not validated");
+	
+	std::map<IfaceInst*,bool>::iterator memo = complies.find(iface);
+	if(memo != complies.end())
+		return memo->second;
+	
+	for(uint i = 0 ; i < iface->pvec.size() ; i++)
+	{
+		if(!AnswersTo(iface->pvec[i]))
+		{
+			complies[iface] = false;
+			return false;
+		}
+		
+		// TODO: might want to record which method is missing for diagnostics
+	}
+	
+	complies[iface] = true;
+	return true;
 }
 
 /***************/
@@ -728,6 +820,13 @@ bool Validator::Validate()
 	if(!success)
 		return false;
 	
+	for(uint i = 0 ; i < ivec.size() ; i++)
+	{
+		AddInfo("------Iface: " + ivec[i]->name->signature);
+		for(uint j = 0 ; j < ivec[i]->pvec.size() ; j++)
+			AddInfo("\t" + ivec[i]->pvec[j]->signature);
+	}
+	
 	for(uint i = 0 ; i < cvec.size() ; i++)
 	{
 		AddInfo("------Class: " + cvec[i]->name->signature);
@@ -735,13 +834,11 @@ bool Validator::Validate()
 		//	AddInfo("\t" + cvec[i]->pvec[j]->signature);
 		for(std::map<std::string,ClassInst::AnswerInfo>::iterator j = cvec[i]->answers.begin() ; j != cvec[i]->answers.end() ; j++)
 			AddInfo("\tanswers to " + j->first + " -> " + j->second.ToString());
+		
+		for(uint j = 0 ; j < ivec.size() ; j++)
+			AddInfo("\tcomplies with " + ivec[j]->name->signature + ": " + (cvec[i]->CompliesWith(ivec[j]) ? "yes" : "no"));
 	}
-	for(uint i = 0 ; i < ivec.size() ; i++)
-	{
-		AddInfo("------Iface: " + ivec[i]->name->signature);
-		for(uint j = 0 ; j < ivec[i]->pvec.size() ; j++)
-			AddInfo("\t" + ivec[i]->pvec[j]->signature);
-	}
+
 	
 	AddInfo("context passed validation");
 	return true;

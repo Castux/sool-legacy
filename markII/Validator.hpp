@@ -7,6 +7,7 @@
 namespace sool
 {
 	class Validator;
+	class IfaceInst;
 	
 	// A unified interface to ifaces and classes, since both can be used
 	// in types. It's only used to lookup what methods the class answers to.
@@ -15,8 +16,9 @@ namespace sool
 	{
 		public:
 		
-		virtual bool AnswersTo(std::string selector, MultiType *rtype = NULL) = 0;
 		virtual bool Validate() = 0;
+		virtual bool AnswersTo(std::string selector, MultiType *rtype = NULL) = 0;
+		virtual bool CompliesWith(IfaceInst *iface) = 0;
 	};
 	
 	class IfaceInst : public GlobalInst
@@ -37,6 +39,10 @@ namespace sool
 		ProtoMap							pmap;		// prototypes indexed by selector
 		std::map<Prototype*,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
 		
+		// Memoization
+		
+		std::map<IfaceInst*,bool>			complies;
+		
 		IfaceInst(Validator *vali, Interface *i);
 		IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params);	// With parameters, given in declaration order
 		~IfaceInst();
@@ -51,6 +57,7 @@ namespace sool
 		
 		bool Contains(Prototype *p);
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
+		bool CompliesWith(IfaceInst *iface);
 		
 		// Recursion guards
 		bool validated;
@@ -108,13 +115,14 @@ namespace sool
 		// Added by Validate() - do not write, use AddMember() and AddProto()
 		
 		std::vector<Member*>	members;		// The type corrected members (owned)
+		std::vector<Member*>	embeds;			// list of which members are embedings
 		std::vector<Prototype*>	pvec;			// the instance's prototypes (owned)
 		ProtoMap				pmap;			// prototypes indexed by selector
 		
-		// Memoization of what we answer to, indexed by selector
+		// Memoization
 		
-		std::map<std::string,AnswerInfo>	answers;
-		
+		std::map<std::string,AnswerInfo>	answers;		// Indexed by selector
+		std::map<IfaceInst*,bool>			complies;
 		
 		ClassInst(Validator *vali, Class *c);	// No parameter
 		ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params);	// With parameters, given in order
@@ -128,6 +136,8 @@ namespace sool
 		// Lookup
 		
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
+		bool AnswersTo(Prototype *proto);
+		bool CompliesWith(IfaceInst *iface);
 		
 		// Recursion guards
 		bool validated;
