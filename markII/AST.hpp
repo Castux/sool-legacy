@@ -230,7 +230,7 @@ namespace sool
 	{
 		public:
 		
-		std::vector<Class*> 		classes;
+		std::vector<Class*>			classes;
 		std::vector<Extension*>		extensions;
 		std::vector<Interface*>		interfaces;
 		

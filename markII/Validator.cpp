@@ -136,7 +136,10 @@ bool IfaceInst::Validate()
 		// Check types' validity
 		success = v->ValidateType(p->rtype, p->rtype_pos);
 		if(!success)
+		{
+			delete p;
 			return false;
+		}
 		
 		for(uint j = 0 ; j < p->args.size() ; j++)
 		{
@@ -151,7 +154,7 @@ bool IfaceInst::Validate()
 		{
 			if(p->rtype != other->rtype)
 			{
-				v->AddError("method " + p->signature + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
+				v->AddError("method " + p->selector + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
 				v->AddInfo("here:", porigin[other], other->pos);
 				delete p;
 				return false;
@@ -380,8 +383,61 @@ bool ClassInst::Validate()
 		AddMember(m);
 	}
 	
+	// Finally, methods
 	
-	
+	for(uint i = 0 ; i < cl->methods.size() ; i++)
+	{
+		// Apply template parameters
+		Prototype *p = cl->methods[i]->proto->ReplaceTemplateParams(tmap);
+		
+		// Check types' validity
+		success = v->ValidateType(p->rtype, p->rtype_pos);
+		if(!success)
+		{
+			delete p;
+			return false;
+		}
+		
+		for(uint j = 0 ; j < p->args.size() ; j++)
+		{
+			success = v->ValidateType(p->args[j].type, p->args[j].pos);
+			if(!success)
+			{
+				delete p;
+				return false;
+			}
+		}
+		
+		// Check selector conflict
+		AnswerInfo info = answers[p->selector];
+		switch(info.mode)
+		{
+			case a_member:
+			case a_shared_member:
+				v->AddError("method " + p->selector + " shadows accessor of member", this, p->pos);
+				v->AddInfo("defined here:", this, info.member->pos);
+				delete p;
+				return false;
+			case a_self:
+			case a_selfless:
+				v->AddError("method " + p->selector + " was already declared", this, p->pos);
+				v->AddInfo("here:", this, pmap[p->selector]->pos);
+				delete p;
+				return false;
+			case a_not:
+				// fine
+				break;
+			default:
+				error("Other kinds of information should not be there yet");
+		}
+		
+		AddProto(p);
+		
+		AnswerInfo info2;
+		info2.mode = cl->methods[i]->kind == Method::k_normal ? a_self : a_selfless;
+		info2.rtype = p->rtype;
+		answers[p->selector] = info2;
+	}
 	
 	validated = true;
 	validating = false;
