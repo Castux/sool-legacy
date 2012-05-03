@@ -45,7 +45,7 @@ namespace sool
 		
 		IfaceInst(Validator *vali, Interface *i);
 		IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params);	// With parameters, given in declaration order
-		~IfaceInst();
+		virtual ~IfaceInst();
 		
 		bool Validate();
 		void AddProto(Prototype* p, IfaceInst* origin = NULL);		// Insert prototype in pmap and porigin. By default, origin is oneself
@@ -126,7 +126,7 @@ namespace sool
 		
 		ClassInst(Validator *vali, Class *c);	// No parameter
 		ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params);	// With parameters, given in order
-		~ClassInst();
+		virtual ~ClassInst();
 		
 		bool Validate();
 		bool CheckShortcutConflicts();

@@ -165,7 +165,7 @@ namespace sool
 		SourcePos				fullname_pos;		// includes template parameters
 		std::vector<SourcePos>	embed_pos;
 		
-		~Class();
+		virtual ~Class();
 		
 		std::string KindToString();
 		bool IsClass()
@@ -215,7 +215,7 @@ namespace sool
 		
 		std::vector<SourcePos>		embed_pos;
 		
-		~Interface();
+		virtual ~Interface();
 		
 		std::string FancyName();
 		bool IsClass()
