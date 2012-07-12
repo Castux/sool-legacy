@@ -15,14 +15,13 @@ namespace sool
 		Report report;
 		
 		// Parsing context
-		std::vector<Token>		*tokens;	//owned
+		Token::vecptr			tokens;
 		Token					*head;
 		Context					*context;	// not owned, will be passed to analyzer
 		
 		public:
 		
-		Parser(std::vector<Token> *t);
-		~Parser();
+		Parser(Token::vecptr t);
 		
 		bool Parse();
 		
@@ -33,12 +32,12 @@ namespace sool
 		std::vector<TemplateParam>* ParseTemplateParams();
 		Extension* ParseExtension();
 		Type ParseType(SourcePos *pos = NULL);
-		ClassName* ParseClassName();
-		Prototype* ParsePrototype(bool expect_arg_names);
+		ClassName::ptr ParseClassName();
+		Prototype::ptr ParsePrototype(bool expect_arg_names);
 		Method* ParseMethod();
 		Member* ParseMember();
 		Interface* ParseInterface();
-		std::vector<ClassName*>* ParseEmbed();
+		ClassName::vec* ParseEmbed();
 		
 		bool Expect(Token::Kind k);
 		bool Accept(Token::Kind k);

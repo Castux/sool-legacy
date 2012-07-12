@@ -2,14 +2,9 @@
 
 using namespace sool;
 
-Parser::Parser(std::vector<Token> *t) : tokens(t), noinfo(false)
+Parser::Parser(Token::vecptr t) : tokens(t), noinfo(false)
 {
 	head = &tokens->front();
-}
-
-Parser::~Parser()
-{
-	delete tokens;
 }
 
 bool Parser::Parse()
@@ -120,7 +115,7 @@ Class* Parser::ParseClass()
 		{
 			SourcePos embed_start = head->pos;
 			
-			std::vector<ClassName*> *embeds = ParseEmbed();
+			ClassName::vec *embeds = ParseEmbed();
 			if(!embeds)
 			{
 				delete c;
@@ -168,7 +163,7 @@ TemplateParam Parser::ParseTemplateParam()
 	TemplateParam res;
 	SourcePos start = head->pos;
 	
-	ClassName *c = ParseClassName();
+	ClassName::ptr c = ParseClassName();
 	if(!c)
 	{
 		AddInfo("as template parameter bound");
@@ -271,7 +266,7 @@ Extension *Parser::ParseExtension()
 	}
 	else
 	{
-		ClassName *cname = ParseClassName();
+		ClassName::ptr cname = ParseClassName();
 		if(!cname)
 		{
 			delete e;
@@ -307,10 +302,10 @@ Extension *Parser::ParseExtension()
 	return e;
 }
 
-ClassName* Parser::ParseClassName()
+ClassName::ptr Parser::ParseClassName()
 {
 	std::string name;
-	std::vector<ClassName*> params;
+	ClassName::vec params;
 	
 	SourcePos start = head->pos;
 	
@@ -331,11 +326,11 @@ ClassName* Parser::ParseClassName()
 		name = "#";
 		head++;
 		
-		ClassName *sub = ParseClassName();
+		ClassName::ptr sub = ParseClassName();
 		if(!sub)
 		{
 			AddInfo("in array class name started here:", start, true);
-			return NULL;
+			return ClassName::ptr();
 		}
 		
 		params.push_back(sub);
@@ -348,7 +343,7 @@ ClassName* Parser::ParseClassName()
 	if(head->kind != Token::t_cname)
 	{
 		AddError("malformed class name", head->pos);
-		return NULL;
+		return ClassName::ptr();
 	}
 	
 	name = head->string;
@@ -366,11 +361,11 @@ ClassName* Parser::ParseClassName()
 			
 			do
 			{
-				ClassName *sub = ParseClassName();
+				ClassName::ptr sub = ParseClassName();
 				if(!sub)
 				{
 					AddInfo("in template parameters list started here:", lparens, true);
-					return NULL;
+					return ClassName::ptr();
 				}
 				params.push_back(sub);
 				
@@ -379,17 +374,17 @@ ClassName* Parser::ParseClassName()
 			if(!Expect(Token::t_rparens))
 			{
 				AddInfo("to close template parameters list started here:", lparens, true);
-				return NULL;
+				return ClassName::ptr();
 			}
 		}
 		else
 		{
 			// Single sub type
-			ClassName *sub = ParseClassName();
+			ClassName::ptr sub = ParseClassName();
 			if(!sub)
 			{
 				AddInfo("as template parameter for class name started here:", start, true);
-				return NULL;
+				return ClassName::ptr();
 			}
 			
 			params.push_back(sub);
@@ -404,7 +399,7 @@ Type Parser::ParseType(SourcePos *pos)
 {
 	SourcePos start = head->pos;
 	
-	ClassName *cname = ParseClassName();
+	ClassName::ptr cname = ParseClassName();
 	if(!cname)
 	{
 		return Type();
@@ -427,9 +422,9 @@ Type Parser::ParseType(SourcePos *pos)
 	return Type(cname, opt);
 }
 
-Prototype* Parser::ParsePrototype(bool expect_arg_names)
+Prototype::ptr Parser::ParsePrototype(bool expect_arg_names)
 {
-	Prototype *p = new Prototype();
+	Prototype::ptr p(new Prototype());
 	SourcePos start = head->pos;
 	
 	if(head->kind != Token::t_name && !IsBinop(head->kind) && head->kind != Token::t_lbracket)
@@ -444,8 +439,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 			if(!t.cname)
 			{
 				AddInfo("as return type for method");
-				delete p;
-				return NULL;
+				return Prototype::ptr();
 			}
 			rtypes.push_back(t);
 			
@@ -480,8 +474,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	{
 		AddError("invalid method name", head->pos);
 		AddInfo("expected name, operator or '[]'");
-		delete p;
-		return NULL;
+		return Prototype::ptr();
 	}
 	
 	// Arguments
@@ -491,8 +484,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	if(!Expect(Token::t_lparens))
 	{
 		AddInfo("to open argument list in method started here:", start, true);
-		delete p;
-		return NULL;
+		return Prototype::ptr();
 	}
 	
 	if(head->kind != Token::t_rparens)
@@ -506,8 +498,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 			if(!t.cname)
 			{
 				AddInfo("as argument type in list started here:", lparens, true);
-				delete p;
-				return NULL;
+				return Prototype::ptr();
 			}
 			arg.type = t;
 			
@@ -516,8 +507,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 				if(!Expect(Token::t_name))
 				{
 					AddInfo("as name for argument started here:", argstart, true);
-					delete p;
-					return NULL;
+					return Prototype::ptr();
 				}
 				arg.name = head[-1].string;
 			}
@@ -537,8 +527,7 @@ Prototype* Parser::ParsePrototype(bool expect_arg_names)
 	if(!Expect(Token::t_rparens))
 	{
 		AddInfo("to close argument list started here:", lparens);
-		delete p;
-		return NULL;
+		return Prototype::ptr();
 	}
 	
 	p->pos = start.To(head[-1].pos);
@@ -576,7 +565,7 @@ Method* Parser::ParseMethod()
 	
 	// Proto
 	
-	Prototype *proto = ParsePrototype(true);	// true to require argument names
+	Prototype::ptr proto = ParsePrototype(true);	// true to require argument names
 	if(!proto)
 	{
 		AddInfo("for method started here:", start, true);
@@ -676,7 +665,7 @@ Interface* Parser::ParseInterface()
 		{
 			SourcePos embed_start = head->pos;
 			
-			std::vector<ClassName*> *embeds = ParseEmbed();
+			ClassName::vec *embeds = ParseEmbed();
 			if(!embeds)
 			{
 				delete i;
@@ -693,7 +682,7 @@ Interface* Parser::ParseInterface()
 		}
 		else
 		{
-			Prototype *p = ParsePrototype(false);	// false for optional argument names
+			Prototype::ptr p = ParsePrototype(false);	// false for optional argument names
 			if(!p)
 			{
 				delete i;
@@ -717,7 +706,7 @@ Interface* Parser::ParseInterface()
 	return i;
 }
 
-std::vector<ClassName*>* Parser::ParseEmbed()
+ClassName::vec* Parser::ParseEmbed()
 {
 	SourcePos start = head->pos;
 	
@@ -726,11 +715,11 @@ std::vector<ClassName*>* Parser::ParseEmbed()
 	
 	head++;
 	
-	std::vector<ClassName*> *classes = new std::vector<ClassName*>;
+	ClassName::vec *classes = new ClassName::vec;
 	
 	do
 	{
-		ClassName *c = ParseClassName();
+		ClassName::ptr c = ParseClassName();
 		if(!c)
 		{
 			AddInfo("in embedding", start, true);

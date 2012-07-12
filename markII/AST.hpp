@@ -1,9 +1,6 @@
 #ifndef AST_HPP
 #define AST_HPP
 
-#include <vector>
-#include <map>
-
 #include "common.hpp"
 #include "SourceFile.hpp"
 #include "Type.hpp"
@@ -38,7 +35,6 @@ namespace sool
 		SourcePos	name_pos;
 		
 		Member();
-		~Member();
 		
 		// Build new member with type substitution
 		Member *ReplaceTemplateParams(ClassNameMap &tmap);
@@ -47,6 +43,9 @@ namespace sool
 	class Prototype : public AST
 	{
 		public:
+		
+		typedef shared_ptr<Prototype> ptr;
+		typedef std::vector<ptr> vec;
 		
 		class Argument : public AST
 		{
@@ -75,14 +74,14 @@ namespace sool
 		
 		// Comparison (more efficient that comparing strings...)
 		
-		bool SameSelector(Prototype *other);
-		bool operator==(Prototype *other);
+		bool SameSelector(Prototype::ptr other);
+		bool operator==(Prototype::ptr other);
 		
 		// Build a new prototype with type substitutions
-		Prototype *ReplaceTemplateParams(ClassNameMap &tmap);
+		Prototype::ptr ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
-	typedef std::map<std::string,Prototype*> ProtoMap;
+	typedef std::map<std::string,Prototype::ptr> ProtoMap;
 	
 	class Method : public AST
 	{
@@ -97,8 +96,8 @@ namespace sool
 			k_foreign
 		} Kind;
 		
-		Kind		kind;
-		Prototype*	proto;
+		Kind			kind;
+		Prototype::ptr	proto;
 		
 		// Body
 		// Block *body;
@@ -107,19 +106,14 @@ namespace sool
 		SourcePos	kind_pos;
 		
 		Method();
-		~Method();
 	};
 	
 	class TemplateParam : public AST
 	{
 		public:
 		
-		ClassName*		bound;
+		ClassName::ptr	bound;
 		std::string		name;
-		
-		TemplateParam() : bound(NULL)
-		{
-		}
 	};
 	
 	class Global : public AST
@@ -158,7 +152,7 @@ namespace sool
 		
 		std::vector<Member*>	members;	// owned
 		std::vector<Method*>	methods;	// owned
-		std::vector<ClassName*>	embeds;
+		ClassName::vec			embeds;
 		
 		// Useful source code positions
 		
@@ -188,7 +182,7 @@ namespace sool
 		// extend Table|(text,Bar)
 		// extend #Bar
 		
-		ClassName*					cname;
+		ClassName::ptr				cname;
 		
 		// or an extension to a class/interface template
 		// extend Name|(Iface1 T, Iface2 U)
@@ -210,12 +204,10 @@ namespace sool
 		
 		// name and parameters are inherited from Global
 		
-		std::vector<ClassName*>		embeds;		// Embedded interfaces
-		std::vector<Prototype*>		protos;		// Owned
+		ClassName::vec				embeds;	// Embedded interfaces
+		Prototype::vec				protos;
 		
 		std::vector<SourcePos>		embed_pos;
-		
-		~Interface();
 		
 		std::string FancyName();
 		bool IsClass()

@@ -11,17 +11,17 @@ namespace sool
 	{
 		public:
 		
-		SourceFile			*file;
+		SourceFile::ptr		file;
 		Report				report;
 
 		
 		// Lexing context
 		const char			*bufstart;
 		const char			*head;
-		std::vector<Token>	*tokens;	// not owned, will be passed to parser
+		Token::vecptr		tokens;
 		
 		public:
-		Lexer(SourceFile *f);
+		Lexer(SourceFile::ptr f);
 		
 		bool Lex();
 		

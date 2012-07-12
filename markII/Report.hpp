@@ -1,7 +1,7 @@
 #ifndef REPORT_HPP
 #define REPORT_HPP
 
-#include <vector>
+#include "common.hpp"
 #include "SourceFile.hpp"
 
 // The report is basically a list of diagnostics, with statistics added...

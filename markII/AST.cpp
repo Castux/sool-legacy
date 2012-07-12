@@ -7,10 +7,6 @@ Member::Member() : shared(false)
 {
 }
 
-Member::~Member()
-{
-}
-
 Member *Member::ReplaceTemplateParams(ClassNameMap &tmap)
 {
 	Member *m = new Member(*this);
@@ -19,14 +15,10 @@ Member *Member::ReplaceTemplateParams(ClassNameMap &tmap)
 	return m;
 }
 
-Method::Method() : proto(NULL)
+Method::Method()
 {
 }
 
-Method::~Method()
-{
-	delete proto;
-}
 
 Class::~Class()
 {
@@ -53,7 +45,7 @@ std::string Class::FancyName()
 	return KindToString() + " " + name;
 }
 
-Extension::Extension() : cname(NULL)
+Extension::Extension()
 {
 }
 
@@ -66,12 +58,6 @@ Extension::~Extension()
 std::string Interface::FancyName()
 {
 	return std::string("interface ") + name;
-}
-
-Interface::~Interface()
-{
-	for(uint i = 0 ; i < protos.size() ; i++)
-		delete protos[i];
 }
 
 Context::~Context()
@@ -97,21 +83,21 @@ void Prototype::ComputeSignature()
 	signature = rtype.signature + ":" + selector;
 }
 
-bool Prototype::SameSelector(Prototype *other)
+bool Prototype::SameSelector(Prototype::ptr other)
 {
 	return (name == other->name &&
 			setter == other->setter &&
 			atype == other->atype);
 }
 
-bool Prototype::operator==(Prototype *other)
+bool Prototype::operator==(Prototype::ptr other)
 {
 	return (rtype == other->rtype) && SameSelector(other);
 }
 
-Prototype* Prototype::ReplaceTemplateParams(ClassNameMap &tmap)
+Prototype::ptr Prototype::ReplaceTemplateParams(ClassNameMap &tmap)
 {
-	Prototype *p = new Prototype(*this);
+	Prototype::ptr p(new Prototype(*this));
 	
 	p->rtype = rtype.ReplaceTemplateParams(tmap);
 	

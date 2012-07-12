@@ -31,31 +31,30 @@ namespace sool
 		
 		Interface*		iface;		// The interface template
 		ClassNameMap	tmap;		// Maps template parameters to their actual binding (can be empty)
-		ClassName*		name;		// The full name, with template arguments
+		ClassName::ptr	name;		// The full name, with template arguments
 		
 		// Filled by Validate() - don't write directly to them, use AddProto()
 		
-		std::vector<Prototype*>				pvec;		// the instance's prototypes
+		Prototype::vec						pvec;		// the instance's prototypes
 		ProtoMap							pmap;		// prototypes indexed by selector
-		std::map<Prototype*,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
+		std::map<Prototype::ptr,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
 		
 		// Memoization
 		
 		std::map<IfaceInst*,bool>			complies;
 		
 		IfaceInst(Validator *vali, Interface *i);
-		IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params);	// With parameters, given in declaration order
-		~IfaceInst();
+		IfaceInst(Validator *vali, Interface *i, ClassName::vec params);	// With parameters, given in declaration order
 		
 		bool Validate();
-		void AddProto(Prototype* p, IfaceInst* origin = NULL);		// Insert prototype in pmap and porigin. By default, origin is oneself
+		void AddProto(Prototype::ptr p, IfaceInst* origin = NULL);		// Insert prototype in pmap and porigin. By default, origin is oneself
 		
 		// After validation lookup methods
 		// They should all assert validation before doing anything,
 		// because some interfaces can be spawned on the fly after the
 		// first round of validations, and we might have forgotten to do it
 		
-		bool Contains(Prototype *p);
+		bool Contains(Prototype::ptr p);
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
 		bool CompliesWith(IfaceInst *iface);
 		
@@ -89,15 +88,15 @@ namespace sool
 			public:
 			
 			AnswerMode		mode;
-			union
-			{
-				Member*		member;		// Points at the member this is an accessor for
-				ClassName*	target;		// Contains the name of the embedded member or the generic class
-				Prototype*	proto;		// Contains the actual prototype for self, selfless and shortcuts
-			};
+			
+			// Of these only one is used at one time
+				Member*			member;		// Points at the member this is an accessor for
+				ClassName::ptr	target;		// Contains the name of the embedded member or the generic class
+				Prototype::ptr	proto;		// Contains the actual prototype for self, selfless and shortcuts
+			
 			MultiType		rtype;
 			
-			AnswerInfo() : mode(a_unknown), member(NULL)
+			AnswerInfo() : mode(a_unknown)
 			{
 			}
 			
@@ -110,13 +109,13 @@ namespace sool
 		
 		Class*			cl;		// Class template
 		ClassNameMap	tmap;	// Type parameters map
-		ClassName*		name;	// Full name
+		ClassName::ptr	name;	// Full name
 		
 		// Added by Validate() - do not write, use AddMember() and AddProto()
 		
 		std::vector<Member*>	members;		// The type corrected members (owned)
 		std::vector<Member*>	embeds;			// list of which members are embedings
-		std::vector<Prototype*>	pvec;			// the instance's prototypes (owned)
+		Prototype::vec			pvec;			// the instance's prototypes
 		ProtoMap				pmap;			// prototypes indexed by selector
 		
 		// Memoization
@@ -125,18 +124,18 @@ namespace sool
 		std::map<IfaceInst*,bool>			complies;
 		
 		ClassInst(Validator *vali, Class *c);	// No parameter
-		ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params);	// With parameters, given in order
+		ClassInst(Validator *vali, Class *c, ClassName::vec params);	// With parameters, given in order
 		~ClassInst();
 		
 		bool Validate();
 		bool CheckShortcutConflicts();
 		void AddMember(Member *m);		// This takes care of adding the accessors' prototypes
-		void AddProto(Prototype *p);	// This adds to both pvec and pmap
+		void AddProto(Prototype::ptr p);	// This adds to both pvec and pmap
 		
 		// Lookup
 		
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
-		bool AnswersTo(Prototype *proto);
+		bool AnswersTo(Prototype::ptr proto);
 		bool CompliesWith(IfaceInst *iface);
 		
 		// Recursion guards
@@ -145,8 +144,8 @@ namespace sool
 		static std::vector<ClassInst*> validation_stack;
 	};
 	
-	typedef std::map<ClassName*,IfaceInst*> IfaceInstMap;
-	typedef std::map<ClassName*,ClassInst*> ClassInstMap;
+	typedef std::map<ClassName::ptr,IfaceInst*> IfaceInstMap;
+	typedef std::map<ClassName::ptr,ClassInst*> ClassInstMap;
 	
 	class Validator
 	{
@@ -179,14 +178,14 @@ namespace sool
 		bool ValidateParameterlessInterfaces();
 		bool ValidateParameterlessClasses();
 		
-		bool ValidateClassName(ClassName *cname, SourcePos pos = SourcePos());
+		bool ValidateClassName(ClassName::ptr cname, SourcePos pos = SourcePos());
 		bool ValidateType(Type &t, SourcePos pos = SourcePos());
 		bool ValidateType(MultiType &t, SourcePos pos = SourcePos());
 		
 		// Helpers
 		void AddIface(IfaceInst* iface);			// add to both vector and name map
 		void AddClass(ClassInst* cl);				// add to both vector and name map
-		GlobalInst* GetGlobal(ClassName *name);		// lookup in both imap and cmap
+		GlobalInst* GetGlobal(ClassName::ptr name);	// lookup in both imap and cmap
 		
 		void AddError(std::string message, SourcePos position = SourcePos());
 		void AddInfo(std::string message, SourcePos position = SourcePos());

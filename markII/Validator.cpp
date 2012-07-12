@@ -13,7 +13,7 @@ IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validat
 	name = ClassName::Build(i->name);
 }
 
-IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> params) : v(vali), iface(i), validated(false), validating(false)
+IfaceInst::IfaceInst(Validator *vali, Interface *i, ClassName::vec params) : v(vali), iface(i), validated(false), validating(false)
 {
 	// Sanity check
 	if(i->params.size() != params.size())
@@ -25,15 +25,6 @@ IfaceInst::IfaceInst(Validator *vali, Interface *i, std::vector<ClassName*> para
 	
 	// Build class name
 	name = ClassName::Build(i->name, params);
-}
-
-IfaceInst::~IfaceInst()
-{
-	for(uint i = 0 ; i < pvec.size() ; i++)
-	{
-		if(porigin[pvec[i]] == this)
-			delete pvec[i];
-	}
 }
 
 std::vector<IfaceInst*> IfaceInst::validation_stack;
@@ -76,7 +67,7 @@ bool IfaceInst::Validate()
 	for(uint i = 0 ; i < iface->embeds.size() ; i++)
 	{
 		// Apply template parameters
-		ClassName *cn = iface->embeds[i]->ReplaceTemplateParams(tmap);
+		ClassName::ptr cn = iface->embeds[i]->ReplaceTemplateParams(tmap);
 		
 		// Make sure instance exists
 		success = v->ValidateClassName(cn, iface->embed_pos[i]);
@@ -105,14 +96,14 @@ bool IfaceInst::Validate()
 			return false;
 		
 		// Retrieve method set!
-		std::vector<Prototype*> *protos = &inst->pvec;
+		Prototype::vec *protos = &inst->pvec;
 		
 		// Add them with conflict check
 		for(uint j = 0 ; j < protos->size() ; j++)
 		{
-			Prototype *proto = (*protos)[j];
+			Prototype::ptr proto = (*protos)[j];
 			
-			Prototype *other = pmap[proto->selector];
+			Prototype::ptr other = pmap[proto->selector];
 			if(other && proto->rtype != other->rtype)
 			{
 				v->AddError("cannot embed interface " + inst->name->signature + " in " + name->signature, this, iface->embed_pos[i]);
@@ -131,13 +122,12 @@ bool IfaceInst::Validate()
 	for(uint i = 0 ; i < iface->protos.size() ; i++)
 	{
 		// Instantiate prototype template
-		Prototype *p = iface->protos[i]->ReplaceTemplateParams(tmap);
+		Prototype::ptr p = iface->protos[i]->ReplaceTemplateParams(tmap);
 		
 		// Check types' validity
 		success = v->ValidateType(p->rtype, p->rtype_pos);
 		if(!success)
 		{
-			delete p;
 			return false;
 		}
 		
@@ -149,17 +139,15 @@ bool IfaceInst::Validate()
 		}
 		
 		// Check selector conflicts
-		Prototype *other = pmap[p->selector];
+		Prototype::ptr other = pmap[p->selector];
 		if(other)
 		{
 			if(p->rtype != other->rtype)
 			{
 				v->AddError("method " + p->selector + " was already declared with a different return type (" + other->rtype.signature + ")", this, p->pos);
 				v->AddInfo("here:", porigin[other], other->pos);
-				delete p;
 				return false;
 			}
-			delete p;
 		}
 		else
 		{
@@ -174,7 +162,7 @@ bool IfaceInst::Validate()
 	return true;
 }
 
-void IfaceInst::AddProto(Prototype* p, IfaceInst* origin)
+void IfaceInst::AddProto(Prototype::ptr p, IfaceInst* origin)
 {
 	// Sanity check
 	if(pmap[p->selector])
@@ -185,12 +173,12 @@ void IfaceInst::AddProto(Prototype* p, IfaceInst* origin)
 	porigin[p] = origin ? origin : this;
 }
 
-bool IfaceInst::Contains(Prototype *p)
+bool IfaceInst::Contains(Prototype::ptr p)
 {
 	if(!validated)
 		error("IfaceInst::Contains() - iface not validated");
 	
-	Prototype *own = pmap[p->selector];
+	Prototype::ptr own = pmap[p->selector];
 	if(!own)
 		return false;
 	
@@ -205,7 +193,7 @@ bool IfaceInst::AnswersTo(std::string selector, MultiType *rtype)
 	if(!validated)
 		error("IfaceInst::AnswersTo() - iface not validated");
 	
-	Prototype *own = pmap[selector];
+	Prototype::ptr own = pmap[selector];
 	if(!own)
 		return false;
 	
@@ -288,7 +276,7 @@ ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(fals
 	name = ClassName::Build(c->name);
 }
 
-ClassInst::ClassInst(Validator *vali, Class *c, std::vector<ClassName*> params) : v(vali), cl(c), validated(false), validating(false)
+ClassInst::ClassInst(Validator *vali, Class *c, ClassName::vec params) : v(vali), cl(c), validated(false), validating(false)
 {
 	// Sanity check
 	if(c->params.size() != params.size())
@@ -306,9 +294,6 @@ ClassInst::~ClassInst()
 {
 	for(uint i = 0 ; i < members.size() ; i++)
 		delete members[i];
-		
-	for(uint i = 0 ; i < pvec.size() ; i++)
-		delete pvec[i];
 }
 
 std::vector<ClassInst*> ClassInst::validation_stack;
@@ -351,7 +336,7 @@ bool ClassInst::Validate()
 	for(uint i = 0 ; i < cl->embeds.size() ; i++)
 	{
 		// Apply template parameters
-		ClassName *cn = cl->embeds[i]->ReplaceTemplateParams(tmap);
+		ClassName::ptr cn = cl->embeds[i]->ReplaceTemplateParams(tmap);
 		
 		// Make sure instance exists
 		success = v->ValidateClassName(cn, cl->embed_pos[i]);
@@ -431,13 +416,12 @@ bool ClassInst::Validate()
 	for(uint i = 0 ; i < cl->methods.size() ; i++)
 	{
 		// Apply template parameters
-		Prototype *p = cl->methods[i]->proto->ReplaceTemplateParams(tmap);
+		Prototype::ptr p = cl->methods[i]->proto->ReplaceTemplateParams(tmap);
 		
 		// Check types' validity
 		success = v->ValidateType(p->rtype, p->rtype_pos);
 		if(!success)
 		{
-			delete p;
 			return false;
 		}
 		
@@ -446,7 +430,6 @@ bool ClassInst::Validate()
 			success = v->ValidateType(p->args[j].type, p->args[j].pos);
 			if(!success)
 			{
-				delete p;
 				return false;
 			}
 		}
@@ -459,13 +442,11 @@ bool ClassInst::Validate()
 			case a_shared_member:
 				v->AddError("method " + p->selector + " shadows accessor of member", this, p->pos);
 				v->AddInfo("defined here:", this, other.member->pos);
-				delete p;
 				return false;
 			case a_self:
 			case a_selfless:
 				v->AddError("method " + p->selector + " was already declared", this, p->pos);
 				v->AddInfo("here:", this, other.proto->pos);
-				delete p;
 				return false;
 			case a_unknown:
 				// fine
@@ -498,19 +479,17 @@ bool ClassInst::CheckShortcutConflicts()
 {
 	for(uint i = 0 ; i < pvec.size() ; i++)
 	{
-		Prototype *p = pvec[i];
+		Prototype::ptr p = pvec[i];
 		
-		Prototype *curr = p;
+		Prototype::ptr curr = p;
 		
 		while(true)
 		{
-			Prototype *prev = curr;		// for memory cleanup
-			
 			// Check if last argument is optional
 			if(curr->args.size() > 0 && curr->args.back().type.optional)
 			{
 				// Yes! Make shortcut
-				Prototype *shortcut = new Prototype(*curr);
+				Prototype::ptr shortcut(new Prototype(*curr));
 				shortcut->args.pop_back();
 				shortcut->ComputeSignature();
 				
@@ -522,18 +501,15 @@ bool ClassInst::CheckShortcutConflicts()
 					case a_shared_member:
 						v->AddError("optional argument makes shorcut " + shortcut->selector + " shadow accessor of member", this, p->pos);
 						v->AddInfo("defined here:", this, other.member->pos);
-						delete shortcut;
 						return false;
 					case a_self:
 					case a_selfless:
 						v->AddError("optional argument makes shorcut " + shortcut->selector + " shadow method", this, p->pos);
 						v->AddInfo("defined here:", this, other.proto->pos);
-						delete shortcut;
 						return false;
 					case a_shortcut:
 						v->AddError("optional argument makes shorcut " + shortcut->selector + " conflict", this, p->pos);
 						v->AddInfo("with shortcut for:", this, other.proto->pos);
-						delete shortcut;
 						return false;
 					case a_unknown:
 						// fine
@@ -551,14 +527,9 @@ bool ClassInst::CheckShortcutConflicts()
 				answers[shortcut->selector] = info;
 				
 				curr = shortcut;
-				
-				if(prev != p)
-					delete prev;
 			}
 			else
 			{
-				if(prev != p)
-					delete prev;
 				break;
 			}
 		}
@@ -572,7 +543,7 @@ void ClassInst::AddMember(Member *m)
 	members.push_back(m);
 	
 	// Getter
-	Prototype *p = new Prototype;
+	Prototype::ptr p(new Prototype);
 	
 	p->rtype = m->type;
 	p->name = m->name;
@@ -592,7 +563,7 @@ void ClassInst::AddMember(Member *m)
 	answers[p->selector] = info;
 	
 	// Setter
-	p = new Prototype;
+	p = Prototype::ptr(new Prototype);
 	
 	p->rtype = MultiType();		// void
 	p->name = m->name;
@@ -613,7 +584,7 @@ void ClassInst::AddMember(Member *m)
 	answers[p->selector] = info;
 }
 
-void ClassInst::AddProto(Prototype *p)
+void ClassInst::AddProto(Prototype::ptr p)
 {
 	// Sanity check
 	if(pmap[p->selector])
@@ -694,7 +665,7 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 	return false;
 }
 
-bool ClassInst::AnswersTo(Prototype *proto)
+bool ClassInst::AnswersTo(Prototype::ptr proto)
 {
 	MultiType rtype;
 	
@@ -996,7 +967,7 @@ void Validator::AddClass(ClassInst* cl)
 	cmap[cl->name] = cl;
 }
 
-GlobalInst* Validator::GetGlobal(ClassName *name)
+GlobalInst* Validator::GetGlobal(ClassName::ptr name)
 {
 	IfaceInst *i = imap[name];
 	if(i)
@@ -1015,7 +986,7 @@ bool Validator::ValidateType(Type &t, SourcePos pos)
 	return ValidateClassName(t.cname, pos);
 }
 
-bool Validator::ValidateClassName(ClassName *cname, SourcePos pos)
+bool Validator::ValidateClassName(ClassName::ptr cname, SourcePos pos)
 {
 	// First check if it already exists, as a class or interface
 	
