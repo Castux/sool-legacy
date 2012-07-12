@@ -66,7 +66,5 @@ int main(int argc, char **argv)
 	if(!success)
 		return 1;
 	
-	delete validator.context;
-	
 	return 0;
 }

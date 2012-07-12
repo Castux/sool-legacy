@@ -2,18 +2,16 @@
 
 using namespace sool;
 
-Parser::Parser(Token::vecptr t) : tokens(t), noinfo(false)
+Parser::Parser(Token::vecptr t) : tokens(t), context(new Context), noinfo(false)
 {
 	head = &tokens->front();
 }
 
 bool Parser::Parse()
 {
-	Class *c;
-	Extension *e;
-	Interface *i;
-	
-	context = new Context();
+	Class::ptr c;
+	Extension::ptr e;
+	Interface::ptr i;
 	
 	while(head->kind != Token::t_eof)
 	{
@@ -52,9 +50,9 @@ bool Parser::Parse()
 	return true;
 }
 
-Class* Parser::ParseClass()
+Class::ptr Parser::ParseClass()
 {
-	Class *c = new Class();
+	Class::ptr c(new Class);
 	
 	SourcePos start = head->pos;
 	
@@ -77,22 +75,19 @@ Class* Parser::ParseClass()
 	if(!Expect(Token::t_cname))
 	{
 		AddInfo("as class name in class definition started here:", start);
-		delete c;
-		return NULL;
+		return Class::ptr();
 	}
 	c->name = head[-1].string;
 	c->name_pos = head[-1].pos;
 	
 	// Template params
 	
-	std::vector<TemplateParam>* params = ParseTemplateParams();
+	TemplateParam::vecptr params = ParseTemplateParams();
 	if(!params)
 	{
-		delete c;
-		return NULL;
+		return Class::ptr();
 	}
 	c->params = *params;
-	delete params;
 	
 	// Definitions
 	
@@ -103,11 +98,10 @@ Class* Parser::ParseClass()
 			head->kind == Token::t_selfless ||
 			head->kind == Token::t_foreign )
 		{
-			Method *m = ParseMethod();
+			Method::ptr m = ParseMethod();
 			if(!m)
 			{
-				delete c;
-				return NULL;
+				return Class::ptr();
 			}
 			c->methods.push_back(m);
 		}
@@ -115,11 +109,10 @@ Class* Parser::ParseClass()
 		{
 			SourcePos embed_start = head->pos;
 			
-			ClassName::vec *embeds = ParseEmbed();
+			ClassName::vecptr embeds = ParseEmbed();
 			if(!embeds)
 			{
-				delete c;
-				return NULL;
+				return Class::ptr();
 			}
 			
 			SourcePos embed_pos = embed_start.To(head[-1].pos);
@@ -128,15 +121,13 @@ Class* Parser::ParseClass()
 				c->embed_pos.push_back(embed_pos);
 			
 			c->embeds.insert(c->embeds.end(), embeds->begin(), embeds->end());
-			delete embeds;
 		}
 		else
 		{
-			Member *m = ParseMember();
+			Member::ptr m = ParseMember();
 			if(!m)
 			{
-				delete c;
-				return NULL;
+				return Class::ptr();
 			}
 			c->members.push_back(m);
 		}
@@ -147,8 +138,7 @@ Class* Parser::ParseClass()
 	if(!Expect(Token::t_end))
 	{
 		AddInfo("to close class definition started here:", start);
-		delete c;
-		return NULL;
+		return Class::ptr();
 	}
 	
 	c->pos = start.To(head[-1].pos);
@@ -182,9 +172,9 @@ TemplateParam Parser::ParseTemplateParam()
 	return res;
 }
 
-std::vector<TemplateParam>* Parser::ParseTemplateParams()
+TemplateParam::vecptr Parser::ParseTemplateParams()
 {
-	std::vector<TemplateParam>* params = new std::vector<TemplateParam>;
+	TemplateParam::vecptr params (new TemplateParam::vec);
 	
 	if(Accept(Token::t_pipe))
 	{
@@ -193,8 +183,7 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 		if(!Expect(Token::t_lparens))
 		{
 			AddInfo("to open template parameter list introduced here:", pipe);
-			delete params;
-			return NULL;
+			return TemplateParam::vecptr();
 		}
 		
 		SourcePos lparens = head[-1].pos;
@@ -207,8 +196,7 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 			if(res.bound == NULL)
 			{
 				AddInfo("in template parameter list started here:", lparens, true);
-				delete params;
-				return NULL;
+				return TemplateParam::vecptr();
 			};
 			params->push_back(res);
 			
@@ -217,17 +205,16 @@ std::vector<TemplateParam>* Parser::ParseTemplateParams()
 		if(!Expect(Token::t_rparens))
 		{
 			AddInfo("to close template parameters list started here:", lparens, true);
-			delete params;
-			return NULL;
+			return TemplateParam::vecptr();
 		}
 	}
 	
 	return params;
 }
 
-Extension *Parser::ParseExtension()
+Extension::ptr Parser::ParseExtension()
 {
-	Extension *e = new Extension;
+	Extension::ptr e(new Extension);
 	SourcePos start = head->pos;
 	
 	if(head->kind != Token::t_extend)
@@ -255,22 +242,19 @@ Extension *Parser::ParseExtension()
 		
 		// Template params
 		
-		std::vector<TemplateParam>* params = ParseTemplateParams();
+		TemplateParam::vecptr params = ParseTemplateParams();
 		if(!params)
 		{
-			delete e;
-			return NULL;
+			return Extension::ptr();
 		}
 		e->params = *params;
-		delete params;
 	}
 	else
 	{
 		ClassName::ptr cname = ParseClassName();
 		if(!cname)
 		{
-			delete e;
-			return NULL;
+			return Extension::ptr();
 		}
 		e->cname = cname;
 	}
@@ -279,11 +263,10 @@ Extension *Parser::ParseExtension()
 	
 	while(head->kind != Token::t_end && head->kind != Token::t_eof)
 	{
-		Method *m = ParseMethod();
+		Method::ptr m = ParseMethod();
 		if(!m)
 		{
-			delete e;
-			return NULL;
+			return Extension::ptr();
 		}
 		e->methods.push_back(m);
 	}
@@ -293,8 +276,7 @@ Extension *Parser::ParseExtension()
 	if(!Expect(Token::t_end))
 	{
 		AddInfo("to close extension started here:", start);
-		delete e;
-		return NULL;
+		return Extension::ptr();
 	}
 	
 	e->pos = start.To(head[-1].pos);
@@ -536,9 +518,9 @@ Prototype::ptr Parser::ParsePrototype(bool expect_arg_names)
 	return p;
 }
 
-Method* Parser::ParseMethod()
+Method::ptr Parser::ParseMethod()
 {
-	Method* m = new Method;
+	Method::ptr m(new Method);
 	SourcePos start = head->pos;
 	
 	// Attributes
@@ -557,8 +539,7 @@ Method* Parser::ParseMethod()
 		default:
 			AddError("malformed method definition", head->pos);
 			AddInfo("expected 'method', 'selfless' or 'foreign'");
-			delete m;
-			return NULL;
+			return Method::ptr();
 	}
 	m->kind_pos = head->pos;
 	head++;
@@ -569,8 +550,7 @@ Method* Parser::ParseMethod()
 	if(!proto)
 	{
 		AddInfo("for method started here:", start, true);
-		delete m;
-		return NULL;
+		return Method::ptr();
 	}
 	
 	m->proto = proto;
@@ -582,8 +562,7 @@ Method* Parser::ParseMethod()
 	if(!Expect(Token::t_end))
 	{
 		AddInfo("to close method definition started here:", start);
-		delete m;
-		return NULL;
+		return Method::ptr();
 	}
 	
 	m->pos = start.To(head[-1].pos);
@@ -591,9 +570,9 @@ Method* Parser::ParseMethod()
 	return m;
 }
 
-Member* Parser::ParseMember()
+Member::ptr Parser::ParseMember()
 {
-	Member *m = new Member;
+	Member::ptr m(new Member);
 	SourcePos start = head->pos;
 	
 	if(Accept(Token::t_shared))
@@ -606,16 +585,14 @@ Member* Parser::ParseMember()
 	if(!t.cname)
 	{
 		AddInfo("for type in member definition");
-		delete m;
-		return NULL;
+		return Member::ptr();
 	}
 	m->type = t;
 	
 	if(!Expect(Token::t_name))
 	{
 		AddInfo("in member definition started here:", start);
-		delete m;
-		return NULL;
+		return Member::ptr();
 	}
 	m->name = head[-1].string;
 	m->name_pos = head[-1].pos;
@@ -625,9 +602,9 @@ Member* Parser::ParseMember()
 	return m;
 }
 
-Interface* Parser::ParseInterface()
+Interface::ptr Parser::ParseInterface()
 {
-	Interface *i = new Interface;
+	Interface::ptr i(new Interface);
 	SourcePos start = head->pos;
 	
 	if(head->kind != Token::t_interface)
@@ -640,22 +617,19 @@ Interface* Parser::ParseInterface()
 	if(!Expect(Token::t_cname))
 	{
 		AddInfo("as name in interface definition started here:", start);
-		delete i;
-		return NULL;
+		return Interface::ptr();
 	}
 	i->name = head[-1].string;
 	i->name_pos = head[-1].pos;
 	
 	// Template params
 	
-	std::vector<TemplateParam>* params = ParseTemplateParams();
+	TemplateParam::vecptr params = ParseTemplateParams();
 	if(!params)
 	{
-		delete i;
-		return NULL;
+		return Interface::ptr();
 	}
 	i->params = *params;
-	delete params;
 	
 	// Content
 	
@@ -665,11 +639,10 @@ Interface* Parser::ParseInterface()
 		{
 			SourcePos embed_start = head->pos;
 			
-			ClassName::vec *embeds = ParseEmbed();
+			ClassName::vecptr embeds = ParseEmbed();
 			if(!embeds)
 			{
-				delete i;
-				return NULL;
+				return Interface::ptr();
 			}
 			
 			SourcePos embed_pos = embed_start.To(head[-1].pos);
@@ -678,15 +651,13 @@ Interface* Parser::ParseInterface()
 				i->embed_pos.push_back(embed_pos);
 			
 			i->embeds.insert(i->embeds.end(), embeds->begin(), embeds->end());
-			delete embeds;
 		}
 		else
 		{
 			Prototype::ptr p = ParsePrototype(false);	// false for optional argument names
 			if(!p)
 			{
-				delete i;
-				return NULL;
+				return Interface::ptr();
 			}
 			i->protos.push_back(p);
 		}
@@ -697,8 +668,7 @@ Interface* Parser::ParseInterface()
 	if(!Expect(Token::t_end))
 	{
 		AddInfo("to close interface definition started here:", start);
-		delete i;
-		return NULL;
+		return Interface::ptr();
 	}
 	
 	i->pos = start.To(head[-1].pos);
@@ -706,7 +676,7 @@ Interface* Parser::ParseInterface()
 	return i;
 }
 
-ClassName::vec* Parser::ParseEmbed()
+ClassName::vecptr Parser::ParseEmbed()
 {
 	SourcePos start = head->pos;
 	
@@ -715,7 +685,7 @@ ClassName::vec* Parser::ParseEmbed()
 	
 	head++;
 	
-	ClassName::vec *classes = new ClassName::vec;
+	ClassName::vecptr classes(new ClassName::vec);
 	
 	do
 	{
@@ -723,7 +693,7 @@ ClassName::vec* Parser::ParseEmbed()
 		if(!c)
 		{
 			AddInfo("in embedding", start, true);
-			return NULL;
+			return ClassName::vecptr();
 		}
 		classes->push_back(c);
 		

@@ -16,35 +16,41 @@ namespace sool
 	{
 		public:
 		
+		typedef shared_ptr<GlobalInst> ptr;
+		typedef std::vector<ptr> vec;
+		
 		virtual bool Validate() = 0;
 		virtual bool AnswersTo(std::string selector, MultiType *rtype = NULL) = 0;
-		virtual bool CompliesWith(IfaceInst *iface) = 0;
+		virtual bool CompliesWith(shared_ptr<IfaceInst> iface) = 0;
 	};
 	
 	class IfaceInst : public GlobalInst
 	{
 		public:
 		
+		typedef shared_ptr<IfaceInst> ptr;
+		typedef std::vector<ptr> vec;
+		
 		Validator*		v;			// Shortcut to validator
 		
 		// Filled by constructor
 		
-		Interface*		iface;		// The interface template
+		Interface::ptr	iface;		// The interface template
 		ClassNameMap	tmap;		// Maps template parameters to their actual binding (can be empty)
 		ClassName::ptr	name;		// The full name, with template arguments
 		
 		// Filled by Validate() - don't write directly to them, use AddProto()
 		
-		Prototype::vec						pvec;		// the instance's prototypes
-		ProtoMap							pmap;		// prototypes indexed by selector
-		std::map<Prototype::ptr,IfaceInst*>		porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
+		Prototype::vec								pvec;		// the instance's prototypes
+		ProtoMap									pmap;		// prototypes indexed by selector
+		std::map<Prototype::ptr,IfaceInst*>			porigin;	// map from prototypes to the interface they were defined in (useful for embedded ones)
 		
 		// Memoization
 		
-		std::map<IfaceInst*,bool>			complies;
+		std::map<IfaceInst::ptr,bool>				complies;
 		
-		IfaceInst(Validator *vali, Interface *i);
-		IfaceInst(Validator *vali, Interface *i, ClassName::vec params);	// With parameters, given in declaration order
+		IfaceInst(Validator *vali, Interface::ptr i);
+		IfaceInst(Validator *vali, Interface::ptr i, ClassName::vec params);	// With parameters, given in declaration order
 		
 		bool Validate();
 		void AddProto(Prototype::ptr p, IfaceInst* origin = NULL);		// Insert prototype in pmap and porigin. By default, origin is oneself
@@ -56,7 +62,7 @@ namespace sool
 		
 		bool Contains(Prototype::ptr p);
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
-		bool CompliesWith(IfaceInst *iface);
+		bool CompliesWith(IfaceInst::ptr iface);
 		
 		// Recursion guards
 		bool validated;
@@ -67,6 +73,9 @@ namespace sool
 	class ClassInst : public GlobalInst
 	{
 		public:
+		
+		typedef shared_ptr<ClassInst> ptr;
+		typedef std::vector<ptr> vec;
 		
 		// The different possibilities on how an instance can answer to a message
 		
@@ -90,7 +99,7 @@ namespace sool
 			AnswerMode		mode;
 			
 			// Of these only one is used at one time
-				Member*			member;		// Points at the member this is an accessor for
+				Member::ptr		member;		// Points at the member this is an accessor for
 				ClassName::ptr	target;		// Contains the name of the embedded member or the generic class
 				Prototype::ptr	proto;		// Contains the actual prototype for self, selfless and shortcuts
 			
@@ -107,36 +116,35 @@ namespace sool
 		
 		// Filled by constructor
 		
-		Class*			cl;		// Class template
+		Class::ptr		cl;		// Class template
 		ClassNameMap	tmap;	// Type parameters map
 		ClassName::ptr	name;	// Full name
 		
 		// Added by Validate() - do not write, use AddMember() and AddProto()
 		
-		std::vector<Member*>	members;		// The type corrected members (owned)
-		std::vector<Member*>	embeds;			// list of which members are embedings
+		Member::vec				members;		// The type corrected members (owned)
+		Member::vec				embeds;			// list of which members are embedings
 		Prototype::vec			pvec;			// the instance's prototypes
 		ProtoMap				pmap;			// prototypes indexed by selector
 		
 		// Memoization
 		
 		std::map<std::string,AnswerInfo>	answers;		// Indexed by selector
-		std::map<IfaceInst*,bool>			complies;
+		std::map<IfaceInst::ptr,bool>			complies;
 		
-		ClassInst(Validator *vali, Class *c);	// No parameter
-		ClassInst(Validator *vali, Class *c, ClassName::vec params);	// With parameters, given in order
-		~ClassInst();
+		ClassInst(Validator *vali, Class::ptr c);	// No parameter
+		ClassInst(Validator *vali, Class::ptr c, ClassName::vec params);	// With parameters, given in order
 		
 		bool Validate();
 		bool CheckShortcutConflicts();
-		void AddMember(Member *m);		// This takes care of adding the accessors' prototypes
+		void AddMember(Member::ptr m);		// This takes care of adding the accessors' prototypes
 		void AddProto(Prototype::ptr p);	// This adds to both pvec and pmap
 		
 		// Lookup
 		
 		bool AnswersTo(std::string selector, MultiType *rtype = NULL);
 		bool AnswersTo(Prototype::ptr proto);
-		bool CompliesWith(IfaceInst *iface);
+		bool CompliesWith(IfaceInst::ptr iface);
 		
 		// Recursion guards
 		bool validated;
@@ -144,18 +152,17 @@ namespace sool
 		static std::vector<ClassInst*> validation_stack;
 	};
 	
-	typedef std::map<ClassName::ptr,IfaceInst*> IfaceInstMap;
-	typedef std::map<ClassName::ptr,ClassInst*> ClassInstMap;
+	typedef std::map<ClassName::ptr,IfaceInst::ptr> IfaceInstMap;
+	typedef std::map<ClassName::ptr,ClassInst::ptr> ClassInstMap;
 	
 	class Validator
 	{
 		public:
 		
-		Report		report;
-		Context*	context;
+		Report			report;
+		Context::ptr	context;
 		
-		Validator(Context *c);
-		~Validator();
+		Validator(Context::ptr c);
 		
 		// Validation entry point
 		bool Validate();
@@ -167,10 +174,10 @@ namespace sool
 		// Validator owned in-the-middle helper objects: the "real" classes and interfaces
 		// Don't write to them! Use AddIface() instead.
 		
-		std::vector<IfaceInst*>	ivec;			// Linear storage of interface instances
+		IfaceInst::vec			ivec;			// Linear storage of interface instances
 		IfaceInstMap			imap;			// Indexing by full name (as ClassName) of interface instances
 		
-		std::vector<ClassInst*> cvec;			// Linear storage of class instances
+		ClassInst::vec			 cvec;			// Linear storage of class instances
 		ClassInstMap			cmap;			// Indexing by ClassName of class instances
 		
 		bool CheckGlobalNames();
@@ -183,16 +190,16 @@ namespace sool
 		bool ValidateType(MultiType &t, SourcePos pos = SourcePos());
 		
 		// Helpers
-		void AddIface(IfaceInst* iface);			// add to both vector and name map
-		void AddClass(ClassInst* cl);				// add to both vector and name map
-		GlobalInst* GetGlobal(ClassName::ptr name);	// lookup in both imap and cmap
+		void AddIface(IfaceInst::ptr iface);			// add to both vector and name map
+		void AddClass(ClassInst::ptr cl);				// add to both vector and name map
+		GlobalInst::ptr GetGlobal(ClassName::ptr name);	// lookup in both imap and cmap
 		
 		void AddError(std::string message, SourcePos position = SourcePos());
 		void AddInfo(std::string message, SourcePos position = SourcePos());
-		void AddError(std::string message, ClassInst *inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
-		void AddError(std::string message, IfaceInst *inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
-		void AddInfo(std::string message, ClassInst *inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
-		void AddInfo(std::string message, IfaceInst *inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
+		void AddError(std::string message, ClassInst* inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
+		void AddError(std::string message, IfaceInst* inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
+		void AddInfo(std::string message, ClassInst* inst, SourcePos position = SourcePos());	// with class instance info bonus if needed
+		void AddInfo(std::string message, IfaceInst* inst, SourcePos position = SourcePos());	// with iface instance info bonus if needed
 		
 	};
 };

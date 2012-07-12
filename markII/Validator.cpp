@@ -7,13 +7,13 @@ using namespace sool;
 /** IfaceInst **/
 /***************/
 
-IfaceInst::IfaceInst(Validator *vali, Interface *i) : v(vali), iface(i), validated(false), validating(false)
-{
-	// No params, just set the name
-	name = ClassName::Build(i->name);
-}
-
-IfaceInst::IfaceInst(Validator *vali, Interface *i, ClassName::vec params) : v(vali), iface(i), validated(false), validating(false)
+IfaceInst::IfaceInst(Validator *vali, Interface::ptr i) : v(vali), iface(i), validated(false), validating(false)
+{                                              
+	// No params, just set the name            
+	name = ClassName::Build(i->name);          
+}                                              
+                                               
+IfaceInst::IfaceInst(Validator *vali, Interface::ptr i, ClassName::vec params) : v(vali), iface(i), validated(false), validating(false)
 {
 	// Sanity check
 	if(i->params.size() != params.size())
@@ -75,11 +75,11 @@ bool IfaceInst::Validate()
 			return false;
 		
 		// Get instance
-		IfaceInst *inst = v->imap[cn];
+		IfaceInst::ptr inst = v->imap[cn];
 		if(!inst)
 		{
 			// It's probably not an interface, then
-			ClassInst *cinst = v->cmap[cn];
+			ClassInst::ptr cinst = v->cmap[cn];
 			if(cinst)
 			{
 				v->AddError("cannot embed class in interface", this, iface->embed_pos[i]);
@@ -107,13 +107,13 @@ bool IfaceInst::Validate()
 			if(other && proto->rtype != other->rtype)
 			{
 				v->AddError("cannot embed interface " + inst->name->signature + " in " + name->signature, this, iface->embed_pos[i]);
-				v->AddInfo("method " + proto->signature + " was already declared with a different return type (" + other->rtype.signature + ")", inst, proto->pos);
+				v->AddInfo("method " + proto->signature + " was already declared with a different return type (" + other->rtype.signature + ")", inst.get(), proto->pos);
 				v->AddInfo("here:", porigin[other], other->pos);
 				return false;
 			}
 			
 			if(!other)
-				AddProto(proto, inst);
+				AddProto(proto, inst.get());
 		}
 	}
 	
@@ -203,12 +203,12 @@ bool IfaceInst::AnswersTo(std::string selector, MultiType *rtype)
 	return true;
 }
 
-bool IfaceInst::CompliesWith(IfaceInst *iface)
+bool IfaceInst::CompliesWith(IfaceInst::ptr iface)
 {
 	if(!validated)
 		error("IfaceInst::AnswersTo() - iface not validated");
 	
-	std::map<IfaceInst*,bool>::iterator memo = complies.find(iface);
+	std::map<IfaceInst::ptr,bool>::iterator memo = complies.find(iface);
 	if(memo != complies.end())
 		return memo->second;
 		
@@ -270,13 +270,13 @@ std::string ClassInst::AnswerInfo::ToString()
 	return tmp;
 }
 
-ClassInst::ClassInst(Validator *vali, Class *c) : v(vali), cl(c), validated(false), validating(false)
+ClassInst::ClassInst(Validator *vali, Class::ptr c) : v(vali), cl(c), validated(false), validating(false)
 {
 	// No params, name is trivial
 	name = ClassName::Build(c->name);
 }
 
-ClassInst::ClassInst(Validator *vali, Class *c, ClassName::vec params) : v(vali), cl(c), validated(false), validating(false)
+ClassInst::ClassInst(Validator *vali, Class::ptr c, ClassName::vec params) : v(vali), cl(c), validated(false), validating(false)
 {
 	// Sanity check
 	if(c->params.size() != params.size())
@@ -288,12 +288,6 @@ ClassInst::ClassInst(Validator *vali, Class *c, ClassName::vec params) : v(vali)
 	
 	// Build class name
 	name = ClassName::Build(c->name, params);
-}
-
-ClassInst::~ClassInst()
-{
-	for(uint i = 0 ; i < members.size() ; i++)
-		delete members[i];
 }
 
 std::vector<ClassInst*> ClassInst::validation_stack;
@@ -344,7 +338,7 @@ bool ClassInst::Validate()
 			return false;
 		
 		// Get instance
-		GlobalInst *inst = v->GetGlobal(cn);
+		GlobalInst::ptr inst = v->GetGlobal(cn);
 		if(!inst)
 			error("ClassInst::Validate() - no instance found");
 		
@@ -368,7 +362,7 @@ bool ClassInst::Validate()
 		}
 		
 		// Fine, embed.
-		Member *m = new Member;
+		Member::ptr m(new Member);
 		m->shared = false;
 		m->type = type;
 		m->name = cn->signature;
@@ -385,13 +379,12 @@ bool ClassInst::Validate()
 	for(uint i = 0 ; i < cl->members.size() ; i++)
 	{
 		// Apply template parameters
-		Member *m = cl->members[i]->ReplaceTemplateParams(tmap);
+		Member::ptr m = cl->members[i]->ReplaceTemplateParams(tmap);
 		
 		// Make sure instance exists
 		success = v->ValidateClassName(m->type.cname, m->type_pos);
 		if(!success)
 		{
-			delete m;
 			return false;
 		}
 		
@@ -402,7 +395,6 @@ bool ClassInst::Validate()
 			{
 				v->AddError("member " + m->name + " was already defined", this, m->name_pos);
 				v->AddInfo("here:", this, members[j]->name_pos);
-				delete m;
 				return false;
 			}
 		}
@@ -538,7 +530,7 @@ bool ClassInst::CheckShortcutConflicts()
 	return true;
 }
 
-void ClassInst::AddMember(Member *m)
+void ClassInst::AddMember(Member::ptr m)
 {
 	members.push_back(m);
 	
@@ -616,12 +608,12 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 	
 	// 2. exactly one embedded object
 	
-	Member *candidate = NULL;
+	Member::ptr candidate;
 	MultiType cand_type;
 	
 	for(uint i = 0 ; i < embeds.size() ; i++)
 	{
-		GlobalInst *inst = v->GetGlobal(embeds[i]->type.cname);
+		GlobalInst::ptr inst = v->GetGlobal(embeds[i]->type.cname);
 		if(!inst)
 			error("ClassInst::AnswersTo() - no instance found");
 		
@@ -635,7 +627,7 @@ bool ClassInst::AnswersTo(std::string selector, MultiType *rtype)
 			{
 				// We already had one, meaning there's conflict
 				// TODO: could return some kind of info about it
-				candidate = NULL;
+				candidate.reset();
 				break;
 			}
 		}
@@ -672,12 +664,12 @@ bool ClassInst::AnswersTo(Prototype::ptr proto)
 	return AnswersTo(proto->selector, &rtype) && rtype == proto->rtype;
 }
 
-bool ClassInst::CompliesWith(IfaceInst *iface)
+bool ClassInst::CompliesWith(IfaceInst::ptr iface)
 {
 	if(!validated)
 		error("ClassInst::CompliesWith() - classinst not validated");
 	
-	std::map<IfaceInst*,bool>::iterator memo = complies.find(iface);
+	std::map<IfaceInst::ptr,bool>::iterator memo = complies.find(iface);
 	if(memo != complies.end())
 		return memo->second;
 	
@@ -700,17 +692,8 @@ bool ClassInst::CompliesWith(IfaceInst *iface)
 /** Validator **/
 /***************/
 
-Validator::Validator(Context *c) : context(c)
+Validator::Validator(Context::ptr c) : context(c)
 {
-}
-
-Validator::~Validator()
-{
-	for(uint i = 0 ; i < ivec.size() ; i++)
-		delete ivec[i];
-		
-	for(uint i = 0 ; i < cvec.size() ; i++)
-		delete cvec[i];
 }
 
 void Validator::AddError(std::string message, SourcePos position)
@@ -723,7 +706,7 @@ void Validator::AddInfo(std::string message, SourcePos position)
 	report.Add("validator", Diagnostic::Info, message, position);
 }
 
-void Validator::AddInfo(std::string message, IfaceInst *inst, SourcePos position)
+void Validator::AddInfo(std::string message, IfaceInst* inst, SourcePos position)
 {
 	// If inst happens to be a template instantiation, it can be usefull to remind it
 	if(!inst->tmap.empty())
@@ -735,7 +718,7 @@ void Validator::AddInfo(std::string message, IfaceInst *inst, SourcePos position
 	AddInfo(message, position);
 }
 
-void Validator::AddInfo(std::string message, ClassInst *inst, SourcePos position)
+void Validator::AddInfo(std::string message, ClassInst* inst, SourcePos position)
 {
 	// If inst happens to be a template instantiation, it can be usefull to remind it
 	if(!inst->tmap.empty())
@@ -747,7 +730,7 @@ void Validator::AddInfo(std::string message, ClassInst *inst, SourcePos position
 	AddInfo(message, position);
 }
 
-void Validator::AddError(std::string message, IfaceInst *inst, SourcePos position)
+void Validator::AddError(std::string message, IfaceInst* inst, SourcePos position)
 {
 	// If inst happens to be a template instantiation, it can be usefull to remind it
 	if(!inst->tmap.empty())
@@ -759,7 +742,7 @@ void Validator::AddError(std::string message, IfaceInst *inst, SourcePos positio
 	AddError(message, position);
 }
 
-void Validator::AddError(std::string message, ClassInst *inst, SourcePos position)
+void Validator::AddError(std::string message, ClassInst* inst, SourcePos position)
 {
 	// If inst happens to be a template instantiation, it can be usefull to remind it
 	if(!inst->tmap.empty())
@@ -821,9 +804,9 @@ bool Validator::CheckGlobalNames()
 {
 	for(uint i = 0 ; i < context->globals.size() ; i++)
 	{
-		Global *g = context->globals[i];
+		Global::ptr g = context->globals[i];
 		
-		Global *prev = global_map[g->name];
+		Global::ptr prev = global_map[g->name];
 		if(prev)
 		{
 			AddError(prev->FancyName() + " was already defined", g->name_pos);
@@ -843,14 +826,14 @@ bool Validator::CheckTemplateParams()
 {
 	for(uint i = 0 ; i < context->globals.size() ; i++)
 	{
-		Global *g = context->globals[i];
+		Global::ptr g = context->globals[i];
 		
 		for(uint j = 0 ; j < g->params.size() ; j++)
 		{
 			// Conflict with global name
 			
 			TemplateParam *p = &g->params[j];
-			Global *other = global_map[p->name];
+			Global::ptr other = global_map[p->name];
 			if(other)
 			{
 				AddError("template parameter shadows " + other->FancyName(), p->pos);
@@ -882,12 +865,12 @@ bool Validator::ValidateParameterlessInterfaces()
 	
 	for(uint i = 0 ; i < context->interfaces.size() ; i++)
 	{
-		Interface *iface = context->interfaces[i];
+		Interface::ptr iface = context->interfaces[i];
 		
 		if(iface->params.size() != 0)
 			continue;
 		
-		IfaceInst *inst = new IfaceInst(this, iface);
+		IfaceInst::ptr inst(new IfaceInst(this, iface));
 		
 		// Insert new instance
 		AddIface(inst);
@@ -916,16 +899,16 @@ bool Validator::ValidateParameterlessClasses()
 	
 	for(uint i = 0 ; i < context->classes.size() ; i++)
 	{
-		Class *c = context->classes[i];
+		Class::ptr c = context->classes[i];
 		
 		if(c->params.size() != 0)
 			continue;
 		
-		ClassInst *prev = cmap[ClassName::Build(c->name)];
+		ClassInst::ptr prev = cmap[ClassName::Build(c->name)];
 		if(prev)
 			continue;
 		
-		ClassInst *inst = new ClassInst(this, c);
+		ClassInst::ptr inst(new ClassInst(this, c));
 		
 		// Insert new instance
 		AddClass(inst);
@@ -947,7 +930,7 @@ bool Validator::ValidateParameterlessClasses()
 	return true;
 }
 
-void Validator::AddIface(IfaceInst* iface)
+void Validator::AddIface(IfaceInst::ptr iface)
 {
 	// Sanity check
 	if(imap[iface->name])
@@ -957,7 +940,7 @@ void Validator::AddIface(IfaceInst* iface)
 	imap[iface->name] = iface;
 }
 
-void Validator::AddClass(ClassInst* cl)
+void Validator::AddClass(ClassInst::ptr cl)
 {
 	// Sanity check
 	if(cmap[cl->name])
@@ -967,17 +950,17 @@ void Validator::AddClass(ClassInst* cl)
 	cmap[cl->name] = cl;
 }
 
-GlobalInst* Validator::GetGlobal(ClassName::ptr name)
+GlobalInst::ptr Validator::GetGlobal(ClassName::ptr name)
 {
-	IfaceInst *i = imap[name];
+	IfaceInst::ptr i = imap[name];
 	if(i)
 		return i;
 	
-	ClassInst *c = cmap[name];
+	ClassInst::ptr c = cmap[name];
 	if(c)
 		return c;
 	
-	return NULL;
+	return GlobalInst::ptr();
 }
 
 bool Validator::ValidateType(Type &t, SourcePos pos)
@@ -990,17 +973,17 @@ bool Validator::ValidateClassName(ClassName::ptr cname, SourcePos pos)
 {
 	// First check if it already exists, as a class or interface
 	
-	ClassInst *c = cmap[cname];
+	ClassInst::ptr c = cmap[cname];
 	if(c)
 		return true;
 	
-	IfaceInst *iface = imap[cname];
+	IfaceInst::ptr iface = imap[cname];
 	if(iface)
 		return true;
 	
 	// It doesn't. Now check that the base name exists
 	
-	Global *g = global_map[cname->name];
+	Global::ptr g = global_map[cname->name];
 	if(!g)
 	{
 		AddError("unknown class " + cname->name, pos);
@@ -1045,12 +1028,14 @@ bool Validator::ValidateClassName(ClassName::ptr cname, SourcePos pos)
 	
 	if(g->IsClass())
 	{
-		ClassInst *inst = new ClassInst(this, (Class*) g, cname->params);
+		Class::ptr tmp = dynamic_pointer_cast<Class,Global>(g);
+		ClassInst::ptr inst(new ClassInst(this, tmp, cname->params));
 		AddClass(inst);
 	}
 	else
 	{
-		IfaceInst *inst = new IfaceInst(this, (Interface*) g, cname->params);
+		Interface::ptr tmp = dynamic_pointer_cast<Interface,Global>(g);
+		IfaceInst::ptr inst(new IfaceInst(this, tmp, cname->params));
 		AddIface(inst);
 	}
 	

@@ -22,6 +22,9 @@ namespace sool
 	{
 		public:
 		
+		typedef shared_ptr<Member> ptr;
+		typedef std::vector<ptr> vec;
+		
 		bool		shared;
 		Type		type;
 		std::string	name;
@@ -37,7 +40,7 @@ namespace sool
 		Member();
 		
 		// Build new member with type substitution
-		Member *ReplaceTemplateParams(ClassNameMap &tmap);
+		Member::ptr ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
 	class Prototype : public AST
@@ -87,6 +90,9 @@ namespace sool
 	{
 		public:
 		
+		typedef shared_ptr<Method> ptr;
+		typedef std::vector<ptr> vec;
+		
 		// Interface
 		
 		typedef enum
@@ -104,13 +110,14 @@ namespace sool
 		
 		// Useful source code positions
 		SourcePos	kind_pos;
-		
-		Method();
 	};
 	
 	class TemplateParam : public AST
 	{
 		public:
+		
+		typedef std::vector<TemplateParam> vec;
+		typedef shared_ptr<vec> vecptr;
 		
 		ClassName::ptr	bound;
 		std::string		name;
@@ -120,8 +127,11 @@ namespace sool
 	{
 		public:
 		
+		typedef shared_ptr<Global> ptr;
+		typedef std::vector<ptr> vec;
+		
 		std::string					name;		// Base name
-		std::vector<TemplateParam>	params;		// Template parameters, may be empty
+		TemplateParam::vec			params;		// Template parameters, may be empty
 		
 		SourcePos	name_pos;
 		
@@ -134,11 +144,14 @@ namespace sool
 		}
 	};
 	
-	typedef std::map<std::string,Global*> GlobalMap;
+	typedef std::map<std::string,Global::ptr> GlobalMap;
 	
 	class Class : public Global
 	{
 		public:
+		
+		typedef shared_ptr<Class> ptr;
+		typedef std::vector<ptr> vec;
 		
 		typedef enum
 		{
@@ -150,16 +163,14 @@ namespace sool
 		
 		// name and parameters are inherited from Global
 		
-		std::vector<Member*>	members;	// owned
-		std::vector<Method*>	methods;	// owned
+		Member::vec				members;
+		Method::vec				methods;
 		ClassName::vec			embeds;
 		
 		// Useful source code positions
 		
 		SourcePos				fullname_pos;		// includes template parameters
 		std::vector<SourcePos>	embed_pos;
-		
-		~Class();
 		
 		std::string KindToString();
 		bool IsClass()
@@ -170,11 +181,14 @@ namespace sool
 		std::string FancyName();
 	};
 	
-	typedef std::map<std::string,Class*> ClassMap;
+	typedef std::map<std::string,Class::ptr> ClassMap;
 	
 	class Extension : public AST
 	{
 		public:
+		
+		typedef shared_ptr<Extension> ptr;
+		typedef std::vector<ptr> vec;
 		
 		// Difficulty here. We can have either an extension for a full fledged class:
 		// extend num
@@ -188,19 +202,19 @@ namespace sool
 		// extend Name|(Iface1 T, Iface2 U)
 		
 		std::string					name;
-		std::vector<TemplateParam>	params;
+		TemplateParam::vec			params;
 		
-		std::vector<Method*>		methods;
-		
-		Extension();
-		~Extension();
+		Method::vec					methods;
 	};
 	
-	typedef std::map<std::string,Extension*> ExtensionMap;
+	typedef std::map<std::string,Extension::ptr> ExtensionMap;
 	
 	class Interface : public Global
 	{
 		public:
+		
+		typedef shared_ptr<Interface> ptr;
+		typedef std::vector<ptr> vec;
 		
 		// name and parameters are inherited from Global
 		
@@ -216,19 +230,19 @@ namespace sool
 		};
 	};
 	
-	typedef std::map<std::string,Interface*> InterfaceMap;
+	typedef std::map<std::string,Interface::ptr> InterfaceMap;
 	
 	struct Context
 	{
 		public:
 		
-		std::vector<Class*>			classes;
-		std::vector<Extension*>		extensions;
-		std::vector<Interface*>		interfaces;
+		typedef shared_ptr<Context> ptr;
 		
-		std::vector<Global*>		globals;		// For the sake of knowing in what order they appeared
+		Class::vec			classes;
+		Extension::vec		extensions;
+		Interface::vec		interfaces;
 		
-		~Context();
+		Global::vec			globals;		// For the sake of knowing in what order they appeared
 	};
 }
 

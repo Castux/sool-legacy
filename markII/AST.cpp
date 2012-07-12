@@ -7,26 +7,12 @@ Member::Member() : shared(false)
 {
 }
 
-Member *Member::ReplaceTemplateParams(ClassNameMap &tmap)
+Member::ptr Member::ReplaceTemplateParams(ClassNameMap &tmap)
 {
-	Member *m = new Member(*this);
+	Member::ptr m(new Member(*this));
 	m->type = type.ReplaceTemplateParams(tmap);
 	
 	return m;
-}
-
-Method::Method()
-{
-}
-
-
-Class::~Class()
-{
-	for(uint i = 0 ; i < members.size() ; i++)
-		delete members[i];
-		
-	for(uint i = 0 ; i < methods.size() ; i++)
-		delete methods[i];
 }
 
 std::string Class::KindToString()
@@ -45,31 +31,9 @@ std::string Class::FancyName()
 	return KindToString() + " " + name;
 }
 
-Extension::Extension()
-{
-}
-
-Extension::~Extension()
-{
-	for(uint i = 0 ; i < methods.size() ; i++)
-		delete methods[i];
-}
-
 std::string Interface::FancyName()
 {
 	return std::string("interface ") + name;
-}
-
-Context::~Context()
-{
-	for(uint i = 0 ; i < classes.size() ; i++)
-		delete classes[i];
-	
-	for(uint i = 0 ; i < interfaces.size() ; i++)
-		delete interfaces[i];
-	
-	for(uint i = 0 ; i < extensions.size() ; i++)
-		delete extensions[i];
 }
 
 void Prototype::ComputeSignature()

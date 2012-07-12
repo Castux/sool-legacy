@@ -22,6 +22,7 @@ namespace sool
 		
 		typedef shared_ptr<ClassName> ptr;
 		typedef std::vector<ptr> vec;
+		typedef shared_ptr<vec> vecptr;
 		
 		private:
 		
