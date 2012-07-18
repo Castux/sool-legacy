@@ -7,34 +7,12 @@ Member::Member() : shared(false)
 {
 }
 
-Member::~Member()
+Member::ptr Member::ReplaceTemplateParams(ClassNameMap &tmap)
 {
-}
-
-Member *Member::ReplaceTemplateParams(ClassNameMap &tmap)
-{
-	Member *m = new Member(*this);
+	Member::ptr m(new Member(*this));
 	m->type = type.ReplaceTemplateParams(tmap);
 	
 	return m;
-}
-
-Method::Method() : proto(NULL)
-{
-}
-
-Method::~Method()
-{
-	delete proto;
-}
-
-Class::~Class()
-{
-	for(uint i = 0 ; i < members.size() ; i++)
-		delete members[i];
-		
-	for(uint i = 0 ; i < methods.size() ; i++)
-		delete methods[i];
 }
 
 std::string Class::KindToString()
@@ -53,37 +31,9 @@ std::string Class::FancyName()
 	return KindToString() + " " + name;
 }
 
-Extension::Extension() : cname(NULL)
-{
-}
-
-Extension::~Extension()
-{
-	for(uint i = 0 ; i < methods.size() ; i++)
-		delete methods[i];
-}
-
 std::string Interface::FancyName()
 {
 	return std::string("interface ") + name;
-}
-
-Interface::~Interface()
-{
-	for(uint i = 0 ; i < protos.size() ; i++)
-		delete protos[i];
-}
-
-Context::~Context()
-{
-	for(uint i = 0 ; i < classes.size() ; i++)
-		delete classes[i];
-	
-	for(uint i = 0 ; i < interfaces.size() ; i++)
-		delete interfaces[i];
-	
-	for(uint i = 0 ; i < extensions.size() ; i++)
-		delete extensions[i];
 }
 
 void Prototype::ComputeSignature()
@@ -97,21 +47,21 @@ void Prototype::ComputeSignature()
 	signature = rtype.signature + ":" + selector;
 }
 
-bool Prototype::SameSelector(Prototype *other)
+bool Prototype::SameSelector(Prototype::ptr other)
 {
 	return (name == other->name &&
 			setter == other->setter &&
 			atype == other->atype);
 }
 
-bool Prototype::operator==(Prototype *other)
+bool Prototype::operator==(Prototype::ptr other)
 {
 	return (rtype == other->rtype) && SameSelector(other);
 }
 
-Prototype* Prototype::ReplaceTemplateParams(ClassNameMap &tmap)
+Prototype::ptr Prototype::ReplaceTemplateParams(ClassNameMap &tmap)
 {
-	Prototype *p = new Prototype(*this);
+	Prototype::ptr p(new Prototype(*this));
 	
 	p->rtype = rtype.ReplaceTemplateParams(tmap);
 	

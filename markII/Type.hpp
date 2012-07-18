@@ -1,9 +1,6 @@
 #ifndef TYPE_HPP
 #define TYPE_HPP
 
-#include <map>
-#include <vector>
-
 #include "common.hpp"
 
 namespace sool
@@ -16,34 +13,38 @@ namespace sool
 	class Class;
 	
 	class ClassName;
-	typedef std::map<std::string,ClassName*> ClassNameMap;
+	typedef std::map<std::string,shared_ptr<ClassName> > ClassNameMap;
+	typedef shared_ptr<ClassNameMap> ClassNameMapPtr;
 	
 	class ClassName
 	{
+		public:
+		
+		typedef shared_ptr<ClassName> ptr;
+		typedef std::vector<ptr> vec;
+		typedef shared_ptr<vec> vecptr;
+		
 		private:
 		
-		static ClassNameMap map;	// The map used for internizing: indexed by signature
+		static ClassNameMapPtr map;	// The map used for internizing: indexed by signature
 		
 		ClassName();
 		
 		public:
 		
-		std::string name;		// The base name of the class
-		std::vector<ClassName*> params;
+		std::string		name;		// The base name of the class
+		ClassName::vec	params;
 		
 		std::string signature;	// The full canonical name of the class, with '|' and parameters
 		
 		// Build an internized ClassName
-		static ClassName *Build(std::string name);
-		static ClassName *Build(std::string name, std::vector<ClassName*> params);
+		static ClassName::ptr Build(std::string name);
+		static ClassName::ptr Build(std::string name, ClassName::vec params);
 		// Get a ClassName by signature
-		static ClassName *Get(std::string sig);
-		
-		// Empty database
-		static void Clear();
+		static ClassName::ptr Get(std::string sig);
 		
 		// Create new class name by replacing occurences of the keys in the tmap by their values
-		ClassName *ReplaceTemplateParams(ClassNameMap &tmap);
+		ClassName::ptr ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
 	// Type is a wider concept: qualifies variables, can be multiple, and void
@@ -52,13 +53,13 @@ namespace sool
 	{
 		public:
 		
-		ClassName	*cname;
-		bool		optional;
+		ClassName::ptr	cname;
+		bool			optional;
 		
 		std::string	signature;
 		
 		Type();
-		Type(ClassName *c, bool opt);
+		Type(ClassName::ptr c, bool opt);
 		
 		// Replace class name in place by replacing occurences of the keys in the tmap by their values
 		Type ReplaceTemplateParams(ClassNameMap &tmap);

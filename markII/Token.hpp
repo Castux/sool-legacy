@@ -10,6 +10,8 @@ namespace sool
 	{
 		public:
 		
+		typedef shared_ptr< std::vector<Token> > vecptr;
+		
 		typedef enum
 		{
 			#define TOKEN(x,y) t_ ## x,
@@ -32,6 +34,7 @@ namespace sool
 		
 		std::string FancyName();
 	};
+	
 }
 
 #endif // TOKEN_HPP

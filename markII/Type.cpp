@@ -8,15 +8,15 @@ ClassName::ClassName()
 {
 }
 
-ClassNameMap ClassName::map;
+ClassNameMapPtr ClassName::map = ClassNameMapPtr(new ClassNameMap());
 
-ClassName *ClassName::Build(std::string name)
+ClassName::ptr ClassName::Build(std::string name)
 {
-	std::vector<ClassName*> params;
+	ClassName::vec params;
 	return Build(name, params);
 }
 
-ClassName *ClassName::Build(std::string name, std::vector<ClassName*> params)
+ClassName::ptr ClassName::Build(std::string name, ClassName::vec params)
 {
 	// Build signature
 	
@@ -59,13 +59,13 @@ ClassName *ClassName::Build(std::string name, std::vector<ClassName*> params)
 	
 	// Check if it already exists
 	
-	ClassName *cname = Get(sig);
+	ClassName::ptr cname = Get(sig);
 	if(cname)
 		return cname;
 	
 	// Make new one otherwise
 	
-	cname = new ClassName;
+	cname = ClassName::ptr(new ClassName);
 	
 	cname->name = name;
 	cname->params = params;
@@ -73,32 +73,24 @@ ClassName *ClassName::Build(std::string name, std::vector<ClassName*> params)
 	
 	// Add to map
 	
-	map[sig] = cname;
+	(*map)[sig] = cname;
 	
 	// And return
 	
 	return cname;
 }
 
-ClassName *ClassName::Get(std::string sig)
+ClassName::ptr ClassName::Get(std::string sig)
 {
-	ClassNameMap::iterator it = map.find(sig);
+	ClassNameMap::iterator it = map->find(sig);
 	
-	if(it != map.end())
+	if(it != map->end())
 		return it->second;
 	
-	return NULL;
+	return ClassName::ptr();
 }
 
-void ClassName::Clear()
-{
-	ClassNameMap::iterator it;
-	
-	for(it = map.begin(); it != map.end(); it++)
-		delete it->second;
-}
-
-ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
+ClassName::ptr ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 {
 	// Look for base name in replacement map
 	ClassNameMap::iterator it = tmap.find(name);
@@ -106,7 +98,7 @@ ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 	// Found!
 	if(it != tmap.end())
 	{
-		ClassName *cl = it->second;
+		ClassName::ptr cl = it->second;
 		
 		// Sanity check, our main name is itself a param, there should not be any subnames:
 		// T|(A,B,C) cannot exist if T is a template parameter in the current class
@@ -120,10 +112,10 @@ ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 	
 	// Not found! If we have no subnames, we're a plain and simple class name. Nothing to do.
 	if(params.size() == 0)
-		return this;
+		return (*map)[signature];
 	
 	// If we do have subnames, there might be some replacements to do there. Recurse.
-	std::vector<ClassName*> subnames;
+	ClassName::vec subnames;
 	
 	for(uint i = 0; i < params.size(); i++)
 		subnames.push_back(params[i]->ReplaceTemplateParams(tmap));
@@ -133,11 +125,11 @@ ClassName *ClassName::ReplaceTemplateParams(ClassNameMap &tmap)
 }
 
 
-Type::Type() : cname(NULL), optional(false)
+Type::Type() : optional(false)
 {
 }
 
-Type::Type(ClassName *c, bool opt) : cname(c), optional(opt)
+Type::Type(ClassName::ptr c, bool opt) : cname(c), optional(opt)
 {
 	signature = c->signature;
 	if(opt)
@@ -146,7 +138,7 @@ Type::Type(ClassName *c, bool opt) : cname(c), optional(opt)
 
 Type Type::ReplaceTemplateParams(ClassNameMap &tmap)
 {
-	ClassName *cl = cname->ReplaceTemplateParams(tmap);
+	ClassName::ptr cl = cname->ReplaceTemplateParams(tmap);
 	return Type(cl, optional);
 }
 

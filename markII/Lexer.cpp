@@ -3,12 +3,9 @@
 
 using namespace sool;
 
-Lexer::Lexer(SourceFile *f)
+Lexer::Lexer(SourceFile::ptr f) : file(f), bufstart(file->text.c_str()),
+	head(bufstart), tokens(new std::vector<Token>)
 {
-	file = f;
-	bufstart = file->text.c_str();
-	head = bufstart;
-	tokens = new std::vector<Token>;
 }
 
 bool Lexer::Lex()
@@ -104,9 +101,7 @@ bool Lexer::LexName()
 	}
 	
 	// Fill in source position
-	tok.pos.file = file;
-	tok.pos.begin = head - bufstart;
-	tok.pos.end = end - 1 - bufstart;
+	tok.pos = SourcePos(file.get(), head - bufstart, end - 1 - bufstart);
 	
 	// Memorise token
 	tokens->push_back(tok);
@@ -132,7 +127,7 @@ bool Lexer::LexNumber()
 			end++;
 	}
 	
-	SourcePos pos(file, head-bufstart, end-1-bufstart);
+	SourcePos pos(file.get(), head-bufstart, end-1-bufstart);
 	
 	std::string str(head, end-head);
 	
@@ -198,7 +193,7 @@ bool Lexer::LexString()
 		// Complain at end of file
 		if(*end == 0)
 		{
-			AddError("unfinished litteral string started here:", SourcePos(file, head-bufstart, head-bufstart));
+			AddError("unfinished litteral string started here:", SourcePos(file.get(), head-bufstart, head-bufstart));
 				return false;
 		}
 		
@@ -214,7 +209,7 @@ bool Lexer::LexString()
 				
 				if(*endptr != 0)
 				{
-					AddError("malformed hexadecimal escape", SourcePos(file, end-bufstart, end+3-bufstart));
+					AddError("malformed hexadecimal escape", SourcePos(file.get(), end-bufstart, end+3-bufstart));
 					return false;
 				}
 				
@@ -260,7 +255,7 @@ bool Lexer::LexString()
 						value += '\'';
 						break;
 					default:
-						AddError("unknown escape", SourcePos(file, end-bufstart, end+1-bufstart));
+						AddError("unknown escape", SourcePos(file.get(), end-bufstart, end+1-bufstart));
 						return false;
 				}
 				
@@ -278,7 +273,7 @@ bool Lexer::LexString()
 	// Success, build token
 	Token tok;
 	tok.kind = Token::t_string;
-	tok.pos = SourcePos(file, head-bufstart, end-1-bufstart);
+	tok.pos = SourcePos(file.get(), head-bufstart, end-1-bufstart);
 	tok.string = value;
 	
 	// Memorise token
@@ -301,7 +296,7 @@ bool Lexer::LexPunctuation()
 			// Found it!
 			Token tok;
 			tok.kind = (Token::Kind) i;
-			tok.pos = SourcePos(file, head-bufstart, head+1-bufstart);
+			tok.pos = SourcePos(file.get(), head-bufstart, head+1-bufstart);
 			
 			tokens->push_back(tok);
 			head += 2;
@@ -319,7 +314,7 @@ bool Lexer::LexPunctuation()
 			// Found it!
 			Token tok;
 			tok.kind = (Token::Kind) i;
-			tok.pos = SourcePos(file, head-bufstart, head-bufstart);
+			tok.pos = SourcePos(file.get(), head-bufstart, head-bufstart);
 			
 			tokens->push_back(tok);
 			head += 1;
@@ -329,7 +324,7 @@ bool Lexer::LexPunctuation()
 	}
 	
 	// Le fail
-	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file, head - bufstart, head - bufstart));
+	AddError(std::string("unexpected symbol '") + head[0] + "'", SourcePos(file.get(), head - bufstart, head - bufstart));
 	return false;
 }
 

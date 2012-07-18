@@ -1,8 +1,6 @@
 #ifndef SOURCEFILE_HPP
 #define SOURCEFILE_HPP
 
-#include <vector>
-
 #include "common.hpp"
 
 namespace sool
@@ -34,6 +32,9 @@ namespace sool
 	class SourceFile
 	{
 		public:
+		
+		typedef shared_ptr<SourceFile> ptr;
+		typedef weak_ptr<SourceFile> weak;
 		
 		std::string name;
 		std::string text;

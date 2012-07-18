@@ -31,12 +31,7 @@ bool SourceFile::Load(std::string path)
 	{
 		if(text[i] == '\n')
 		{
-			SourcePos pos;
-			pos.file = this;
-			pos.begin = begin;
-			pos.end = i;
-			lines.push_back(pos);
-			
+			lines.push_back(SourcePos(this, begin, i));
 			begin = i+1;
 		}
 	}

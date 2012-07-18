@@ -13,7 +13,7 @@ using namespace sool;
 
 int main(int argc, char **argv)
 {
-	SourceFile file;
+	SourceFile::ptr file(new SourceFile);
 	
 	if(argc < 2)
 	{
@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	
-	bool success = file.Load(argv[1]);
+	bool success = file->Load(argv[1]);
 	
 	if(!success)
 	{
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	
-	Lexer lex(&file);
+	Lexer lex(file);
 	success = lex.Lex();
 	
     /*
@@ -65,10 +65,6 @@ int main(int argc, char **argv)
 	
 	if(!success)
 		return 1;
-	
-	delete validator.context;
-	
-	ClassName::Clear();
 	
 	return 0;
 }
