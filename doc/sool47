@@ -1,0 +1,315 @@
+The expressive power of templates
+=================================
+
+The current state of things is:
+
+- interfaces are sets of method prototypes. A class is said to comply with an interface if it implements all the interface's methods.
+- declaring an interface also creates a so called "generic" class. This generic class cannot be instantiated, but objects of compliant classes can be casted to it. This generic class can be used as any other class: methods can be written for it (via `extend`), variables can use it as their type, it can be passed as argument, etc. Behind the scene, it uses the virtual table mechanism: when an object is casted to it, pointers to its relevants methods are attached to it, which are then used to make the calls.
+Generic classes are great to write algorithms that apply to similar classes, in a concise and elegant way: any object compliant to the interface can be casted - often implicitely - and used right away.
+
+The cons are that virtual calls are slightly slower, and that generics are completely useless to store objects: no downcasting is possible, so an object casted to a generic loses all its properties outside of these defined by the interface. In particular, general purpose containers cannot be written using generics. Even if downcasting was allowed, containers would be very unefficient: the user would need to remember what class is contained in a particular container, and (dynamically) downcast each element before every use. Unacceptable. Furthermore, because of the virtual table mechanism, generics work only with objects. Values need to be boxed before they can be casted to generics.
+
+Therefore, for containers (and algorithms that cannot afford the loss of efficiency due to virtual calls), we also need templates.
+
+Since the main use is for containers, I decided that only full classes can be templated. Individual methods would be too bothersome, and if really required, they can always be wrapped in classes anyway. So:
+
+- classes can be declared to take template parameters. These parameters are resolved only when the template is "instantiated", that is used with concrete classes. The entire class is then rewritten by the compiler, for these particular classes, and all types and calls can be early bound.
+
+This is how templates work in most languages. Now I wanted to add some fancyness:
+
+- the class parameters to a template are bounded by interfaces. That is, the template declares, for each class parameter, an interface to which the concrete type must comply when instantiating.
+
+This was to simplify analysis: by restricting the set of methods a parameter class can call, you only need to analyze the code in the template once. Then at instantiation, simply verify that the given class complies to the interface used as bound.
+
+This sounded great: simplified analysis, and some form of theoretical niceness. A class template is some kind of function, which takes in class parameters, and returns a class. These parameters have a sort of "type" which restricts them:
+
+	object Farm|(Animal A) end
+	
+`Farm|Pig` is ok, `Farm|Car` is not, because we will most likely try to feed and breed and slaughter the animals. That won't work on cars.
+
+	object List|(Any T) end
+
+Anything is ok in a container, because we only move them around, and assignment and copy are operations that are built-in for all classes.
+
+This restriction caused by the interface seems completely alright, because it prevents you to try an instantiate a template that would fail anyway. In C++, templates don't have these bounds, and you can always try to use them for anything. But within the template's code, if you call a method that the type doesn't support, it will fail. Having bounds seems to be a great way to catch the error early, for an equivalent result.
+
+Unfortunately, it is not that simple. The reality is that the expressive power of this system is far lesser. Example.
+
+	template <class T>
+	T add(T a, T b)
+	{
+		return a + b;
+	}
+	
+	// later
+	
+	int i = add<int>(4,10);		// or even "add(4,10)"
+
+Simple enough. In sool, we can only template classes, but we can always make dummy ones and selfless methods, that not the problem. Let's try:
+
+	object Adder|(MyBound T)
+		selfless T add(T a, T b)
+			return a + b
+		end
+	end
+
+Seems easy as well. Now we just have to define the bound. Our class T up there only need to answer to the `+` operator:
+
+	interface Addable
+		Addable +(Addable)
+	end
+
+Can you see the problem? This interface is defined recursively. `Addable` here as argument and return type is the generic type, which means "any class that complies to Addable". Except that no class can, because it would need to define a method that uses Addables, not itself! And there is no such thing as Addables in the first place.
+
+OK, lets use concrete types, by using an interface template as well:
+
+	interface Addable|(Any T)
+		T +(T)
+	end
+
+which represents "you can add a T to it, and it returns a T". For instance, `num` complies to `Addable|num`. So far so good. The problem is when we put this back in the Adder:
+
+	object Adder|(Addable|T T)
+		--
+	end
+
+The interface `Addable|T` does not exist, because `T` is not a class... `T` doesn't exist yet. We could decide to allow a parameter's bound to depend on the parameter (which sounds completely absurd)
+
+	local sum = Adder|num:add(3,10)
+
+But then can other bounds depend on previous parameters?
+
+	class Foo|(Any T, Interf|T U, Other|U V) end
+
+Technically it seems feasible, since instantiation is always done by giving all parameters first. The bounds could be deduced from these, and then compliance checking could occur. But how weird and unnatural is that... And having to define a num as an Addable|num? Hmm.
+
+Furthermore I realized just by writing the interface earlier that a bound to an interface template is useless: no code is called by the interface, only prototypes are defined. The restriction would be purely arbitrary, and you could use `Any` all the time.
+
+Soooo, if it's useless on an interface, and too much constraint on a class, maybe template parameter bounds have no reason to exist?
+
+Hmm. Let's see. D, like C++, has "completely free" template parameters. Rust has the same system as currently described for sool: you have to give an interface to define what operations can do your parameter. If you omit it, it is assumed that it can do nothing (only be moved around).
+
+How does Rust survive with this? Well, this system, albeit very constraining, is enough to define containers. Containers don't do anything with their containees: they just store them, and retrieve them when needed. And containers was the one thing we needed templates for.
+
+What about "efficient" algorithms? For instance, once we have a vector, or list of T, we might want to sort it, whatever T is. That would mean having to impose an additional restriction on T, the fact that it can be compared to another T, and we have the same recursive interface definition problem:
+
+	-- not what we want:
+	interface Comparable
+		bool <(Comparable)
+	end
+	
+	-- not exactly what we want:
+	interface Comparable|(Any T)
+		bool <(T)
+	end
+
+Then you'd have num comply to Comparable|num, but any class you try to define for sortable container would fail the same:
+
+	class SortableVector|(Comparable|T T) end	-- eeek
+
+And yet, Rust has templates for sorting facilities and such. How do they do that? Well, they don't impose the restriction on the parameter itself. They just ask you to provide the function that actually compares elements (Rust has first level functions). In sool, the equivalent would be a dummy object that carries the function with it (a "functor"):
+
+	interface Comparer|(Any T)
+		bool compare(T,T)
+	end
+
+	class Sorter|(Any T)
+		method sort(Vector|T vec, Comparer|T comp)
+			-- use comp.compare(a,b)
+		end
+	end
+	
+Still not perfect. `Comparer|T` is a generic type, and would require casting and virtual calls to `compare`. In the end, we have the equivalent of a function pointer. Which is what happens in Rust when you pass a function to the sorting algorithm.
+
+Can't we statically bind this at all? We would like to be able to do:
+
+	class Sorter|(Any T, Comparer|T Comp)
+		method sort(Vector|T vec, Comp c)
+			-- use Comp:compare(), which known at compile time
+		end
+	end
+
+And we're back to "can we use template parameters in the bounds of other template parameters?" That would be equivalent to having templates within templates and doing some stuff that looks like currification. Mmm, functional programming...
+
+Frankly, I'm not sure where to go with this.
+
+Functors
+--------
+
+Since I started mentioning them, I might as well continue. Functors are objects whose sole purpose are to be executed "as a function", so that we can dynamically choose between functions at runtime. Or alternatively, at compile time using templates.
+
+For instance it can be used in a collection, to apply an operation to every element and save the result in place:
+
+	extend #num
+		method map(Functor f)
+			for i,v in self do
+				self[i] = f.call(v)
+			end
+		end
+	end
+
+Now what is the type "Functor"? Since in sool there are no first-level function, Functor has to be a class. Now of course if we wrote:
+
+	class Functor
+		method num call(num i)
+			-- do something with it
+		end
+	end
+
+that would be quite boring, and all instances of Functor would do exactly the same. No, the interest comes by having Functor be an interface, and describe various operations in classes that comply to it:
+
+	interface Functor
+		num call(num)
+	end
+	
+	class Double
+		method num call(num i)
+			return i*2
+		end
+	end
+
+	class SetToZero
+		method num call(num i)
+			return 0
+		end
+	end
+
+Then instances of these classes can be casted to the generic type Functor, and be passed to the array's method:
+
+	local d = Double	
+	local arr = [1,2,3,4,5]
+	
+	arr.map(d)	-- d is casted to a Functor
+
+Inside `map`, `f.call(v)` is now a virtual call. We could have put a SetToZero insted:
+
+	arr.map(SetToZero)
+
+Note that you can use an anonymous object, which makes a nice concise syntax. Also, we can use value classes for the functors, no need for an object on the heap. Especially when it doesn't have state, in which case we can also write a selfless method:
+
+	value Decrement
+		selfless num call(num i)
+			return i - 1
+		end
+	end
+
+With that last example, we have something that is almost exactly a function pointer. No state, the class is there only to ensure the type safety. But we can have more, by carrying state around:
+	
+	interface Functor2
+		void call(num)
+	end
+
+	object Accumulator
+		num sum = 0
+		method void call(num i)
+			sum = sum + i
+		end
+	end
+	
+	-- later
+	
+	local arr = [1,2,3,4,5]
+	local acc = Accumulator
+	arr.apply(acc)			-- acc is casted to a Functor2
+	assert(acc.sum == 15)
+
+By carrying state around, we can get fancy effects. Note that this time we need an object. Otherwise we wouldn't have been able to retrieve the result. Alternatively we can design the `apply` method to return the functor once it's done, in which case we could have done:
+
+	local sum = arr.apply(acc).sum
+
+Of course this is far heavier than having actual functions. We need to define interfaces for each and every function prototype we need, and then classes for each individual function. And as we saw before, it's not always possible to make templates for the "functions".
+
+Some functors are quite generic and often applicable. They exist in C++'s `<algorithm>`, for instance:
+
+	interface UnaryPredicate|T
+		bool call(T)
+	end
+	
+	interface BinaryPredicate|(T,U)
+		bool call(T,U)
+	end
+	
+	interface Function|T
+		call(T)
+	end
+	
+	interface UnaryOperator|T
+		T call(T)
+	end
+	
+	interface BinaryOperator|T
+		T call(T,T)
+	end
+	
+etc. With this you can have generic algorithms:
+
+	extend #T
+		method find(UnaryPredicate|T pred)
+			for v in self do
+				if pred.call(v) then
+					return v
+				end
+			end
+		end
+	end
+
+But like we saw, it's difficult (impossible?) to write some functors generically. We could have, for instance:
+
+	value LowerThan
+		num bound
+		
+		selfless new(num n)
+			return LowerThan(bound = n)
+		end
+	
+		selfless bool call(num i)
+			return i < bound
+		end
+	end
+	
+	-- later
+	
+	local arr = [10,7,11,3,20,1]
+	local res = arr.find(LowerThan(5))
+	-- res == 3
+
+Pretty, isn't it? Well, to some extent. As we saw before, we can't generalize this functor to be "lower than" anything else than a num. We'd have to write it again for integers, and any other class we need. And it still involves one virtual call per iteration.
+
+But it can still be quite useful, to avoid writing the same code over and over again, despite the limits of our template system.
+
+Now for syntax... In these examples, I simply used the convention that the actual method's name is `call`, and that algorithms that use functors would indeed send the `call` message to them. C++ allows you to overload the `()` operator, that is, you can use the objects directly as if they were functions.
+
+Is this necessary in sool? Is it even possible? I don't think so. Imagine that `()` after a variable would mean `.call()`:
+
+	local foo = SomeFunctor
+	foo()		-- is really foo.call()
+	
+	local bar = Bar		-- Bar has a func member that contains a functor
+	bar.func()
+
+Eeeek, is this calling the `func` method on `bar` (usual member accessor), or calling `()` on the result of `bar.func`? Is:
+
+	bar.func()()
+
+any clearer? This syntax completely breaks the fact that parentheses are optional in a method call. And if the argument types are different we have confusion again:
+
+	bar.func(5)		-- hey, but `func` is a member getter, doesn't need arguments!
+	bar.returnFuncNumber(5)		-- hey we got an accessor, followed by nothing
+								-- does it mean call the functor with no arg?
+
+This is not possible. We can't overload `()` because it is *not* an operator. It is part of the grammar, like `=`. Applying `()` is *not* a method call, it *is* the method calling.
+
+So all our functor fun must be home-made. A convention can be to name the method `call`. It could be `f`. Could be anything. As long as the caller and the callee agree, of course.
+
+Last word about performance
+---------------------------
+
+So, we saw that some algorithms were not writable using templates, only using the generic late-bound classes.
+
+However, as we mentionned earlier, some optimizations can be done by the compiler. When calling a generic method, sometimes the compiler definitely knows the actual type that is casted to a generic:
+
+	arr.sort(MyComparisonFunctor)
+
+The MyComparisonFunctor instance that is passed to `sort` is in principle casted and attached to a virtual table, so that the generic `sort` can be run. But since we definitely know what actual type it is, the `sort` function could be automatically "templated", and generated for the specific class of functor. And in this instance, the functor can be resolved to early bound code, or even inlined.
+
+And there you have it, the performance of templates with the elegance of generic types. For the price of more work in the comiler. But why not?

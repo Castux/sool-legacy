@@ -1,0 +1,352 @@
+Syntactic sugar and namespaces
+==============================
+
+I've been playing around more seriously with D lately, and learned a few interesting things about it. By using it in an actual (small) program, I was forced to learn it more thoroughly, and many details that had escaped me surfaced.
+
+D has lots of syntactic sugar, these small features that add nothing to the core of the language, but make its use much more pleasant. Lua has lots as well. This is exactly the spirit I want for sool: a set of core features as simple as possible, and the rest building on it, with a few tiny things that glue them together harmoniously.
+
+Methods are really functions
+----------------------------
+
+For instance, Lua has the colon syntax to mimic method calls:
+
+	foo:bar(baz) -- is really:
+	foo.bar(foo,baz)
+
+So, if table `foo` happens to have a function in the member `bar`, that takes an "object" as first argument, it all works very nicely. And thanks to metatables, an "object" can lookup missing members in another table, which acts as a class. And tadaa, with no additional core features, you can make Lua object-oriented.
+
+D, I found out, has a similar feature. If you send a method to an object that doesn't answer to it, the compiler looks up the functions in the current scope for a function with the same prototype, but with an additional argument of the type of your object in first position. And calls it.
+
+	int foo(Bar bar, string meh)
+	{
+		// ...
+	}
+	
+	int main()
+	{
+		b = new Bar;
+		b.foo("yay");	// is really: foo(b, "yay");
+	}
+
+And tadaa, for free, you get the mechanism that I made explicit with the `extend` keyword, that "reopens" a class to add methods. Since sool doesn't have standalone functions, an additional syntax was necessary. The funny part is that in low level, the function with the object as first argument is what actually happens.
+
+I find this quite elegant. You can't guess it, but once you know it, it's a nice shortcut. I think the message syntax is much nicer than the function one.
+
+Member access is really method calling
+--------------------------------------
+
+D also complies to the principle that the syntax should be the same for accessing members and methods. In other words, a method that takes no argument can be called without parentheses:
+
+	foo.bar		// might really be foo.bar()
+
+I haven't been able to get the information right, but according to the language reference, this is possible only for methods declared "properties":
+
+	class Foo
+	{
+		@property int bar()
+		{
+			return 230;
+		}
+	}
+	
+	// later:
+	
+	auto i = foo.bar;
+	assert(i == 230);
+
+However, the gdc compiler accepts the syntax for every relevent method, even without the keyword. The dmd compiler has a flag to enforce the syntax. In any case, I like it.
+
+It works as well in the other direction, for assignment:
+
+	class Foo
+	{
+		void meh(uint v)
+		{
+			std.stdio.writeln(v);
+		}
+	}
+	
+	// later:
+	foo.meh = 210;		// this prints 210
+
+So, in D, any method that takes a single argument can be used as a left-value. In sool, I have this exact same mechanism, but with a twist: a setter method must end in `=`:
+
+	object Foo
+		method uint foo()
+			return 10
+		end
+		
+		method foo=(uint v)
+			print(v)
+		end
+	end
+
+In fact, this is a core mechanic, as the member setting and getting is in fact done through the setter/getter methods that the compiler fills in automatically. Everything in sool is a method call (ok, except assignment to locals, but that's another story, and in fact, you could semantically consider that locals are members of the local scope, and therefore accessing them is kinda like method calls to the local scope object.)
+
+Now it makes me think, do I really need the `=` thing? It would seem not. In fact, it's even a bit redundant, since a setter method *must* return void, and *must* take only one argument. Instead of forcing this on the setter method, we could just check when actually setting things:
+
+	bar.foo = 249	-- does bar answer to foo(uint)?
+
+If `foo` is a member, the compiler will have filled in the method automatically. If it's a user defined method, well, you get the core mechanism for free. Therefore, for member-like access, the `=` is not necessary.
+
+However, I was using the same trick for array-like indexing:
+
+	foo = bar[4]	-- is really calling method "[]" on bar with arg 4
+	bar[2] = foo	-- is really calling method "[]=" on bar with args (2,foo)
+
+And this allowed us to nicely extend the syntax to any number of arguments, for slice operations:
+
+	foo = bar[2,10]
+	bar[3,13] = whatever
+
+That works as long as `bar` has the right methods with the right number of arguments. But now that the number of argument is not fixed, the `=` is essential in choosing the method, in particular when the indices and values have the same types:
+
+	object #uint
+		-- slicing, called arr[1,10]:
+		method #uint [](uint first, uint last)
+		end
+		
+		-- setting, called arr[2] = val
+		method []=(uint index, uint val)
+		end
+	end
+
+Without the `=`, woops, it would be the same selector... Even though it's necessary only for indexing, I'm keeping it for members-like setters too, for the sake of consistency.
+
+Note that the other way around, the getters, need no particular effort. Anything that takes no argument can be called "like a member", and that's good because that makes sool comply with the principle that members and methods should be accessed with the same syntax. Semantically, it doesn't matter is the result is read from memory or computed. That's encapsulation.
+
+Modules and namespaces
+----------------------
+
+D has the nice rule that one source file is one module, and the module name is the source file's name without the extension (by default). Then modules can be grouped in packages, which are simply directories containing modules.
+
+That's simple and neat. Then to use the modules, import them from other modules:
+
+	import std.stdio;
+	
+	void main()
+	{
+		writeln("Hello");
+	}
+
+"Importing" makes all symbols from the module available directly. Here, the `writeln`. If there are conflicts, you can always use the full "path":
+
+	std.stdio.writeln("Hello");
+
+Also, you can import only selected symbols from modules:
+
+	import std.stdio: writeln;
+
+When doing this, only `writeln` is available, you can't even use the full path to other symbols in the module.
+
+Then, D being (ever so slightly) on the bloated side, you have many options about modules, like publicly importing (to transitively make the symbols available to whomever imports you), static import (which forces you to use the full path for everything in the module), renamed import (rename symbols), renamed *and* selective, scoped, etc, etc. There's also rules about construction and destruction, since D has variables that can live out of classes (like module-locals, which therefore can become globals if they are imported).
+
+And naturally this serves as namespaces.
+
+In sool, I planned on being simple: every class is global. Period. And the global space is whatever you compile together. That's the simplicity of Lua, but without the tricks that Lua has for namespacing (modules are just tables). Will it come back to haunt me? Is polluting the global space a good idea?
+
+It might be a problem. No namespacing means that you can't ever compile code where two classes have the same name. If you write a geometry library, for instance, and define a Vector class, you prevent anyone from writing a new vector class, at least with this trivial name. And if you write a *standard* library (that's me), you prevent *every* user to use some common names like File, Array, etc.
+
+Which introduces name prefixes (all the "NS" crap in the famous Objective-C frameworks) and other sadness.
+
+I'm not sure what to do. Namespacing combined with modules, as D does it, is quite elegant, because it cleanly separates things and at the same time lets you use them with a light syntax (use the full path only when necessary).
+
+About syntax, by the way. D is quite simple: everything is done with a dot:
+
+- selecting a module in a package
+- selecting a class (or other symbols) in a module
+- accessing a member or method in a class
+
+You end up with things like:
+
+	foo.bar.baz.meh();
+
+And you have no idea what is what. `foo` could be:
+
+- a package
+- a module
+- a class name
+- a module variable
+- a member
+- a method
+- a local
+
+Syntax is simplified, analysis is complexified. In sool, so far, I had the rule that class names started with a capital letter, so that you could always ensure with the grammar that what you wrote had meaning:
+
+	Foo.bar		-- instantiate Foo, call bar on new object
+	Foo:meh		-- call selfless method meh on class Foo
+	foo.bar		-- foo cannot be a class, it's either a method, or a local
+
+However, like the last line shows, it is not complete. Simple identifiers can refer either to members, methods, or local variables. If I wanted to be coherent, I'd have the local variables be lexically different (like start with `$` or something ugly like this).
+
+Furthermore, the standard and built-in classes break this rule already: `num`, `uint`, `text`, they are class names. And for the sake of good looks, I wanted the standard "bogus classes" (used as namespaces) be lowercase as well: `io`, `os`, `sool`. This way, you'd always simply see what is standard, and what is user made.
+
+But that's a lot of incoherencies (and exceptions in the compiler). I see two ways to solve this. Either go "full lexical discrimination":
+
+	$local
+	method
+	Class
+	@namespace		-- could be
+
+and make no exceptions, even for builtins:
+
+	Num, Uint, Text, Io, Os, Sool
+
+But that's ugly. Or go "full lexical freedom":
+
+	local, Local, _local
+	method, _method, Method
+	Class, class, cLass, _class
+
+And let the happy analyzer take care of its symbol table. Then the standard stuff is actually following the rules, and that's nice. It sure makes the grammar simpler:
+
+	foo.bar
+
+becomes the AST node "dot access", and be done with it. Analyzer will decide if `foo` can be dot accessed with `bar`.
+
+If there was to be modules and namespaces in sool, however, what syntax would I prefer? So far, the dot has always meant calling a method. I like when the same thing has the same meaning everywhere. Furthermore, we can't use the dot for everything, since these are different:
+
+	Class:meh		-- call selfless method meh of class Class
+	Class.foo		-- call selfless method Class:new(), call foo on result
+
+If all identifiers are completely lexically free, maybe we should have different operators for different actions. `:` for selfless method call, `.` for normal method call. Something else for namespace accessing?
+
+Maybe the easiest is to use `:` for everything else than regular method call. After all, selfless methods are really just functions, enclosed in classes for namespacing (and access to shared members). This "selecting" action could be represented by the `:` operator, while the message sending would be the dot.
+
+	io:print "meh"
+	os:exit(1)
+	boo = pack:subpack:module:Class
+
+And to include a module or open a namespace, many syntaxes exist:
+
+	use namespace foo;		// C++
+	require "foo"			-- Lua
+	import foo;				// D
+	use foo;				// Rust
+	import "foo"			// Go
+
+More shadowing
+--------------
+
+A direct consequence of having no lexical difference between packages, modules, class/interface names, member, methods, and locals, is that a lot more name shadowing can occur. And we dislike name shadowing, because it's confusing (same name for different things, which one are we talking about).
+
+It is however necessary to allow shadowing, as we'll see. Imagine a naive approach, in which nothing can shadow anything. If the name is already taken, pick another one. Can't name a local like a member or a class, or a module. Can't name a member like a class or a module. Can't name a class like a module.
+
+Good, everything is separate and clear. But these relations are both ways: can't name a module like a class, class member or local (anywhere!)
+
+In a bottom-up approach, a no shadowing rule is sound: don't name a local like a class that "already" exists. But the compiler doesn't know about "already", it only see a top-down view: modules, with classes in it, with methods in them, and locals in them.
+
+The consequence of this is that by creating a new class "foo", you can invalidate code anywhere else in the module, if any other class happened to use "foo" for a member or a local or a method. This is unacceptable. The rule must be that new code cannot modify the validity of older code.
+
+This means that shadowing must be allowed, and the shadowing must always go from inner scope outwards. When you add new code in an inner scope, everything is your problem. When someone adds new code in an outer scope, it should never be your problem.
+
+There should be mechanisms to allow you to access the shadowed symbol, because it's not always your fault:
+
+- code a method with a local "point"
+- some dude creates a new class "point" in the same module
+
+Your code must be unaffected. But if you would like to use the new class in this same method, you should be allowed without having to refactor (rename your local).
+
+That's particularly true of methods, which are an API and can be used elsewhere:
+- code a class with a method "sort"
+- use method sort like: "a = sort"
+- some dude creates new class "sort" in same module
+
+Meh, "a = sort" could now mean "instantiate sort object". But no, it shouldn't. It should always be the "closest" symbol in scope.
+
+What if:
+
+- there is a class called "sort"
+- you use it in class foo as "a = sort" (new sort object)
+- some dude creates new method "sort" in class foo
+
+Well, now your code is broken. If the dude is lucky, the return types are different, and he will see that your method doesn't compile anymore. If not, your code will be hijacked into using the dude's method instead of the object instantiation you intended. But well, by keeping the "default" to the closest in scope, you never have to look too far away. Also, you really *shouldn't* use conflicting names. You just *can*, for the sake of forbidding new code forcing old code to be refactored.
+
+I checked, that's what happens in D. In D, you instantiate structs by simply using their name, and an optional list of arguments to their constructors:
+
+	auto p = Point(1,2);
+
+This is of course exactly how you would call a method `Point` in the same class. Logically, the method will always shadow the struct, so the previous scenario (dude creates a new method with the same name as an existing struct) happens in D.
+
+To completely remove ambiguity, there should be a different syntax for calling methods and making objects. Note that in D, objects are created with `new`:
+
+	auto obj = new Object(1,2);
+
+But I think this is redundant. `new` will work only with classes, and will fail with structs, so in my opinion, the keyword is useless. No such keyword in sool. The price is possible ambiguity.
+
+Likewise, in sool, there is still one big issue: the local vs. method conflict is specially problematic in that I intended to have "declarative assignments" for locals:
+
+	foo = bar		-- if foo doesn't exist, it's now a new local
+
+But imagine that now someone adds a new `foo=` method in the class, and tadaa, your declarative assignment becomes a call to `foo=` with argument `bar`. Broken. Of course an explicit declaration for locals would solve that:
+
+	local foo = bar
+	var foo = bar
+	auto foo = bar
+
+It's true that I always had two conflicting directions for sool:
+
+- less writing, more meaning. If I write `a = b` and `a` doesn't exist, well, make it.
+- the same syntax should always mean the same thing. That is quite incompatible with most shortcuts, which end up make different things look the same.
+
+Quite frankly, I don't mind using a declarative `local` like in Lua. It makes everything simpler: the parser can make a local declaration node right away, which simplifies the analyzer's work, and as we just saw, it removes one more possible ambiguity. And sool has always been "Lua syntax with static typing and object orientation". Kind of.
+
+Conclusion
+----------
+
+Lua doesn't have namespaces, because they can be (and are) simulated using tables. Since everything is dynamic, you can store your "class" definitions inside any hierarchy of tables you desire. Furthermore, chunks (source files, among other things) are compiled as anonymous functions that are exectuted when `require`d, which means you can have locals to modules and fancy things like that. Lua is awesomely clever. Other languages have dedicated mechanisms for namespacing. It seems that any "serious" language nowadays needs namespacing. Is sool serious enough?
+
+A simplified D system could work:
+
+- each file is a module, named after the file's name by default
+- importing a module makes all its classes and interfaces available to the current module
+- shadowing and scope resolution works as usual: lookup in module first, then in imported modules. If a class is found in exactly one imported module, you can use it directly, otherwise its full name `module:class` must be used
+
+I don't know about grouping modules in "crates", as Rust calls them. Any library will most likely be composed of several files, and therefore several modules. Packages could simply be directories of modules, as in D.
+
+What about transitivity? If module A imports module B that imports module C, should C's symbols be available by default to A? Seems to me that probably, yes, because it's quite likely that the classes in B will have some of the C classes in their interface:
+
+	-- module C
+	
+	class Foo
+		method dothefoo() end
+	end
+	
+	-- module B
+	
+	import C
+	
+	class Bar
+		Foo f
+	end
+	
+	-- module A
+	
+	import B
+	
+	class Other
+		method something()
+			local bar = Bar
+			local f = bar.f
+			f.dothefoo
+		end
+	end
+
+The type of this new local `f` is the `Foo` defined in module C. Validation of module A can only occur if we know that this `Foo` class answers to `dothefoo`.
+
+Hence the question: does "importing" mean only "bring the class names in scope so we can use them in the source", or is it a deeper concept that engages the compiler to bring the module in the current validation context?
+
+In Lua, this is equivalent: `require "foo"` provoques the compilation of the needed file "foo.lua", and its execution, which normally brings its interesting symbols into the global table `foo`.
+
+In a compiled language like sool, where there is no separation between interface and implementation of classes, importing another module would necessarily mean that the other module has to be parsed and analyzed as well. So it *would* be in the compilation context, as well as all the modules recursively imported. The analyzer would definitely have the complete information.
+
+The problem is reduced to the user: importing is only a matter of which symbols have shortcuts in the current scope, which must use a full path, and which are accessible at all.
+
+Can one use the full path to access symbols that we know are in the compilation context, but have not been explicitely imported? Or even directly the class names if they don't conflict? That would be both convenient (import one base module, and all the mesh of modules is available) and iffy (no actual control over it).
+A clean solution would be: regardless of what is in the compilation context, you need to import a module to use its symbols. Furthermore, the non conflicting names can be used unqualified. This is cleaner, but also means that you'll have bucketloads of imports at the beginning of each module.
+
+In D you can use unqualified symbols from imported modules, and fully qualified symbols from any module recursively imported ("in the compilation context"). It makes sense, because after all "they are here". The import just makes shortcuts (brings the unambiguous unqualified names in the current scope).
+
+After checking, I realized that Rust has two different mechanisms: `use` informs the compiler that it needs another module (and probably provokes its compilation and linking), while `import` brings all or part of the symbols in the current scope. That's more control, but feels tiresome. I prefer the D way which automatically lets you use the non-conflictual names directly.
+
+So, sool with modules and namespaces? Why not. That's only more work to implement the compiler...
