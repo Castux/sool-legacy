@@ -5,6 +5,7 @@ The current state of things is:
 
 - interfaces are sets of method prototypes. A class is said to comply with an interface if it implements all the interface's methods.
 - declaring an interface also creates a so called "generic" class. This generic class cannot be instantiated, but objects of compliant classes can be casted to it. This generic class can be used as any other class: methods can be written for it (via `extend`), variables can use it as their type, it can be passed as argument, etc. Behind the scene, it uses the virtual table mechanism: when an object is casted to it, pointers to its relevants methods are attached to it, which are then used to make the calls.
+
 Generic classes are great to write algorithms that apply to similar classes, in a concise and elegant way: any object compliant to the interface can be casted - often implicitely - and used right away.
 
 The cons are that virtual calls are slightly slower, and that generics are completely useless to store objects: no downcasting is possible, so an object casted to a generic loses all its properties outside of these defined by the interface. In particular, general purpose containers cannot be written using generics. Even if downcasting was allowed, containers would be very unefficient: the user would need to remember what class is contained in a particular container, and (dynamically) downcast each element before every use. Unacceptable. Furthermore, because of the virtual table mechanism, generics work only with objects. Values need to be boxed before they can be casted to generics.
@@ -131,7 +132,9 @@ Can't we statically bind this at all? We would like to be able to do:
 
 And we're back to "can we use template parameters in the bounds of other template parameters?" That would be equivalent to having templates within templates and doing some stuff that looks like currification. Mmm, functional programming...
 
-Frankly, I'm not sure where to go with this.
+The problem with this approach is that since the bound depends on the parameter, you can't know it until template instantiation. And that voids our idea that the template can be validated once, using the (generic) bound as the (actual) class in the code. Which would be equivalent to having to validate the full template for each instance of it. Which then would require just as much work than having no bound at all, and makes the whole bound concept useless.
+
+So no, bounds cannot depend on the parameters.
 
 Functors
 --------
@@ -244,7 +247,7 @@ Some functors are quite generic and often applicable. They exist in C++'s `<algo
 etc. With this you can have generic algorithms:
 
 	extend #T
-		method find(UnaryPredicate|T pred)
+		method T find(UnaryPredicate|T pred)
 			for v in self do
 				if pred.call(v) then
 					return v
@@ -277,30 +280,6 @@ Pretty, isn't it? Well, to some extent. As we saw before, we can't generalize th
 
 But it can still be quite useful, to avoid writing the same code over and over again, despite the limits of our template system.
 
-Now for syntax... In these examples, I simply used the convention that the actual method's name is `call`, and that algorithms that use functors would indeed send the `call` message to them. C++ allows you to overload the `()` operator, that is, you can use the objects directly as if they were functions.
-
-Is this necessary in sool? Is it even possible? I don't think so. Imagine that `()` after a variable would mean `.call()`:
-
-	local foo = SomeFunctor
-	foo()		-- is really foo.call()
-	
-	local bar = Bar		-- Bar has a func member that contains a functor
-	bar.func()
-
-Eeeek, is this calling the `func` method on `bar` (usual member accessor), or calling `()` on the result of `bar.func`? Is:
-
-	bar.func()()
-
-any clearer? This syntax completely breaks the fact that parentheses are optional in a method call. And if the argument types are different we have confusion again:
-
-	bar.func(5)		-- hey, but `func` is a member getter, doesn't need arguments!
-	bar.returnFuncNumber(5)		-- hey we got an accessor, followed by nothing
-								-- does it mean call the functor with no arg?
-
-This is not possible. We can't overload `()` because it is *not* an operator. It is part of the grammar, like `=`. Applying `()` is *not* a method call, it *is* the method calling.
-
-So all our functor fun must be home-made. A convention can be to name the method `call`. It could be `f`. Could be anything. As long as the caller and the callee agree, of course.
-
 Last word about performance
 ---------------------------
 
@@ -313,3 +292,537 @@ However, as we mentionned earlier, some optimizations can be done by the compile
 The MyComparisonFunctor instance that is passed to `sort` is in principle casted and attached to a virtual table, so that the generic `sort` can be run. But since we definitely know what actual type it is, the `sort` function could be automatically "templated", and generated for the specific class of functor. And in this instance, the functor can be resolved to early bound code, or even inlined.
 
 And there you have it, the performance of templates with the elegance of generic types. For the price of more work in the comiler. But why not?
+
+Selfless vs. selfish in generics
+--------------------------------
+
+A thing came to my mind while writing this about functors. When a class defines a selfless method,
+
+	object Class
+		selfless no_self()
+		end
+	end
+
+ it can be called either without an object:
+
+	Class:no_self()
+
+or with one:
+
+	local instance = Class
+	instance.no_self()
+
+And of course from the object's methods itself:
+
+	extend Class
+		method foo()
+			no_self()
+			
+			-- same as:
+			self.no_self()
+			Class:no_self()
+		end
+	end
+
+In this context, everything is statically binded, and the compiler can directly write the low-level code to the selfless method, which really looks like a function.
+
+But lately I've been dealing with interfaces and naturally considered that if you can write:
+
+	instance.foo()
+
+then it really means that the object implements `void:foo:void` and therefore would comply with an interface:
+
+	interface HasFoo
+		foo()
+	end
+
+Unfortunately, the low-level calls for a selfless and a "selfish" method are different:
+
+	instance.no_self(arg) 	-- is really Class_no_self(arg)
+	instance.selfish(arg)	-- is really Class_selfish(instance,arg)
+
+Therefore, casting to a generic HasFoo would be confusing. In the virtual table, if you put a sefless method, and the generic tries to call it as a selfish one, the ABI for arguments won't match and catastrophy ensues...
+
+Two solutions:
+
+- interfaces include the "selfless" information. Meaning that an object can be casted to the corresponding generic only if its methods match the selflessness defined in the interface.
+- classes with selfless methods who want to be casted to generics must wrap them into dummy selfish calls.
+
+First one is very awkward:
+
+	interface CanFooBar
+		foo()
+		selfless bar()
+	end
+
+Interfaces define what messages an object must answer to. Selfless methods are just an artificial mechanism to include "classic" functions under class namespaces. Having such an interface would mean "the object answers to foo(), and the class must somehow also have a bar() function". But since `bar()` is not related to any object of the class, that makes little sense.
+
+The second one is better. It allows classes who have a "poorer" definition of a method (without self) to still act as if they had a richer version.
+
+	interface HasFoo
+		foo()
+	end
+
+	object A
+		num i
+		
+		method foo()
+			io:print("I'm an A, and my num is ", i)
+		end
+	end
+	
+	object B
+		selfless foo()
+			io:print("It is I, the B!")
+		end
+	end
+
+Class B doesn't hold state, and its `foo` always does the same. Defining B's `foo` as a normal method would be a useless loss of performance: in static calls, you would need an instance, and the call would always include a self parameter:
+
+	-- if it was "method foo()" in B:
+	
+	local dummy = B		-- instantiation, memory use, etc...
+	B.foo()
+	
+	-- as a selfless method:
+	
+	B:foo()				-- no instance, no memory, just a function call
+
+But it would sure be nice to be able to use B as a HasFoo.
+
+	local myB = B
+	local myHasFoo = myB to HasFoo
+
+But when casting, we build a virtual table, with a pointer to the `Foo` implementation. And class B only has a selfless `Foo`. Trying to call it with an object will fail at low-level.
+
+Can the compiler fill-in a dummy method with a self argument for us? Would be nice. Of course, that generates more code (a forwarding function that only calls the selfless one), and the virtual call will pass a useless argument. But semantically, it works.
+
+Which brings us back to:
+
+Why selfless methods?
+---------------------
+
+Do we need them? We definitely don't *need* them. They have less features than normal ones, so we could always do with the normal ones. The reason for them was performance. You can always do:
+
+	object Foo
+		method bar()
+			io:print("Hallo")
+		end
+	end
+	
+	-- later
+	
+	Foo.bar()
+
+But this means instantiate a Foo, and call `bar` on it. That takes memory, and the call passes the pointer to the instance as argument, even though it is not used.
+
+Now I'm not certain, but I might have decided about selfless methods before the language had structs ("value classes"). If you use a value class, there is not instantiation involved... Only some local memory is reserved (on the stack, or even in registers):
+
+	value Foo
+		method bar()
+			io:print "Whatev'"
+		end
+	end
+	
+	-- later:
+	
+	Foo.bar()
+
+Here, the "instantiation" doesn't create an object, just a temporary value whose address will be passed to the method (who won't use it). And temporary values' creation are very cheap: it's just space on the stack, or even just in registers. And if the "value" is actually empty, there's really no memory involved.
+
+Plus, if the method is small enough, it will be inlined, and then when the compiler sees that the value is not even used, it will likely optimize it out. In the end, it will be equivalent.
+
+OK, you say, there is no performance cost when using dummy empty value classes. But often, you store "functions" in classes, because they are related to the class. They won't be empty, there will be lots of things in it, initializations, maybe a complex constructor. The price of instantiation is not going to be zero.
+
+True. But check this: how often do you call a static method from the outside of a class? If it is "related" to the class, you will often call it from inside the class (in which case you already have an object: self), or from the outside but from a "related" piece of code in which you probably manipulate an object already.
+
+Also, small functions will be inlined and optimized. Big functions won't be inlined, and then the cost of passing a useless argument is negligible.
+
+The only problem left is when you absolutely don't already have an object of the class and still need a "selfless" call. For instance the `new` factory:
+
+	object Foo
+		num i
+		
+		method new(num i)
+			return Foo(i = i)
+		end
+	end
+
+This `new` is normally selfless, since it's meant to build new objects with the convenience of function call syntax, and possible "complex" calculations in it.
+
+	local foo = Foo(5)		-- is really Foo:new(5)
+
+If we don't have selfless methods anymore, we need a real Foo before we can call `new` on it, and we're biting our own tail:
+
+	local foo = Foo
+	local foo2 = foo.new(5)
+
+Meh? What if the class Foo has non optional references in it, that absolutely need manual initialization (in C++ terms: no default constructor)?
+
+	local foo = Foo		-- error!
+
+Then we'd need a helper class to hold our factory "function":
+
+	value FooMaker
+		method Foo new(num i)
+			return Foo(i = i)
+		end
+	end
+	
+	-- later:
+	
+	local foo = FooMaker.new(5)
+	-- or even, if we keep the shortcut:
+	local foo = FooMaker(5)
+
+Now ain't that ugly. That would be the price of a language without first-order functions. By putting the object at the center of the language, it does mean that to do anything, you first need either an object to do it for you, or an object to do it on. And that includes creating other objects.
+
+Conceptually sound, but annoying. And an annoying language is not a language people want to use.
+
+Remember, we removed the constructor-like `init` methods, because they forced us to do special semantic analysis, to be certain that no member was used before it was initialized. That turned out to be quite difficult, and forced this particular method to be treated specially.
+
+Therefore we forced object creation to happen with the former `with` syntax:
+
+	foo = Class(member = value, ...)
+
+which makes things much easier: the object exists only after this call, so all information must be created prior to the call. The compiler only needs to check that all mandatory members are set. And the "created prior to" led us to have these factory functions `new`.
+
+Conclusion: no solution is perfect. No "selfless" methods would make the language simpler, without necessarily loss of performance. But it would make some things less elegant to write.
+
+Ah, the dilemma.
+
+Special case: factories
+-----------------------
+
+Maybe the solution is to have no selfless methods, but to have a special case for factory functions! As we just saw, you can always do without selfless methods. Only one case would be really awkward: `new`, because we'd need helper objects.
+
+Let's make `new` a special thing. Not a method, but more like a function, strongly associated to a class.
+
+	object Foo
+		-- lots of members
+		
+		new(lots of args)
+			-- lots of calculations
+			return Foo(setting all members in a new Foo)
+		end
+	end
+	
+	-- later
+	
+	local foo = Foo(args)
+
+It would be the only thing that is written like a function in low-level (no object). It's not a real method, so you can't call `new` from the object, nor from the outside. The only way to invoke it is the object/value instantiation syntax.
+
+For convenience, it would also be overloadable:
+
+	object Foo
+		num i
+		text t
+		
+		new(num i, text t)
+			return Foo(i = i, t = t)
+		end
+		
+		new()
+			return Foo(i = 5, t = "default")
+		end
+	end
+
+In fact, most semantics would be the same as methods. But it would be the only true function. Assuming this, we could get rid of selfless and all the issues that came with it:
+
+- syntax: no more `class:method`, so the colon can be reserved for namespaces
+- simpler language: no need to decide which is selfless and which is not. Also you can't do the mistake of declaring selfless and using self, or forgetting to declare selfless in a method that doesn't use self. One less keyword.
+- simpler compiler: only one kind of method. `new` functions are special, true, but they are very specific and happen at only one place.
+- no ambiguity with interfaces: all methods are called the same way, so casting to generic always works (the same). `new` is not a method, and cannot be in an interface. If you need something like "make an object of the same class", write a clone method yourself.
+- not so much performance drop: small methods can be inlined and the extra useless `self` argument disappears. Big methods are big, and the extra argument is negligeable.
+
+As for the extra instantiation "just" to call a selfless method, well... If it applies to an existing object, it should probably be a method for it (and no excuses, the `extend` syntax lets you do it for *any* class, even built-ins). Even if it applies symmetrically to several objects (and there is no "obvious" main target for the call), you can still write it for one of them.
+
+If you really need a "function" that does not apply to an existing object, it sure sounds like a factory function, and it could probably be a special `new` function for the class.
+
+If you need a function that:
+
+- uses no object
+- creates no object
+
+Then it's probably that it has strictly only side-effects. Well, either you can just put in an arbitrary class, to "namespace" it (or group it with related functions). Or you can make it a `new` function of a dummy empty class:
+
+	value Print
+		new(text t)
+			io.print(t)
+			return Print	-- default constructor for the "print" class
+		end
+	end
+
+	-- later
+	
+	Print("hello")
+
+Semantically: we make a dummy "Print" value, empty, whose constructor has a side effect and then returns a dummy value, that we ignore. Concretely, after optimization: just print "hello".
+
+Heh, look, we just invented global functions. Magic.
+
+One last ambiguity
+------------------
+
+Sounds good. I see one last issue worth investigating (that already existed before, mind you). To create an object or a value, the "only" way is the instantiation syntax:
+
+	local foo = Foo(member1 = value1, member2 = value2)
+
+It's the only way in the language to create user-defined objects and values. All members that have default values are optional, so you can sometimes even write:
+	foo = Foo()
+	foo = Foo
+
+Now unfortunately, this is also the syntax to call the (formerly selfless method) special function `new`, if it has no arguments:
+
+	foo = Foo(a,b,c)
+	foo = Foo()
+	foo = Foo
+
+Oh noooo. The horror! How do we make the difference? They might be very different:
+
+	object Foo
+		num a = 10
+		
+		new()
+			return Foo(a = 40)
+		end
+	end
+	
+	foo = Foo()
+	assert(foo.a == 10)		-- it was the instantiation syntax
+	assert(foo.a == 40)		-- it was the `new` call
+
+Sure, using the `new` only for initial values is dumb, since there is a built-in initial value system. But it was just for the example.
+
+The usual answer, when syntaxes collide, is to change the syntax of one of these. Either the low-level constructor, or the high-level `new` function.
+
+Note that the high-level one is cool, because it gives us this new "global" function trick. And we're used to making objects with a function-like syntax, by passing arguments.
+
+So what if we changed the low-level one, where we list members:
+
+	foo = Foo!(member = value)
+	foo = Foo!
+	foo = new Foo(member = value)
+	foo = new Foo
+	foo = @Foo
+	foo = $Foo
+	foo = &Foo
+
+Running out of tokens. Other brackets? They're all taken:
+
+	foo = Foo[a,b,c,d]		-- array like initialization: foo[1] = a
+	foo = Foo{key = value}	-- table-like initialization: foo[key] = value
+
+Using `new` is confusing, since we exactly *not* using the `new` function. Could be something else like `make`, but I don't like reserving too many keywords. The prefixes look weird.
+
+Somehow the `!` is nice. It's imperative: "do it". It emphasizes the instantiation, which is associated with reserving memory (on the heap for objects, maybe on the stack for values). And it's a single character, so it doesn't take too much space if you want to use the member by member syntax by yourself:
+
+	foo = Foo!
+	(
+		blah = 5,
+		thing = "haha"
+		etc = false
+	)
+
+or even if you want to use all default values (if they exist):
+
+	foo = Foo!
+
+You would write the `new` functions only if you need or want them:
+
+	new(Bar b)
+		return Foo!(thebar = b)
+	end
+
+For consistency, the compiler could provide a default `new`, if it is possible:
+
+	new()
+		return Foo!
+	end
+
+What would be the point? Not sure. But I'm thinking it could serve as default constructors do in C++. For instance when you grow a vector of structs ("values"), the constructors are called on the new elements (remember, everything must be initialized). Here we'd need the same:
+
+	local arr = #Foo(20)
+
+Behind the scene, the compiler must initialize all 20 Foos. Should it use the initial values as if it was `Foo!`, or should it call the constructor `new`? If neither exist, of course it must complain.
+
+But which would be more useful? Calling `new` allows the writer of `Foo` total control on the default building of a Foo. Including possible "complex calculations". But by definition `new()` has no argument, so how complex can these computations be?
+
+Remember, we can set initial values for the members:
+
+	value Foo
+		num a = 5
+		text t = "blah"
+		Bar b = Bar(1,"yepee")
+	end
+
+and these are used when calling `Foo!`. However these expressions must be somewhat constant: they can't depend on each other. You might want something more complex to happen, even for default cases:
+
+	value Foo
+		num a
+		text t
+		Bar b
+		
+		new()
+			local a = 5
+			local t = a.totext
+			local b = Bar(a,t)
+			
+			return Foo!(a = a, t = t, b = b)
+		end
+	end
+
+It is of course equivalent, but easier to write (and modify) in a single function. It might be a rare case, but then again it's very nice to have the feature if you need it, and it represents no more work in other cases. You can always say that the default compiler-provided `new()` simply calls `Foo!` if it exists.
+
+In any case, of course, if there is no such thing as a default constructor, you must give an initial value to the array resize/create thing:
+
+	local init = Foo(1, "meh", Bar)
+	local arr = #Foo(20, init)
+
+Note that this argumentless constructor is also the one that would be called for members in another object/value:
+
+	object Another
+		num a		-- implied: "= num()"
+		Foo f		-- implied: "= Foo()"
+	end
+	
+	-- since both num and Foo have the "new()" function, we can do:
+	local another = Another!
+	-- or even:
+	local another = Another()
+
+Interestingly, it's a recursion without a base. Built-in types have no members, and therefore using the `!` is useless. It might be allowed anyway, for consistency.
+
+Use in templates
+----------------
+
+Consider:
+
+	object Container|(Any T, Any U)
+		T t = T()
+		#U arr
+		
+		method resize(uint i)
+			arr.resize(i)
+		end
+		
+		method foobar()
+			local t,u = T,U
+		end
+	end
+
+Can you see where I'm going there? Interfaces define only the methods of the objects/values. `new` is not a method. Inside the template, we have no idea if `T()` can be called, or if there is a default value for U in the resizing.
+
+Question:
+
+- do we make `new` part of the interface, so that templates can know what to expect?
+- do we delay checking until actual template instantiation?
+- do we forbid instantiation in templates?
+
+Number one: impossible. The return type of `new` is the class itself, and it is now notorious that our interfaces can't be self-referential (note that the problem would have been the same with the former selfless factory).
+
+Number two: if we delay this, it's equivalent (and easier) to delay everything, and we fall back to the result that interfaces as bounds are pointless.
+
+Number three: well here we are again. Realizing that templates with bounds have strong constraints. It would seem indeed, that we cannot instantiate the generic types from within templated code. Only use existing ones: move them around, and call the known methods about them.
+
+Is it a problem? I don't know. Containers are supposed to store and retrieve objects made outside. What about simple hash tables, which have lots of "empty" places, for instance:
+
+	value Pair|(Hashable K, Any V)
+		K key
+		V val
+	end
+	
+	object Table|(Hashable K, Any V)
+		#Pair|(K,V) array
+		
+		new()
+			-- make initial free space
+			array.resize(8)
+		end
+	end
+
+Well, this resize on array of values Pair|(K,V) requires that Pair|(K,V) has a constructor without arguments `new()`, which really depends on whether K and V have any. Which we don't know.
+
+Oh wait, not really. This implementation is foolish. All we have to do is use optionals:
+
+	value Pair|(Hashable K, Any V)
+		K? key
+		V? val
+	end
+
+Now the Pair always has a default `new` (which fills nil and nil), and all is well.
+
+	object Table|(Hashable K, Any V)
+		#Pair|(K,V) array
+		
+		V? [](K key)
+			
+			local pair = array[key.hash % array.size]
+			
+			if pair.key as key_found then
+				if key_found == key then
+					return pair.value
+				else
+					-- lookup the rest of the bin or something
+				end
+			else
+				return nil
+			end
+		end
+		
+	end
+
+Where were we already? Ah yes, can't instantiate the template parameter's class within the template. Maybe we don't need to.
+
+Prototype for `new`
+-------------------
+
+More problems! Remember how I once complained that without exceptions, you can't properly handle constructor failure? And that using a selfless `new` was nice because it was a perfectly normal method that could return anything you wanted, including an existing object (internizing), nil (failure) or even anything else you wanted?
+
+Could our new `new` do the same? Be declared with any prototype you want, and be just a normal function?
+
+	object Foo
+		Foo? new(uint i)
+			if i > 5 then
+				return nil
+			else
+				return Foo!
+			end
+		end
+	end
+
+I don't see why not. And that way we can do even more interesting "global function" tricks:
+
+	value give_me_five
+		uint new()
+			return 5
+		end
+	end
+	
+	-- lter
+	local meh = give_me_five()
+
+Of course, when the `new()` is used for default values somewhere else, the return type compatibility is checked. But otherwise it poses no problem at all.
+
+Summary of this episode
+-----------------------
+
+Initial values for members:
+
+- non optional object members have no default initialization.
+- optional object members have the `nil` default initialization.
+- value members have the default initialization `new()`, if it exists.
+- every member can have an explicit initialization (`= expression`)
+
+Instantiation:
+
+- values and objects are instantiated with the `Foo!(...)` syntax. All members that do not have a default initialization must be provided.
+- if the argumentless `Foo!` call is valid, the compiler also provides the default constructor `new()` that simply returns `Foo!`.
+- `new()` can be explicitely provided by the user, also with other prototypes.
+
+Arrays:
+
+- growing an array of values is possible only if `new()` exists for that value class, and it is use to create each new value.
+- any other case (values without `new()`, objects) requires passing an initial value with which to fill the new elements.
+
