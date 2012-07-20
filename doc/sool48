@@ -1,0 +1,411 @@
+Selfless vs. selfish and the return of the constructor
+------------------------------------------------------
+
+A thing came to my mind while writing this about functors. When a class defines a selfless method,
+
+	object Class
+		selfless no_self()
+		end
+	end
+
+ it can be called either without an object:
+
+	Class:no_self()
+
+or with one:
+
+	local instance = Class
+	instance.no_self()
+
+And of course from the object's methods itself:
+
+	extend Class
+		method foo()
+			no_self()
+			
+			-- same as:
+			self.no_self()
+			Class:no_self()
+		end
+	end
+
+In this context, everything is statically binded, and the compiler can directly write the low-level code to the selfless method, which really looks like a function.
+
+But lately I've been dealing with interfaces and naturally considered that if you can write:
+
+	instance.foo()
+
+then it really means that the object implements `void:foo:void` and therefore would comply with an interface:
+
+	interface HasFoo
+		foo()
+	end
+
+Unfortunately, the low-level calls for a selfless and a "selfish" method are different:
+
+	instance.no_self(arg) 	-- is really Class_no_self(arg)
+	instance.selfish(arg)	-- is really Class_selfish(instance,arg)
+
+Therefore, casting to a generic HasFoo would be confusing. In the virtual table, if you put a selfless method, and the generic tries to call it as a selfish one, the ABI for arguments won't match and catastrophe ensues...
+
+Two solutions:
+
+- interfaces include the "selfless" information. Meaning that an object can be casted to the corresponding generic only if its methods match the selflessness defined in the interface.
+- classes with selfless methods who want to be casted to generics must wrap them into dummy selfish calls.
+
+First one is very awkward:
+
+	interface CanFooBar
+		foo()
+		selfless bar()
+	end
+
+Interfaces define what messages an object must answer to. Selfless methods are just an artificial mechanism to include "classic" functions under class namespaces. Having such an interface would mean "the object answers to `foo()`, and the class must somehow also have a `bar()` function". But since `bar()` is not related to any object of the class, that makes little sense.
+
+The second one is better. It allows classes who have a "poorer" definition of a method (without self) to still act as if they had a richer version.
+
+	interface HasFoo
+		foo()
+	end
+
+	object A
+		num i
+		
+		method foo()
+			io:print("I'm an A, and my num is ", i)
+		end
+	end
+	
+	object B
+		selfless foo()
+			io:print("It is I, the B!")
+		end
+	end
+
+Class B doesn't hold state, and its `foo` always does the same. Defining B's `foo` as a normal method would be a useless loss of performance: in static calls, you would need an instance, and the call would always include a self parameter:
+
+	-- if it was "method foo()" in B:
+	
+	local dummy = B		-- instantiation, memory use, etc...
+	B.foo()
+	
+	-- as a selfless method:
+	
+	B:foo()				-- no instance, no memory, just a function call
+
+But it would sure be nice to be able to use B as a HasFoo.
+
+	local myB = B
+	local myHasFoo = myB to HasFoo
+
+But when casting, we build a virtual table, with a pointer to the `Foo` implementation. And class B only has a selfless `Foo`. Trying to call it with an object will fail at low-level.
+
+Can the compiler fill-in a dummy method with a self argument for us? Would be nice. Of course, that generates more code (a forwarding function that only calls the selfless one), and the virtual call will pass a useless argument. But semantically, it works.
+
+Which brings us back to:
+
+Why selfless methods?
+---------------------
+
+Do we need them? We definitely don't *need* them. They have less features than normal ones, so we could always do with the normal ones. The reason for them was performance. You can always do:
+
+	object Foo
+		method bar()
+			io:print("Hallo")
+		end
+	end
+	
+	-- later
+	
+	Foo.bar()
+
+But this means instantiate a Foo, and call `bar` on it. That takes memory, and the call passes the pointer to the instance as argument, even though it is not used.
+
+Now I'm not certain, but I might have decided about selfless methods before the language had structs ("value classes"). If you use a value class, there is not memory allocation involved... Only some local memory is reserved (on the stack, or even in registers):
+
+	value Foo
+		method bar()
+			io:print "Whatev'"
+		end
+	end
+	
+	-- later:
+	
+	Foo.bar()
+
+Here, the "instantiation" doesn't create an object, just a temporary value whose address will be passed to the method (who won't use it). And temporary values' creation are very cheap: it's just space on the stack, or even just in registers. And if the "value" is actually empty, there's really no memory involved.
+
+Plus, if the method is small enough, it will be inlined, and then when the compiler sees that the value is not even used, it will likely optimize it out. In the end, it will be equivalent.
+
+OK, you say, there is no performance cost when using dummy empty value classes. But often, you store "functions" in classes, because they are related to the class. They won't be empty, there will be lots of things in it, initializations, maybe a complex constructor. The price of instantiation is not going to be zero.
+
+True. But check this: how often do you call a static method from the outside of a class? If it is "related" to the class, you will often call it from inside the class (in which case you already have an object: self), or from the outside but from a "related" piece of code in which you probably manipulate an object already.
+
+Also, small functions will be inlined and optimized. Big functions won't be inlined, and then the cost of passing a useless argument is negligible.
+
+The only problem left is when you absolutely don't already have an object of the class and still need a "selfless" call. For instance the `new` factory:
+
+	object Foo
+		num i
+		
+		method new(num ii)
+			return Foo(i = ii)
+		end
+	end
+
+This `new` is normally selfless, since it's meant to build new objects with the convenience of function call syntax, and possible "complex" calculations in it.
+
+	local foo = Foo(5)		-- is really Foo:new(5)
+
+If we don't have selfless methods anymore, we need a real Foo before we can call `new` on it, and we're biting our own tail:
+
+	local foo = Foo
+	local foo2 = foo.new(5)
+
+Meh? What if the class Foo has non optional references in it, that absolutely need manual initialization (in C++ terms: no default constructor)?
+
+	local foo = Foo		-- error!
+
+Then we'd need a helper class to hold our factory "function":
+
+	value FooMaker
+		method Foo new(num ii)
+			return Foo(i = ii)
+		end
+	end
+	
+	-- later:
+	
+	local foo = FooMaker.new(5)
+	-- or even, if we keep the shortcut:
+	local foo = FooMaker(5)
+
+Now ain't that ugly. That would be the price of a language without first-order functions. By putting the object at the center of the language, it does mean that to do anything, you first need either an object to do it for you, or an object to do it on. And that includes creating other objects.
+
+Conceptually sound, but annoying. And an annoying language is not a language people want to use.
+
+Remember, we removed the constructor-like `init` methods, because they forced us to do special semantic analysis, to be certain that no member was used before it was initialized. That turned out to be quite difficult, and forced this particular method to be treated specially.
+
+Therefore we forced object creation to happen with the former `with` syntax:
+
+	foo = Class(member = value, ...)
+
+which makes things much easier: the object exists only after this call, so all information must be created prior to the call. The compiler only needs to check that all mandatory members are set. And the "created prior to" led us to have these factory functions `new`.
+
+Conclusion: no solution is perfect. No "selfless" methods would make the language simpler, without necessarily loss of performance. But it would make some things less elegant to write.
+
+Ah, the dilemma.
+
+The constructor dilemma
+-----------------------
+
+Things were different when we decided to remove the `init` constructor. We still had classic inheritance, which made the relation between the object and itself as a parent complicated for initialization. I wrote that semantic analysis was difficult, but let's be frank: not so much. Now that there is no inheritance anymore (only embeded classes), every member can be treated the same. In this idea:
+
+- a constructor is a normal method, probably with a special name, say `init`.
+- it is called automatically right after memory allocation, during instantiation.
+- it is prepended with the setting of default values, for the members that have some.
+- there is an additional check that a member is initialized before use.
+
+In that last point, "use" mean:
+
+- accessing the member
+- other calls to self (other methods don't have these strict semantic checks)
+- calls with self as argument (ditto, methods in other classes)
+- return
+
+So, basically, the semantic checks are not *that* bad. The only methods on self you can use in `init` are:
+
+- the built-in setters for members
+- the built-in getters for already set members
+
+It should be fairly easy to track down. Without inheritance, you simply have a list of members, and you can just tick them out on the go:
+
+- implicit default value
+- explicit initial value
+- explicit assignment in `init`
+
+And when reading it, just check it's there already. And before returning, check that everyone is ticked. Really not that bad after all. And most importantly, we don't need the former `with` syntax that was so problematic (ambiguity and multiple ways to instantiate), or at least not as the main instantiation mechanism. The only way to make an object/value now is using its class name, followed by an optional list of arguments:
+
+	foo = Foo(arg)
+
+which is a memory allocation followed by a call to `init(arg)`.
+
+Default constructors
+--------------------
+
+Of course, it's annoying to have to write trivial constructors like:
+
+	object Foo
+		num i
+		text t
+		
+		init(num ii, text tt)
+			i = ii
+			t = tt
+		end
+	end
+
+But the compiler can help us here. First, there is the empty default constructor. If all members have default values (implicit or explicit), it simply fills in:
+
+	init() end
+
+Remember that default values are:
+
+- for value classes, the result of their argumentless constructor `init()`, if any.
+- for optional object references, nil.
+- for all, any expression given explicitly in the member definition.
+
+For non optional objects, we know we can't have an automatic allocation, because that would often result in useless memory and CPU usage. Often, you already have an object to pass as a member. And most "complicated" classes can't have a default argumentless constructor anyway. If you want an object member to have automatic allocation, just write:
+
+	object Foo
+		Bar b = Bar()
+	end
+
+So, for many simple cases, the default argumentless constructor will be enough, provided that you gave reasonable initial values.
+
+	object Foo
+		text t = "the default"
+	end
+	
+	local a = Foo	-- there you go!
+
+And - again - if all members have a `init()` constructor, or an explicit initial value where needed, you can always build the object, and fill it later (it's at least memory safe).
+
+Then we could have something like an "automatic trivial constructor" that simply matches all members to arguments in the constructor, in the same order:
+
+	value Vector
+		num x
+		num y
+	end
+	
+	local v = Vector(1,2)		-- automatically uses init(num,num)
+	
+	object Foo
+		Bar b
+		text t
+	end
+	
+	local foo = Foo(Bar(12), "yepee")	-- init(Bar,text)
+
+Of course, for very big classes, doing this is very tedious and unclear. Typically, the user doesn't need to set all members themselves. In fact, some members are actually used only for internal stuff and shouldn't be fiddled with from the outside.
+
+	local big_object = BigObject("haha", Foo(1), 234.4, Vector(1,2),
+		[a,b,c,d], true, false, true, true)
+
+But for small classes, it's perfect. Anyway, the compiler could fill it in only if someone tries to call it.
+
+Oh, and all of this works with embedded members, of course:
+
+	object Foo
+		embed Val			-- if this is a value and there is an init(), that's the default
+		embed Obj = Obj		-- automatic alloc if you want
+		embed num = 65		-- hey, why not?
+	end
+	
+	foo = Foo		-- it works!
+
+That's particularly cool with the automatic "trivial" constructor:
+
+	value Box|(Any T)
+		embed T
+	end
+	
+	foo = Box|num(5)
+
+Non void constructor?
+---------------------
+
+At some point I wanted to have constructors that could have return values. For instance, the same class, but optional, to signify constructor failure. Or same class and non optional, for things like internizing (return an existing object). Or return a completely different class. Or return multiple values.
+
+In other words, have general "factory" methods. And since they have a return value, they don't need a self, or a prior allocation. They can take care of allocating themselves. And you know what that means? They would be selfless. Ha! It's back.
+
+	value Byte
+		embed uint
+		
+		Byte? init(uint v)
+			if v > 255 then
+				return nil
+			end
+			
+			return Byte(v)
+		end
+	end
+
+It's equivalent to what we had before: a shortcut to call a selfless method. Again, same old story, they could be normal methods instead, and just not use their self argument, but that requires having already one object of the class, or making a dummy one (which is not always trivial, some don't have the `init()` constructor), or making a small (empty) dummy value class to avoid memory use (and then it can't have the same name as the one you're interested in).
+
+One possibility is to have these "special" factory functions be actually functions. They are not methods of the object, you can't call them directly. They do not participate to interfaces, etc. The only way to call them is with the instantiation syntax and the proper prototype:
+
+	object Foo
+		num init(text t)
+			return t.tonum
+		end
+	end
+	
+	local meh = Foo("5")	-- ok
+	local foo = Foo
+	meh = foo.init("5")		-- not ok, Foo doesn't answer to init:text
+
+A bit weird, but why not. And it makes a nice trick to have global functions.
+
+So we'd have:
+
+- regular methods
+- constructors (no return value, called on freshly allocated object/value, have special semantic checks: init members before use, be fully inited before using self or returning)
+- factories (with return value, equivalent to global functions)
+
+And now about naming or syntax... Constructors are called on self like regular methods, they could potentially looks like methods. But it might not be OK to call them again on existing objects (not clear if the default initializers would be called again, or only the visible code in the method). Factories are definitely *not* methods, cannot be called on objects and should somehow stand out. They are called like the constructors, so it might be OK to make them look the same.
+
+Also I don't like to reserve names, so it could be nice if they use an existing keyword, or a new symbol. C++ and others use the class name for the constructor. Others use `this`, here it would be `self`.
+
+	object Foo
+		num i
+		
+		Foo(num a)		-- slightly confusing for the grammar, Foo might look like a return type
+			i = a*2		-- but it does look like the way it will be called: Foo(5)
+		end
+		
+		self(num a)		-- not bad, it's clearly a keyword, so not a regular method
+			i = a*2		-- but it doesn't make any particular sense
+		end
+		
+		Foo Foo(num a)	-- clearly a factory, but repeating the type is kinda weird
+			return Foo
+		end
+		
+		Foo,text Foo()	-- a funkier factory, note that it overrides the default constructor! Can be useful.
+			return Foo(3),"lol"
+		end
+	end
+
+Also, `self` really makes no sense with the factories, since they are selfless. And we can always distinguish the factories from the constructors based on return values. If you want to use a factory as a fake global function that returns nothing, you can always make a dummy empty "void" class (or even use that same class itself, if it's empty):
+
+	value void end
+	
+	value my_global
+		void my_global(text t)	-- haha, return value, this is a factory!
+			t.print
+			return void			-- conveniently, the void class has a default constructor!
+		end
+	end
+	
+	-- later
+	
+	my_global("hahaha")		-- feel free to ignore the dummy return value!
+
+But erm well, that's not really the point. But hey, otherwise we might have solved our constructor conundrum!
+
+Conclusion
+----------
+
+- no more selfless methods
+- no more `Foo(member = value)` type instantiation
+- constructors are declared using the class name instead of the method name, and no return value
+- constructors are called after instantiation and after setting members to their initial value (if any)
+- constructors have special semantic constraints:
+	- can use member setters
+	- member getters can be used only if the member has been set before
+	- other methods, returning, and passing self as argument only once all members have been set
+- factories are declared as constructors with return values
+- factories do not have a self parameter, and no particular semantic constraints
+- constructors and factories are called with the class name followed by optional arguments
+- naturally, constructors and factories cannot have conflicting argument types

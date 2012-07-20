@@ -54,7 +54,7 @@ I haven't been able to get the information right, but according to the language 
 	auto i = foo.bar;
 	assert(i == 230);
 
-However, the gdc compiler accepts the syntax for every relevent method, even without the keyword. The dmd compiler has a flag to enforce the syntax. In any case, I like it.
+However, the gdc compiler accepts the syntax for every relevant method, even without the keyword. The dmd compiler has a flag to enforce the syntax. In any case, I like it.
 
 It works as well in the other direction, for assignment:
 
@@ -181,7 +181,7 @@ However, like the last line shows, it is not complete. Simple identifiers can re
 
 Furthermore, the standard and built-in classes break this rule already: `num`, `uint`, `text`, they are class names. And for the sake of good looks, I wanted the standard "bogus classes" (used as namespaces) be lowercase as well: `io`, `os`, `sool`. This way, you'd always simply see what is standard, and what is user made.
 
-But that's a lot of incoherencies (and exceptions in the compiler). I see two ways to solve this. Either go "full lexical discrimination":
+But that's a lot of incoherences (and exceptions in the compiler). I see two ways to solve this. Either go "full lexical discrimination":
 
 	$local
 	method
@@ -294,7 +294,7 @@ Quite frankly, I don't mind using a declarative `local` like in Lua. It makes ev
 Conclusion
 ----------
 
-Lua doesn't have namespaces, because they can be (and are) simulated using tables. Since everything is dynamic, you can store your "class" definitions inside any hierarchy of tables you desire. Furthermore, chunks (source files, among other things) are compiled as anonymous functions that are exectuted when `require`d, which means you can have locals to modules and fancy things like that. Lua is awesomely clever. Other languages have dedicated mechanisms for namespacing. It seems that any "serious" language nowadays needs namespacing. Is sool serious enough?
+Lua doesn't have namespaces, because they can be (and are) simulated using tables. Since everything is dynamic, you can store your "class" definitions inside any hierarchy of tables you desire. Furthermore, chunks (source files, among other things) are compiled as anonymous functions that are executed when `require`d, which means you can have locals to modules and fancy things like that. Lua is awesomely clever. Other languages have dedicated mechanisms for namespacing. It seems that any "serious" language nowadays needs namespacing. Is sool serious enough?
 
 A simplified D system could work:
 
@@ -336,17 +336,17 @@ The type of this new local `f` is the `Foo` defined in module C. Validation of m
 
 Hence the question: does "importing" mean only "bring the class names in scope so we can use them in the source", or is it a deeper concept that engages the compiler to bring the module in the current validation context?
 
-In Lua, this is equivalent: `require "foo"` provoques the compilation of the needed file "foo.lua", and its execution, which normally brings its interesting symbols into the global table `foo`.
+In Lua, this is equivalent: `require "foo"` provokes the compilation of the needed file "foo.lua", and its execution, which normally brings its interesting symbols into the global table `foo`.
 
 In a compiled language like sool, where there is no separation between interface and implementation of classes, importing another module would necessarily mean that the other module has to be parsed and analyzed as well. So it *would* be in the compilation context, as well as all the modules recursively imported. The analyzer would definitely have the complete information.
 
 The problem is reduced to the user: importing is only a matter of which symbols have shortcuts in the current scope, which must use a full path, and which are accessible at all.
 
-Can one use the full path to access symbols that we know are in the compilation context, but have not been explicitely imported? Or even directly the class names if they don't conflict? That would be both convenient (import one base module, and all the mesh of modules is available) and iffy (no actual control over it).
+Can one use the full path to access symbols that we know are in the compilation context, but have not been explicitly imported? Or even directly the class names if they don't conflict? That would be both convenient (import one base module, and all the mesh of modules is available) and iffy (no actual control over it).
 A clean solution would be: regardless of what is in the compilation context, you need to import a module to use its symbols. Furthermore, the non conflicting names can be used unqualified. This is cleaner, but also means that you'll have bucketloads of imports at the beginning of each module.
 
 In D you can use unqualified symbols from imported modules, and fully qualified symbols from any module recursively imported ("in the compilation context"). It makes sense, because after all "they are here". The import just makes shortcuts (brings the unambiguous unqualified names in the current scope).
 
-After checking, I realized that Rust has two different mechanisms: `use` informs the compiler that it needs another module (and probably provokes its compilation and linking), while `import` brings all or part of the symbols in the current scope. That's more control, but feels tiresome. I prefer the D way which automatically lets you use the non-conflictual names directly.
+After checking, I realized that Rust has two different mechanisms: `use` informs the compiler that it needs another module (and probably provokes its compilation and linking), while `import` brings all or part of the symbols in the current scope. That's more control, but feels tiresome. I prefer the D way which automatically lets you use the non-conflicting names directly.
 
 So, sool with modules and namespaces? Why not. That's only more work to implement the compiler...
