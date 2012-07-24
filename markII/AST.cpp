@@ -2,6 +2,7 @@
 #include "Type.hpp"
 
 using namespace sool;
+using namespace AST;
 
 Member::Member() : shared(false)
 {

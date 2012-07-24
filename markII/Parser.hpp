@@ -8,6 +8,8 @@
 
 namespace sool
 {
+	using namespace AST;
+	
 	class Parser
 	{
 		public:

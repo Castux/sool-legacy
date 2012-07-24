@@ -9,6 +9,8 @@ namespace sool
 	class Validator;
 	class IfaceInst;
 	
+	using namespace AST;
+	
 	// A unified interface to ifaces and classes, since both can be used
 	// in types. It's only used to lookup what methods the class answers to.
 	

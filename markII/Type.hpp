@@ -10,7 +10,6 @@ namespace sool
 	// Types can only be built through the TypeForge::Get() static methods
 	
 	class Validator;
-	class Class;
 	
 	class ClassName;
 	typedef std::map<std::string,shared_ptr<ClassName> > ClassNameMap;
