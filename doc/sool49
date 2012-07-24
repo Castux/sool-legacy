@@ -6,7 +6,7 @@ The last few posts introduced some major changes. Let's see what fun consequence
 Global functions
 ----------------
 
-By using the factory functions in classes, we can simulate global functions. One in particular stands out: `main`. I never had a clear idea of how we could have an entry point in our program. Vaguely, I imagined there would be a special object spawned into existance, and a special method called on it. Well:
+By using the factory functions in classes, we can simulate global functions. One in particular stands out: `main`. I never had a clear idea of how we could have an entry point in our program. Vaguely, I imagined there would be a special object spawned into existence, and a special method called on it. Well:
 
 	object main
 		main()
@@ -87,7 +87,7 @@ Or you know, now that I think about it, maybe it's better not to have exceptions
 Namespace syntax and modules
 ----------------------------
 
-Now that selfless methods are gone, the `:` token is back to being used only for navigating modules. It might be time to think about how the standard library will be organised. Should we put all standard stuff under one package name `sool`, or `std`? Should the library be divided in modules or should everything be in one same space?
+Now that selfless methods are gone, the `:` token is back to being used only for navigating modules. It might be time to think about how the standard library will be organized. Should we put all standard stuff under one package name `sool`, or `std`? Should the library be divided in modules or should everything be in one same space?
 
 	require sool:io
 	require sool:math
@@ -216,7 +216,15 @@ Now of course, new keyword means reserving one identifier. Also, our "factories"
 		end
 	end
 
-I guess we're quite used to have `new` be a special reserved keyword. Simple enough to change later.
+I guess we're quite used to have `new` be a special reserved keyword. Simple enough to change later. It also means that our fake global function and main object look a little less natural:
+
+	object main
+		new()
+			-- do the lolz!
+		end
+	end
+
+But then again, the global function trick is just a trick, and the main object is really what it is: "spawn a new main object". So that's fine.
 
 Some new syntax conflicts
 -------------------------
@@ -233,7 +241,81 @@ The "table-like" initialization is still fine though
 
 	foo = Bar{ 5 = "haha" }
 
-but instead of making a special case, we could very well just make it mean like in Lua: pass as single argument. Then it would work with other methods as well.
+but instead of making a special case, we could very well just make it mean like in Lua: pass as single argument. Then it would work with other methods as well, but it would be less efficient for new objects:
+
+	foo = Bar{"doo" = "boo"}
+	-- was supposed to be exactly like:
+	foo = Bar()
+	Bar["doo"] = "boo"
+	
+	-- but with a general "pass as single argument" meaning:
+	local temp = {"doo" = "boo"}	-- allocate table
+	foo = Bar(temp)					-- allocate Bar and pass table,
+									-- probably copy all entries
+
+Note that with a bit of grammar relaxation, we could use the `Class{}` syntax for both the "array-like" and "table-like" instantiation:
+
+	foo = Class{a,b,c}
+	-- would really be:
+	foo = Class()
+	foo <~ a
+	foo <~ b
+	foo <~ c
+
+(or any standard inserting method). But then it becomes slightly confusing that without class name:
+
+	foo = [a,b,c]	-- makes an array
+	foo = {a=b,c=d}	-- makes a table
+
+We could go "Lua" the whole way, and decide that `{}` is the only constructor there is. And the actual container is determined by the syntax:
+
+	arr = {a,b,c}		-- make a standard array
+	tab = {a=b,c=d}		-- make a standard table
+	bar = Bar{a,b,c}	-- array-like init of Bar object
+	bar = Bar{a=b,c=d}	-- table-like init of Bar object
+
+That makes everything coherent! Then the `[]` syntax is reserved for actual indexing, which happens to work both in arrays and tables:
+
+	elem = arr[3]
+	elem2 = tab["something"] 
+
+In terms of parsing, it's not that bad: parse an expression, and the next token can be only `,` (array-like) or `=` (table-like), or `}` (array-like with only one expression).
+
+Now the fun part:
+
+	foo = {}	-- eeeek, which one? empty array or empty table?
+
+One could simply rely on type inferring, when possible:
+
+	foo = {}
+	foo["lol"] = Meh	-- can only be a table|(text,Meh)
+	bar = {}
+	bar <~ "yey"		-- can only be a #text
+
+But it's not always possible:
+
+	foo = {}
+	foo[100] = "meh"	-- could be #text or table|(uint,text)
+
+In this case, I suppose we could just have the compiler complain about not being able to infer the type, and refuse to compile. Then you'd have to disambiguate:
+
+	foo = #text
+	bar = table|(uint,text)
+
+I haven't specified how much type inferring will the analyzer do. For instance, if the left-hand-side's type is known, can we use it to infer the ambiguous right-hand-side?
+
+	local foo = #num
+	-- later
+	foo = {}	-- this must be an empty #num
+
+Otherwise, I like this big unification thing. It gets us closer to the Lua root syntax where the table is used both as array and dictionary, while being actually two different classes here. And now any other class than the standard array and table can benefit from the initialization syntax, which is nice.
+
+And we can also bring back the shortcut "single array/table" argument for methods. Obviously not for constructors, as that would be the same syntax. It *would* be OK as well for factories and foreign functions. In which case the syntax would always mean "single table/array argument", except for constructors, where it would bypass the array/table allocation and passing, and mean directly "insert these expressions or key-value pairs", since that's what most likely you would do in the constructor. If you actually need to pass an array or table to a constructor, you'll need the parentheses, which is a very small price to pay.
+
+I like it!
+
+More shadowing
+--------------
 
 Another one: with the embedding, a class can have accessors that are named after a class. Ambiguity:
 
@@ -243,7 +325,7 @@ Another one: with the embedding, a class can have accessors that are named after
 		method meh()
 			local a = Bar		-- am I accessing my embedded Bar member or calling Bar's constructor?
 			Bar = something		-- no ambiguity, it's the setter Bar=, but it's weird
-			Bar.blah = othert	-- again, am I making a new Bar and calling blah= on it, or doing it on my own?
+			Bar.blah = other	-- again, am I making a new Bar and calling blah= on it, or doing it on my own?
 		end
 	end
 
@@ -262,7 +344,7 @@ No more ambiguity, but... The general rule is broken. Also I never wondered if t
 		Foo=(Foo)
 	end
 
-It could be an interface that means "embeds Foo", and could be used to write generic algorithms that apply to anybody who has a Foo embeded. It would probably be better to write an interface that details exactly which methods of Foo you need, that would be more specific (might not need all of Foo's functionalities), and more general at the same time (then it can apply to anyone else who behaves the same).
+It could be an interface that means "embeds Foo", and could be used to write generic algorithms that apply to anybody who has a Foo embedded. It would probably be better to write an interface that details exactly which methods of Foo you need, that would be more specific (might not need all of Foo's functionalities), and more general at the same time (then it can apply to anyone else who behaves the same).
 
 The problem is that some class names are not compatible with usual method names:
 
@@ -282,7 +364,7 @@ It's a bit icky, but not ambiguous. And then you can't define an interface about
 		#num #num()			-- eeeek, expected identifier, found '#' instead
 	end
 
-Except if you allow methods to have class names as names. Which would be weird, because it would be automatically shadowing them and randering them useless. I once thought that we could use the casting syntax, but it has issues:
+Except if you allow methods to have class names as names. Which would be weird, because it would be automatically shadowing them and rendering them useless. I once thought that we could use the casting syntax, but it has issues:
 
 	(self to #num).size		-- ok
 	self to #num = [1,2,3]	-- not ok, not a left-value
@@ -326,3 +408,19 @@ I'm not sure how annoying that would be in practice. This is a semantic detail t
 
 - as an exception, the accessors for an embedded instance do not shadow its class' constructor. It must be accessed with `self`.
 - no exception, use full module path for the shadowed class if needed.
+
+Assuming the second option, we need a syntax to specify "this module", since the module is named out of the file name, and it wouldn't be elegant to have to repeat it, or change it if the filename changes (while other modules' names are explicit in the `require module` command). We could go the C++ way and just omit the first namespace:
+
+	local foo = :Bar	-- the Bar class' constructor in this module,
+						-- not the Bar method in this class
+
+But hmm, that's not very pretty. Keyword:
+
+	local foo = this:Bar	-- new keyword
+	local foo = self:Bar	-- existing keyword, different meaning
+
+We could decide that the `self` keyword has two meanings: the recipient of an object, when used as a variable, and the current module, when used as a namespace. There is no ambiguity possible, since the variable can only be used naked, or with a method call (`self.method`, `self[foo]`), while the namespace can only be used with a `:` after it. Hmm, not ambiguous, but confusing.
+
+`this` makes more sense, and fits well in reading the sentence in English. `this:Foo` is really *this* class Foo, not one in another module or a method. Then again the local class always shadows the one from another module, so the ambiguity is only about an embedded object's accessor. Maybe we don't need to introduce a new syntax just for this specific case.
+
+So in the end, the other solution might be more elegant: as an exception, the accessors for an embedded class must be called with `self` from within the class, so that the constructor is not shadowed.

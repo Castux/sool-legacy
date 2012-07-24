@@ -92,20 +92,18 @@ exp :=			term { binop term } [ 'to' full-ident ]
 
 term :=			basic-exp | ( '-' | 'not' ) term
 
-basic-exp :=	( literal-exp | array-cons | table-cons | '(' exp ')' | full-ident )
+basic-exp :=	( literal-exp | array-table-cons | '(' exp ')' | full-ident )
 				exp-tail
 
 literal-exp :=	Number | String | 'true' | 'false' | 'nil' | 'self'
 
-array-cons :=	'[' [ list-exp ] ']'
+array-table-cons :=	'{' [ list-exp ] | [ list-table-cons-pair ] '}'
 
-table-cons :=	'{' [ list-table-cons-pair ] '}'
-
-table-cons-pair :=	exp ':' exp
+table-cons-pair :=	exp '=' exp
 
 exp-tail :=		{ '[' list-exp ']' | '.' full-ident | call-arg }	### no consecutive call-args
 
-call-arg :=		'(' [ list-exp ] ')' | table-cons | String
+call-arg :=		'(' [ list-exp ] ')' | array-table-cons | String
 
 call-stat :=	( 'self' | full-ident ) exp-tail
 
