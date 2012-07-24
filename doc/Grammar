@@ -1,47 +1,49 @@
--- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is, comma separated list of at least one <R>
+-- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is,
+-- comma separated list of at least one <R>
 
-chunk :=		{ class-def | iface-def | extend-def }
+chunk :=		{ class-def | iface-def | extend-def | foreign-def }
 
 class-def :=	( 'object' | 'value' )
-				CName
+				Name
 				[ template-def ]
 				class-body
 				'end'
 
-iface-def :=	'interface' CName [ template-def ]
-				{ method-proto | 'embed' list-class-name }
+iface-def :=	'interface' Name [ template-def ]
+				{ prototype | 'embed' full-ident }
 				'end'
 
-extend-def :=	'extend' ( class-name | CName template-def )
+extend-def :=	'extend' ( Name template-def | full-ident )
 				{ method-def }
 				'end'
 
-class-name :=	CName [ class-params ] |
-				'num' | 'bool' | 'text' | 'blob' | 'data' |
-				'#' class-name
+foreign-def :=	'foreign' Name
+				{ prototype }
+				'end'
 
-class-params := 	'|' ( class-name | '(' list-class-name ')' )
+-- This rule is used for class names, methods and members, locals, foreign
+-- functions, etc. Often, only analysis can make the distinction.
 
-template-def :=		'|' '(' list-class-param-def ')'
+full-ident :=	Name { ':' Name } [ class-params ] | '#' full-ident
 
-class-param-def :=	class-name CName
+class-params :=	'|' ( full-ident | '(' list-full-ident ')' )
 
-type :=			class-name [ '?' ]
+template-def :=	'|' '(' list-class-param-def ')'
 
-class-body :=	{ member-def | method-def | foreign-def |
-				'embed' list-class-name }
+class-param-def :=	full-ident Name
 
-member-def :=	[ 'shared' ] type Name
-				[ '=' exp ]
+type :=			full-ident [ '?' ]
 
-method-def :=	( 'method' | 'selfless' )
-				method-proto
+class-body :=	{ member-def | method-def | ctor-def }
+
+member-def :=	( type Name | 'embed' full-ident ) [ '=' exp ]
+
+method-def :=	'method'
+				prototype
 				block
 				'end'
 
-foreign-def :=	'foreign' method-proto
-
-method-proto :=	[ list-type ] method-name '(' [ list-arg-def ] ')'
+prototype :=	[ list-type ] method-name '(' [ list-arg-def ] ')'
 
 method-name :=	Name [ '=' ] |
 				binop | 
@@ -54,6 +56,10 @@ binop :=		'+' | '-' | '*' | '/' | '%' |
 
 arg-def :=		type [ Name ]
 
+ctor-def :=		'new' [ list-type ] '(' [ list-arg-def ] ')'
+				block
+				'end'
+
 block :=		{ statement }
 				[ final-statement ]
 
@@ -61,6 +67,7 @@ statement :=	do-stat |
 				while-stat |
 				for-stat |
 				if-stat |
+				local-decl |
 				assignment |
 				call-stat
 
@@ -77,30 +84,18 @@ if-stat :=		'if' exp [ 'as' Name ] 'then' block
 				[ 'else' block ]
 				'end'
 
+local-decl :=	'local' list-name [ '=' list-exp ]
+
 assignment :=	list-left-value '=' list-exp
 
-left-value :=	[ class-name ':' ] Name [ [ call-arg ] { exp-tail } ( indexing | '.' Name | '.' class-name ) ]
+exp :=			term { binop term } [ 'to' full-ident ]
 
-call-stat :=	method-call { exp-tail }
+term :=			basic-exp | ( '-' | 'not' ) term
 
-method-call :=	[ class-name ':' ] Name [ call-arg ]
+basic-exp :=	( literal-exp | array-cons | table-cons | '(' exp ')' | full-ident )
+				exp-tail
 
-exp :=			term { binop term }
-
-term :=			unary-op | typecast | basic-exp
-
-unary-op :=		( '-' | 'not' ) term
-
-typecast :=		basic-exp 'to' class-name
-
-basic-exp :=	( atomic-exp | method-call | vec-cons | array-cons |
-				table-cons | object-cons | '(' exp ')' )
-				{ exp-tail }
-
-atomic-exp :=	Name | Number | String | 'true' | 'false' | 'nil'
-				'self'
-
-vec-cons :=		'<' list-basic-exp '>'
+literal-exp :=	Number | String | 'true' | 'false' | 'nil' | 'self'
 
 array-cons :=	'[' [ list-exp ] ']'
 
@@ -108,16 +103,10 @@ table-cons :=	'{' [ list-table-cons-pair ] '}'
 
 table-cons-pair :=	exp ':' exp
 
-object-cons :=	class-name [ array-cons | table-cons | with-cons | call-arg ]
+exp-tail :=		{ '[' list-exp ']' | '.' full-ident | call-arg }	### no consecutive call-args
 
-with-cons :=	'(' list-with-cons-pair ')'
+call-arg :=		'(' [ list-exp ] ')' | table-cons | String
 
-with-cons-pair :=	( Name | class-name ) '=' exp
+call-stat :=	( 'self' | full-ident ) exp-tail
 
-call-arg	:=	'(' [ list-exp ] ')' | String
-
-exp-tail :=		indexing | message-sending
-
-indexing :=		'[' list-exp ']'
-
-message-sending := 	'.' ( Name [ call-arg ] | class-name )
+left-value :=	call-stat	### no final call-arg

@@ -8,6 +8,7 @@
 #include "Parser.hpp"
 #include "Validator.hpp"
 
+#include "Ident.hpp"
 
 using namespace sool;
 
@@ -65,6 +66,19 @@ int main(int argc, char **argv)
 	
 	if(!success)
 		return 1;
+	
+	vector<string> path;
+	path.push_back("foo");
+	path.push_back("bar");
+	path.push_back("meh");
+	
+	vector<Ident> params;
+	params.push_back(Ident("lol"));
+	params.push_back(Ident("lol"));
+	
+	Ident id(path, "Bar", params);
+	
+	std::cout << (std::string) id << std::endl;
 	
 	return 0;
 }

@@ -1,0 +1,328 @@
+A few consequences
+==================
+
+The last few posts introduced some major changes. Let's see what fun consequences they might have.
+
+Global functions
+----------------
+
+By using the factory functions in classes, we can simulate global functions. One in particular stands out: `main`. I never had a clear idea of how we could have an entry point in our program. Vaguely, I imagined there would be a special object spawned into existance, and a special method called on it. Well:
+
+	object main
+		main()
+			-- foooooo
+		end
+	end
+
+We define a class `main`, and its constructor is naturally called `main`, and it is naturally called at program start. When it returns, the program exits. It could also be a factory, to have a return value:
+
+	object main
+		uint main(#text args)	-- more classic C-like prototype
+			return 0
+		end
+	end
+
+And `main` being a normal object, it can have methods and members. Just remember that in the constructor, a member must be inited before use, and all members must be inited before other methods can be called. Also, if you use a factory instead of a constructor, there's no `main` object at all! You can very well use only locals, or another bigger object as entry point to your program.
+
+	object main
+		uint main(#text args)
+			App(args)
+		end
+	end
+
+But for small programs, you can put everything in `main`, no problem...
+
+	object main
+		
+		method log(num i)
+			io.print("Log: ", i.totext)
+		end
+		
+		main()
+			for i in 10 do
+				if i%2 == 0 then
+					log(i)			-- all members (none!) are inited, so this is ok!
+				end
+			end
+		end
+		
+	end
+
+Fun!
+
+Instantiation in templates
+--------------------------
+
+This is not really new (the problem existed before), but I realized it while writing about constructors. They are not methods, so they cannot be parts of interfaces. And anyway, interfaces cannot be self-referential, so we can't represent "class C has a method that returns a C" properly. Whatever.
+
+If T is a template parameter, then the code in the template cannot instantiate any new T. Look:
+
+	object Cont|(Any T)
+		
+		T elem
+		#T arr
+		
+		method reset(T t)
+			elem = T		-- impossible!
+			elem = t		-- ok
+			arr.resize(40)	-- impossible!
+		end
+		
+	end
+
+When validating the code of the template (the body of method `reset`), we do not know what type is ("will be") T. All we know is that it complies to interface Any, and that tells us only what methods we can call on it (namely, none). In other words, we do not know if T has an argumentless constructor (or factory). We have no idea if `T()`, or `T(1.2)`, or even `T("foo")` can be called. So we can't make a new T!
+
+I proposed already that to "fix" this, we'd need to do the semantic analysis on fully instantiated templates. Which I still refuse to do, because it breaks our nice "bounded by interface" concept.
+
+Won't that be a problem? I don't think so. Our main reason for templates is containers. Containers contain and give back, they do not create. One consequence is that operations that need "new" values must take an argument, like `reset` here. Otherwise, they can store optionals, that can always take a nil instead of an actual object or value.
+
+One tiny exception can be the built-in array. Even though it looks like a template, it has no sool-side code, and therefore we can force things at compiler level:
+
+	local arr = #Foo(20)
+
+If class Foo is an object class, or a value class without an argumentless constructor, we have a nice compile error. Otherwise we can directly use `Foo()` to fill the blanks.
+
+Or you know, now that I think about it, maybe it's better not to have exceptions. A resize must always give a filling value? Anyway, a lot of `extend` code for the array will actually be written in sool, so the rule will apply there.
+
+Namespace syntax and modules
+----------------------------
+
+Now that selfless methods are gone, the `:` token is back to being used only for navigating modules. It might be time to think about how the standard library will be organised. Should we put all standard stuff under one package name `sool`, or `std`? Should the library be divided in modules or should everything be in one same space?
+
+	require sool:io
+	require sool:math
+	
+	object main
+		main()
+			io.write("foo")		-- io is class sool:io:io and has shortcuts to stdin and stdout
+			local f = file("meh.txt")	-- class sool:io:file
+			local t = f.readall
+			
+			local v = vec(1,2)	-- sool:math:vec
+		end
+	end
+
+Could we have all main containers in one module `sool:containers` or each in its own module (to avoid loading everything if you don't need them): `sool:table`, `sool:list`. And array extensions for vector-like capacities in `sool:array`? And some generic algorithms in `sool:algos`?
+
+Well, we're not there yet, but designing the standard library is going to be fun. Loads of fun!
+
+Foreign functions
+-----------------
+
+Oh no, the selfless methods are back. Again! I had forgotten about these. Not only the have *exactly* the same problems as selfless methods, but these we definitely can't do without. Problems being:
+
+- we can't have them floating around globally
+- we have to attach them to classes, but they're still not methods
+- if they're not methods, they shouldn't be called as methods
+- if they can't be called as methods, they can't be called on self or on an object
+- we need a new syntax, or reuse an existing one and have ambiguity
+
+	object MyFoo
+		
+		uint i
+		
+		foreign uint blah(uint)
+		
+		method foo()
+			i = blah(5)
+		end
+	end
+
+So, `blah` looks like we're calling `self.blah`, but we're not. And from outside, can we do `MyFoo.blah` or `foo.blah` on an instance? That's how we decided to "simulate" selfless methods anyway. But the compiler could really just use the type information and discard the object completely, although it's semantically different (the argumentless constructor might have side-effects!)
+
+How about we put that in a completely different place?
+
+	foreign
+		uint blah(uint)
+		num foo()
+		whatever(text)
+	end
+	
+	object MyFoo
+		method blah()
+			local i = foo	-- calling foreign foo()!
+		end
+	end
+
+But doing this pollute the module's global space. And if we can have global functions, it means we have the mechanism for functions, and the mechanism for globals, and we're not very far anymore from something like:
+
+	function uint blah(Foo f)
+		return f.haha
+	end
+
+HA! *Real* functions! Fun. But I always decided against (if it has an argument, it could be a method on it instead; if it doesn't it's probably should be a factory method for a class; if it has purely side-effects and manipulates no known object whatsoever, it's just weird).
+
+However, look at this `foreign ... end` block up there. It has only prototypes in it. It does look like we're defining an interface. Rings a bell? We could at least give it a name and scope it:
+
+	foreign some_c_module
+		uint blah(uint)
+		num foo()
+		whatever(text)
+	end
+
+And then how do we call this? The dot is really supposed to be for methods. But we do have the colon for namespacing:
+
+	method blah()
+		local i = some_c_module:blah(5)
+	end
+
+Pros:
+
+- no global/module scope is polluted
+- calls never look like method calls (no dot, and cannot do just `blah()`, you need the namespace)
+
+Cons:
+
+- syntactically, it's exactly like `namespace:class(constructor_args)`. It's logical (that's also a kind of function), but will again make more work for the analyzer.
+
+Actually, it's not even that big of a con. I like this.
+
+The next funny part will be rewriting the grammar. With no more lexical difference between anything, and full class names that can appear as method/member names, that will be fun. Lots. I'm betting we'll be far from LL(1)-ness.
+
+Constructor syntax
+------------------
+
+And already: having no start token for the constructors is a bit distressing. It completely conflicts with members, which start with a type, and therefore, a class name:
+
+	class Foo
+		Bar b		-- starts with a name
+		Foo() end	-- starts with a name
+	end
+
+Also, I figured it would be slightly annoying in templates:
+
+	class Foo(Any T)
+		Foo|T ()
+			-- weird!
+		end
+	end
+
+And anyway, there's only one possible name you can put there, the current class'. Redundant! We should have a nice keyword instead, like we have `method`.
+
+	class Foo
+		num i
+		constructor(num a)		-- ctor? I don't like abbreviations too much
+			i = a
+		end
+	end
+
+Now of course, new keyword means reserving one identifier. Also, our "factories" can use the same one, so it should work with both.
+
+	class Foo
+		new()
+		end
+		
+		new Foo? (num a)
+		end
+	end
+
+I guess we're quite used to have `new` be a special reserved keyword. Simple enough to change later.
+
+Some new syntax conflicts
+-------------------------
+
+With classes using the same identifiers as everyone else, new conflict:
+
+	foo = Bar[11,2]
+
+Is it instantiating Bar with no argument, and then indexing with arguments 11 and 2, or is it the "array-like" initialization? Can't know. Must remove the "array-like" initialization shortcut. You can always pass the array as argument to the constructor, even if it's less nice:
+
+	foo = Bar([11,2])
+
+The "table-like" initialization is still fine though
+
+	foo = Bar{ 5 = "haha" }
+
+but instead of making a special case, we could very well just make it mean like in Lua: pass as single argument. Then it would work with other methods as well.
+
+Another one: with the embedding, a class can have accessors that are named after a class. Ambiguity:
+
+	object Foo
+		embed Bar
+		
+		method meh()
+			local a = Bar		-- am I accessing my embedded Bar member or calling Bar's constructor?
+			Bar = something		-- no ambiguity, it's the setter Bar=, but it's weird
+			Bar.blah = othert	-- again, am I making a new Bar and calling blah= on it, or doing it on my own?
+		end
+	end
+
+The shadowing rule is supposed to be "own method shadows class name". Sadly that would mean that whenever you embed a class, you can't use it anymore, because it's shadowed by your own methods. Now the rule can be that the embedded member is always accessed with an explicit `self`:
+
+	local a = self.Bar
+	local b = Bar
+	self.Bar = something
+	self.Bar.blah = otherthing
+	Bar.blah = otherthing
+
+No more ambiguity, but... The general rule is broken. Also I never wondered if the embedded members' accessors counted for interfaces. It's weird to make interfaces that use methods named after classes but why not:
+
+	interface Weird
+		Foo Foo()
+		Foo=(Foo)
+	end
+
+It could be an interface that means "embeds Foo", and could be used to write generic algorithms that apply to anybody who has a Foo embeded. It would probably be better to write an interface that details exactly which methods of Foo you need, that would be more specific (might not need all of Foo's functionalities), and more general at the same time (then it can apply to anyone else who behaves the same).
+
+The problem is that some class names are not compatible with usual method names:
+
+	embed #num
+	embed table|(text,Foo)
+	embed pack:mod:something
+	
+	method meh()
+		local a = self.#num.size
+		self.table|(text,Foo)["haha"] = Foo()
+		local b = self.pack:mod:something.blah
+	end
+
+It's a bit icky, but not ambiguous. And then you can't define an interface about them (not that it would be very useful):
+
+	interface Impossible
+		#num #num()			-- eeeek, expected identifier, found '#' instead
+	end
+
+Except if you allow methods to have class names as names. Which would be weird, because it would be automatically shadowing them and randering them useless. I once thought that we could use the casting syntax, but it has issues:
+
+	(self to #num).size		-- ok
+	self to #num = [1,2,3]	-- not ok, not a left-value
+
+Also, if you embed a generic class Iface, you automatically comply to interface Iface (thanks to the shortcuts to the embedded object), and then `(self to Iface)` is ambiguous: is it an actual cast to generic, or are we just accessing the embedded member?
+
+Another solution is to make embedded member not anonymous. The `embed` keyword simply commands the compiler to create all non-conflicting shortcuts:
+
+	object Foo
+		embed Bar bar
+		
+		method meh()
+			local a = bar.blah		-- own Bar
+			local b = Bar.blah		-- new Bar
+			
+			bar = thing			-- ok, we answer to bar=
+			Bar = thing			-- nok, we don't answer to Bar=
+		end
+	end
+
+That is certainly simple. But then the embedded objects would always have stupid names like the uncapitalized class, or things like `num_embed`. And we'd lose the clarity of the concept, the fact that you can't embed the same class twice, etc.
+
+What if we keep the current situation (the accessors are named after the class), and the current shadowing rule (own method shadows external class), but we simply say that the external class must be accessed using namespace resolution. Like C++ has `::blaaah` to mean the `blaaah` in global scope, we could simply refer to the class by the module where it resides:
+
+	require foo		-- defines Foo
+	
+	object Bar
+		embed Foo
+		
+		method meh()
+			local a = Foo		-- self.Foo
+			local b = foo:Foo	-- class Foo's constructor
+		end
+		
+		method haha(Foo f)		-- note that here it can be only a class, no need for the path
+			Foo = f				-- but here it's self.Foo= again
+		end
+	end
+
+I'm not sure how annoying that would be in practice. This is a semantic detail that must be decided, but it could be done later... The best options I see are:
+
+- as an exception, the accessors for an embedded instance do not shadow its class' constructor. It must be accessed with `self`.
+- no exception, use full module path for the shadowed class if needed.

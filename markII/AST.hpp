@@ -9,16 +9,18 @@
 
 namespace sool
 {
+namespace AST
+{
 	// Root class for nodes that come directly from parsing the source
 	
-	class AST
+	class Node
 	{
 		public:
 		
 		SourcePos pos;
 	};
 	
-	class Member : public AST
+	class Member : public Node
 	{
 		public:
 		
@@ -43,14 +45,14 @@ namespace sool
 		Member::ptr ReplaceTemplateParams(ClassNameMap &tmap);
 	};
 	
-	class Prototype : public AST
+	class Prototype : public Node
 	{
 		public:
 		
 		typedef shared_ptr<Prototype> ptr;
 		typedef std::vector<ptr> vec;
 		
-		class Argument : public AST
+		class Argument : public Node
 		{
 			public:
 			
@@ -86,7 +88,7 @@ namespace sool
 	
 	typedef std::map<std::string,Prototype::ptr> ProtoMap;
 	
-	class Method : public AST
+	class Method : public Node
 	{
 		public:
 		
@@ -112,7 +114,7 @@ namespace sool
 		SourcePos	kind_pos;
 	};
 	
-	class TemplateParam : public AST
+	class TemplateParam : public Node
 	{
 		public:
 		
@@ -123,7 +125,7 @@ namespace sool
 		std::string		name;
 	};
 	
-	class Global : public AST
+	class Global : public Node
 	{
 		public:
 		
@@ -183,7 +185,7 @@ namespace sool
 	
 	typedef std::map<std::string,Class::ptr> ClassMap;
 	
-	class Extension : public AST
+	class Extension : public Node
 	{
 		public:
 		
@@ -244,6 +246,7 @@ namespace sool
 		
 		Global::vec			globals;		// For the sake of knowing in what order they appeared
 	};
+}
 }
 
 
