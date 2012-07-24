@@ -111,22 +111,19 @@ Foreign functions
 
 Oh no, the selfless methods are back. Again! I had forgotten about these. Not only the have *exactly* the same problems as selfless methods, but these we definitely can't do without. Problems being:
 
-- we can't have them floating around globally
-- we have to attach them to classes, but they're still not methods
-- if they're not methods, they shouldn't be called as methods
-- if they can't be called as methods, they can't be called on self or on an object
-- we need a new syntax, or reuse an existing one and have ambiguity
-
-	object MyFoo
-		
-		uint i
-		
-		foreign uint blah(uint)
-		
-		method foo()
-			i = blah(5)
+-	we can't have them floating around globally
+-	we have to attach them to classes, but they're still not methods
+-	if they're not methods, they shouldn't be called as methods
+-	if they can't be called as methods, they can't be called on self or on an object
+-	we need a new syntax, or reuse an existing one and have ambiguity
+	
+		object MyFoo
+			uint i
+			foreign uint blah(uint)
+			method foo()
+				i = blah(5)
+			end
 		end
-	end
 
 So, `blah` looks like we're calling `self.blah`, but we're not. And from outside, can we do `MyFoo.blah` or `foo.blah` on an instance? That's how we decided to "simulate" selfless methods anyway. But the compiler could really just use the type information and discard the object completely, although it's semantically different (the argumentless constructor might have side-effects!)
 
