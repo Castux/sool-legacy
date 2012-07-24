@@ -1,7 +1,10 @@
 -- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is,
 -- comma separated list of at least one <R>
 
-chunk :=		{ class-def | iface-def | extend-def | foreign-def }
+chunk :=		{ module-req | class-def | iface-def | extend-def |
+				foreign-def }
+
+module-req :=	'require' Name { ',' Name }
 
 class-def :=	( 'object' | 'value' )
 				Name
@@ -51,7 +54,7 @@ method-name :=	Name [ '=' ] |
 
 binop :=		'+' | '-' | '*' | '/' | '%' |
 				'<' | '>' | '<=' | '>=' | '^' |
-				'~' | '<~' | '==' | '~=' | 'and' |
+				'~' | '==' | '~=' | 'and' |
 				'or' | 'is' | 'isnot'
 
 arg-def :=		type [ Name ]
