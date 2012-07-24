@@ -258,9 +258,9 @@ Note that with a bit of grammar relaxation, we could use the `Class{}` syntax fo
 	foo = Class{a,b,c}
 	-- would really be:
 	foo = Class()
-	foo <~ a
-	foo <~ b
-	foo <~ c
+	foo.insert(a)
+	foo.insert(b)
+	foo.insert(c)
 
 (or any standard inserting method). But then it becomes slightly confusing that without class name:
 
@@ -290,7 +290,7 @@ One could simply rely on type inferring, when possible:
 	foo = {}
 	foo["lol"] = Meh	-- can only be a table|(text,Meh)
 	bar = {}
-	bar <~ "yey"		-- can only be a #text
+	bar.insert("yey")	-- can only be a #text
 
 But it's not always possible:
 

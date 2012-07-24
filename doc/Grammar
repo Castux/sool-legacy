@@ -84,7 +84,7 @@ if-stat :=		'if' exp [ 'as' Name ] 'then' block
 				[ 'else' block ]
 				'end'
 
-local-decl :=	'local' list-name [ '=' list-exp ]
+local-decl :=	'local' list-name '=' list-exp
 
 assignment :=	list-left-value '=' list-exp
 
@@ -101,7 +101,7 @@ array-table-cons :=	'{' [ list-exp ] | [ list-table-cons-pair ] '}'
 
 table-cons-pair :=	exp '=' exp
 
-exp-tail :=		{ '[' list-exp ']' | '.' full-ident | call-arg }	### no consecutive call-args
+exp-tail :=		{ '[' [ list-exp ] ']' | '.' full-ident | call-arg }	### no consecutive call-args
 
 call-arg :=		'(' [ list-exp ] ')' | array-table-cons | String
 
