@@ -1,10 +1,10 @@
 -- All "list-<R>" rules are defined as "<R> { ',' <R> }", that is,
 -- comma separated list of at least one <R>
 
-chunk :=		{ module-req | class-def | iface-def | extend-def |
+module :=		{ module-import | class-def | iface-def | extend-def |
 				foreign-def }
 
-module-req :=	'require' Name { ',' Name }
+module-import :=	'import' Name { ',' Name }
 
 class-def :=	( 'object' | 'value' )
 				Name

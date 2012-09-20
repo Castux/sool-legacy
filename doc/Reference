@@ -1,0 +1,199 @@
+===========================================
+The sool programming language specification
+===========================================
+
+Introduction
+============
+
+This document is the specification for the sool programming language. It consists in a formal definition of the language's core mechanics, grammatical rules, along with the semantics they represent, and a complete description of the built-in classes and standard libraries.
+
+It is meant as a normative reference for the implementation of a translator and runtime, and as such is a useful and necessary ressource for the programmer who uses the language. Therefore, as in any specification, the terms "must", "should" and "may" take their usual meanings from the English language: "must" indicates a definitive requirement, "should" specifies recommended features of a good implementation, and "may" is simply an option that can be safely ignored without compromising the compliance to the language or performance. Anything not explicitely qualified by one of these words is to be considered a "must".
+
+Even though this document will give examples to illustrate the definitions, it is definitely not a tutorial and might not be the easiest way to get acquainted with the language. It is nevertheless recommended to read it through at least once, if only to know where to look for information when needed.
+
+Notation
+--------
+
+Grammar production rules are written in the usual Extended Backus-Naur Form. A `monospace` font is used for code examples, standard identifiers and grammar rules. An *italic* font is used when new terms are defined.
+
+Disclaimer
+----------
+
+sool is a work in progress. It is an experiment, and as such its design is constantly evolving. Any information in this document might change later, and the global state of the language is to be considered temporary.
+
+Only when the language specification will be frozen shall this disclaimer be removed, and a version number given to the language.
+
+Basic concepts
+==============
+
+sool is a general purpose, imperative, class-based, statically typed, memory safe and garbage collected language. It aims at combining the ease of dynamic interpreted languages with the performance of compiled languages. It is a delicate compromise between expressivity, simplicity and execution speed.
+
+Its grammar is simple, and avoids redundancy as much as possible when the programmer's intention is clear. It is obvious and unsurprising. An experienced programmer should be able to fluently read and understand sool code without prior knowledge of the language, and learn to write it very fast.
+
+sool is not particularly innovative. It only tries to combine existing concepts in a coherent and harmonious language, pleasant to use and easy to maintain.
+
+Objects and values classes
+--------------------------
+
+sool is centered around the concept of *class*. Every element of data manipulated in sool is an *instance* of either a *value class* or an *object class*, called respectively a *value* or an *object*. While the class is a model that defines data components and behaviors, an instance is a specific application of this model to data.
+
+*Variables* are used to store and manipulate values and objects. sool is strongly typed, which means that a given variable can only hold instances of a single class. Along with additional information, this constitutes the *type* of the variable. Type is checked at compile time. In practice, it means that every variable is either declared with a class information, or the class information is inferred from the code by the compiler.
+
+The essential difference between values and objects are how they are stored in variables and manipulated. Values, as their name suggest, are manipulated "by value". The data is actually contained in the variable, and copied at assignment or when passed as argument to a method.
+
+	a = 5
+	b = a	-- b now contains 5
+	a = 10	-- b still contains 5
+
+When two variables contain the same value, they are virtually indistinguishible. The number 5 is always equal to the number 5, even if they are stored in different places.
+	
+On the other hand, objects are manipulated "by reference". When an object is created, its data is stored in dynamically allocated memory, and the variable recieves only a reference to it. Likewise, an assignment results only in copying the reference. The manipulated object is the same.
+
+	a = Object		-- a contains a reference to a newly allocated Object
+	a.member = 5	-- data is set in the object
+	b = a			-- b now refers to the same object, so b.member == 5
+	b.member = 10	-- this modifies the same object, so a.member == 10
+
+Built-in classes
+----------------
+
+sool provides *primitive* classes, that cannot be broken down to smaller components.
+
+Value class `num` is the general purpose number. It is implemented as the IEEE 754 double-precision binary floating-point format. It can contain integers in the range `+/- 2^53` with no loss of precision, and real numbers roughly in the range `+/- 1.7e308` wity varying accuracy.
+
+Value class `uint` is the unsigned integer. Its size is at least equal to the size of an address on the target machine. It is used mostly for indices in loops and arrays, and to hold opaque pointers from foreign code.
+
+Value class `bool` is the classic boolean. It can hold exactly two values: `false` and `true`, and is the base of binary logic and program flow control.
+
+Value class `text` represents sequences of Unicode codepoints. They should be implemented as references to internized immutable arrays of 32 bits unsigned integers, which makes them semantically equivalent to values, but with increased efficiency in particular for comparison.
+
+Although sool is meant as a very high-level language, it provides the `data` object class to make binary manipulation possible. `data` represents a sequence of bytes to and from which can be written and read arbitrary binary information, convertible to and from other sool classes.
+
+The only built-in complex class in sool is the *array*, which acts as an homogenous sequence of variables. It is a dynamic object that can be grown or shrunk and manipulated through *slices*: multiple references to the same data.
+
+Every other class - whether it is user provided or from the standard library - is a *composite* class, built with sool code by combining other classes and defining behaviors.
+
+Methods and messages
+--------------------
+
+All data in sool is manipulated as instance of a class. A class defines *members*, that is objects and values it contains, and *methods*, procedures that manipulate the data, perform calculations or have side-effects.
+
+There are no "functions" in sool. Every procedure or algorithm is a method attached to a class. Just like all data is an instance of a class, (almost) every operation is the execution of a method, including reading and writing to an object's member, indexing an array, and applying a binary operator.
+
+This is a core concept of sool. Members and methods are accessed using the same syntax, and more importantly, members and methods can be used interchangeably: accessing a member is simply executing a method that returns its value. Similarly, calling a method that returns a single value can very well be a simple member access. In particular, members and methods participate equally to the interface mechanism.
+
+Asking an instance to execute a certain method is called sending a *message* to this instance. Although fundamentally procedural in nature, a sool program can be seen as a group of class instances being spawned into existence and sending messages to each other.
+
+Generic programming
+-------------------
+
+sool supports two forms of generic programing: class *templates* and *generic* classes.
+
+Templates are classes in which one or more types are left unspecified. The class template is then specialized by explicitly providing class names to be used as template arguments. This is done at compile time, and the resulting specializations are strictly equivalent to having duplicated the class's code for each set of arguments. The built-in array class is an example of template.
+
+Generic classes are sool's mechanism for polymorphism. Any class that complies with a given *interface*, ie. implements a given set of methods, can be casted to the corresponding generic class. These generics work otherwise like any other class: methods can be written for them, variables can use them as types, they can be passed as method arguments and return values. An algorithm can be written once and applied to any class that has a compatible interface.
+
+While generic classes often allow more concise and elegant code than templates, they are naturally slower due to their internal workings: they use dynamic dispatch to allow the same machine code to work with any class instance.
+
+Garbage collection and memory safety
+------------------------------------
+
+sool is fully garbage collected. Every object is allocated dynamically in memory, and its existance is guarantied as long as there are sool variables that refer to it. Once the object is unreachable from sool, the sool runtime should dispose of the object and reclaim the memory for later use.
+
+This forms one part of memory safety: a reference is never becomes invalid, since the garbage collector will never destroy an object still being refered to.
+
+The second part of memory safety is ensured by the core concept that no reference variable shall be uninitialized. The rules of the language and the compiler ensure that every usable reference has been previously set to a valid object. There is no "null" pointer in sool. Instead, the language provides *optional* variables, the validity of which is ensured by syntactic constructs.
+
+Lexical conventions
+===================
+
+sool source code is interpreted as a sequence of Unicode characters encoded in UTF-8. Although all language tokens are in fact restricted to the ASCII range, the string literals are interpreted directly as UTF-8.
+
+sool is a free-form language: white spaces and comments are ignored, except when they separate tokens that would otherwise be combined.
+
+White space characters are: space, horizontal tab, new line, carriage return.
+
+*Names* are any strings of letters, digits and underscores that do not start with a digit. Expressed as a regular expression: `[_a-zA-Z][_a-zA-Z0-9]`.
+
+The following strings are reserved as *keywords* for the language, and cannot be used as names:
+
+	put the list here
+
+The following strings are the other tokens of the language:
+
+	put the list here
+
+String literals are delimited by matching pairs of quotes(`'...'`), or double quotes (`"..."`). Within a string literal, all UTF-8 byte sequences are directly interpreted as their codepoint equivalent, except the following escape sequences: `\a` (bell),  `\b` (backspace), `\e` (escape character), `\f` (form feed), `\n` (newline), `\r` (carriage return), `\t` (horizontal tab), `\v` (vertical tab), `\\` (backslash),  `\"` (double quote), `\'` (single quote), and the following numerical escapes which directly encode the Unicode codepoint represented by their hexadecimal sequence:
+
+- `\x` followed by two hexadecimal digits
+- `\u` followed by four hexadecimal digits
+- `\U` followed by eight hexadecimal digits
+
+A backslash followed by any other character than the previously described escape sequences is invalid.
+
+String literals can also be delimited by matching double brackets (`[[...]]`), in which case no escaping occurs within. Such string literals are called *long strings* and can be nested. For instance the following strings are equivalent:
+
+	[[String start [[substring]] end of string]]
+	"String start [[substring]] end of string"
+
+Integral constants are strings of decimal digits (`[0-9]+`) or `0x` followed by hexadecimal digits (`0x[0-9a-fA-F]+`). Numerical constants are strings of decimal digits which contain exactly one dot, in neither first or last position, and optionally followed by `e` and decimal digits (`[0-9]+.[0-9]+(e[0-9]+)?`).
+
+Note that a single dot is a valid token after an integral or numerical constant, even witout separation, because the grammar ensures that outside of a numerical constant, a dot is always followed by a name (which cannot start with a digit):
+
+	250.print
+	3.6.sin
+
+Comments begin with a double hyphen `--` anywhere except within a string. If the following text is not a long string, the comment is a *short* comment, and lasts until the end of the line. Otherwise, it is a *long comment*, which runs until the end of the long string.
+
+Modules and packages
+====================
+
+sool source code is organized in *modules* and *packages*.
+
+A module is a single sool source file. The module name is taken to be the source file name, stripped of its path and `.sool` extension. A module is composed of *first-level items*: class definitions, interface definitions, extensions and foreign interface declarations.
+
+A package is a directory containing sool source files and possibly other packages. Likewise, the package name is the name of its associated directory. Packages are used to group related modules together, and provide namespacing to prevent conflict between modules with the same name.
+
+Root source locations
+---------------------
+
+The compiler is always invoked on a *main* module, and from there considers a certain number of root source locations:
+
+- the directory in which resides the main module
+- one or more library directories, defined by implementation and options to the compiler
+
+Paths
+-----
+
+The absolute *path* of a module is its location with respect to the root source location by which it is contained. It is written as the column separated sequence of directories (ie. packages) to follow from the root source location down to the module source file:
+
+	module-path ::= { Name ':' } Name
+
+However, in source code, paths are *relative* to the module in which they are used. Modules and packages are first looked for in the directory of the current module, then progressively up the hierarchy of directories until reaching a root source location, then in the library directories.
+
+The compiler should report a conflict if a package or module is not found, if a module was expected but a package was found and vice-versa, or if several packages or modules with the same name are found in a same directory.
+
+Note that the absolute path is a special case of relative path (since the root source locations are the last search locations of relative paths). Furthermore, a module can refer to itself with any suffix of its absolute path, assuming no name conflicts (since the search goes from the module's directory up to the root source location).
+
+Compilation context and module imports
+--------------------------------------
+
+A module can contain any number of *imports*, with the following syntax:
+
+	module-import ::= 'import' module-path
+
+A module import has two effects:
+
+1. bringing the imported module in the *compilation context*, that is the set of all modules that are compiled and linked together to form the final program
+2. creating shortcuts to access the imported module's items unqualified
+
+Indeed, within a module, first-level items can be used by their name alone, and any item in the compilation context can be used by prepending the path of the module it is defined in and a column:
+
+	identifier ::= [ module-path ':' ] Name
+
+When an item name not preceded by a module path appears in the source, it is first looked for in the current module, then in the imported modules, then in the modules that these import, and so forth. If the symbol is found in multiple modules at the same depth of importation, the ambiguity is signaled as an error by the compiler.
+
+It is not an error to import modules which define items with the same name, only to use this name unqualified: they can still be accessed without ambiguity using the module paths. It is not an error either to have modules recursively import each other, directly or indirectly. Note also that it is valid to use any of the current module's paths to qualify its own items, albeit never necessary, considering the previous rules.
+
+Classes
+=======
