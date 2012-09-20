@@ -191,8 +191,6 @@ Types
 
 sool is statically and strongly typed, meaning that the type of all variables and expressions is decided at compile time, through explicit declaration or infering. Additionally, all assignments are checked for compatibility, so that a given variable always holds values or object of a same class.
 
-The following describes only the type declaration syntax. The concepts of templates and optionals will be explained later.
-
 	class-name ::= item-name [ template-args ] | '#' class-name
 	template-args ::= '|' ( class-name | '(' list-class-name ')' )
 
@@ -204,10 +202,17 @@ A type declaration is a class name followed by optionality information, represen
 
 	type ::= class-name [ '?' ]
 
+Optional types
+--------------
+
+Variable of *optional* types can either hold an actual value (instance of a value class or reference to an object), or the special value `nil`.
+
+Optionals cannot be sent messages, or assigned to non optionals. Optionals are converted to they non optional equivalents using boolean evaluation, which is ensured by syntax (see relevant section).
+
 Classes
 =======
 
-sool is class-based language, meaning that all data is instanciated from classes:
+sool is a class-based language, meaning that all data is instanciated from classes:
 
 	class-def ::= 	( 'object' | 'value' ) Name [ template-def ]
 					{ member-def | method-def | ctor-def }
@@ -235,11 +240,11 @@ The name of a method can be a simple identifier, a binary operator, or the brack
 
 Arguments are normally declared with a type and a name, but only the type information is necessary. If its name is omitted, however, the argument will not be usable in the method's block.
 
-The information of the method name and its arguments' types is called the method's *selector*. Indeed, when sending a message to an instance, this information is used to *select* which method to run, and the instance is said to *answer* to this selector.
+The information of the method name and its arguments' types is called the method's *selector*. Indeed, when sending a message to an instance, this information is used to *select* which method to run. If a class implements a method with a certain selector, it is said to *answer* to this selector.
 
-As such, no two methods in a class can have the same selector.
+In light of this, no two methods in a class can have the same selector.
 
-The information of the method's selector and return types is called its *protoype*. The set of method prototypes implemented by a class is called its *interface*. 
+The information of the method's selector and return types is called its *protoype*. The set of method prototypes implemented by a class is called its *interface*.
 
 Members
 -------
@@ -255,7 +260,7 @@ Declaring a member with type `T` and name `n` does two things:
 
 Accessors are methods like any other, except that their code is compiler-provided. In particular they contribute to the interface of the class, and follow the rule that no two methods can have the same selector. From this follows that no two members in a class can have the same name.
 
-A member may have an initializer introduced by an equal sign. This allows to define the inital value that the member will have at instanciation (see section on instanciation).
+A member may have an explicit *initializer* introduced by an equal sign (see instantiation).
 
 Embedded members
 ----------------
@@ -264,7 +269,7 @@ A member can also be declared as an *embedded* member:
 
 	member-def ::= 'embed' class-name [ '=' exp ]
 
-An embedded member is in every aspect similar to a regular member, except that its name is exactly its type, and that its type cannot be an optional. From the usual rule about methods, it follows that a class cannot be embedded more than once in another. 
+An embedded member is in every aspect similar to a regular member, except that its name is exactly its type, and that its type cannot be an optional. From the usual rule about methods, it follows that a class cannot embed another one more than once. 
 
 Additionally, the class provides automatic *forwarding* of messages to its embedded members. That is, if:
 
@@ -274,31 +279,63 @@ Additionally, the class provides automatic *forwarding* of messages to its embed
 
 then the message is passed on to the embedded member as if it was the original recipient. If more than one embedded member answers to the message, the ambiguity results in an error.
 
-Note that it is not an error to embed multiple classes that answer to the same message, only to actually send that message to the embedding class. The ambiguity can always be solved by explicitly using the getters of the embedded members.
+Note that it is not an error to embed multiple classes that answer to the same message, only to actually send that message to an instance of the embedding class. The ambiguity can always be solved by explicitly using the getters of the embedded members.
 
-By "forwarding", it is meant the the class actually implements a method with the same prototype as the embedded member's method, that simply sends the same message to the embedded member, and returns its return values. This compiler-provided method is like any other method, and in particular it participates to the interface of the class.
+By "forwarding", it is meant the the class actually implements a method with the same prototype as the embedded member's method, that simply sends the same message to the embedded member, and returns the returned values. This compiler-provided method is like any other method, and in particular it participates to the interface of the class.
 
-Constructors and factories
---------------------------
+Constructors
+------------
 
-Constructors and factories are special methods that are involved in the process of instanciation.
-
-Note: only the syntax and special constraints are described here. The instanciation mechanism and the `self` variable are explained later.
+Constructors and are special methods that are involved in the process of instanciation.
 
 	ctor-def :=	'new' '(' [ list-arg-def ] ')'
 				block
 				'end'
- 
-Constructors follow additional constraints:
 
-- no message can be sent to `self`, except the compiler-provided accessors for the members
-- `self` cannot be used as argument in a message
-- all non-optional object members must be set before returning
+Constructors do not have names or return values and cannot be called explicitly like other methods. They are run only when invoked using the instanciation expression. Two constructors in the same class cannot have the same set of arguments.
 
-The same syntax with the addition of return types is used to declare *factories*:
+When a constructor is invoked, the class is instanciated as follows:
+
+- for an object class, dynamic memory is allocated
+- members that have an initializer (default, or explicit) are initialized in the order they appear in the class definition
+- the constructor is run
+- for an object class, a reference to the object is returned. For a value class, the entire instance is returned.
+
+The default initializer for a member is:
+
+- for a non-optional value type: the argumentless constructor for its class, if it exists
+- for an optional type: `nil`
+
+Constructors and explicit member initializers follow additional constraints:
+
+- a member getter can only be called after the member is initialized
+- sending a message to `self` other than the member accessors, passing `self` as method argument, or returning from the constructor can only happen once all members have been initialized
+
+Thanks to default initializers, this leaves only value members without argumentless constructors and non-optional object members to be explicitly initialized.
+
+Implicit constructors
+---------------------
+
+The compiler provides the following constructors, if they are not explicitly implemented:
+
+- the argumentless constructor with an empty body, if that does not result in an invalid constructor according to the previous rules
+- a *trivial constructor* which maps its arguments' types to the class members, in the order they are defined, and proceeds to assign each passed value to the corresponding member
+
+Factories
+---------
+
+The constructor syntax with the addition of return types is used to declare *factories*. No two factories or constructors can have the same set of arguments.
 
 	ctor-def :=	'new' list-type '(' [ list-arg-def ] ')'
 				block
 				'end'
 
-A factory is not exactly a method in that it is not executed by an instance, and as such does not have a `self` variable. Its return values *are* the result of the instanciation.
+A factory is not exactly a method in that it is not executed by an instance. It does not have a `self` variable.
+
+When a factory is invoked through the instanciation syntax, its body is executed, and the return values are returned as the result of the instantiation expression.
+
+Note that the return type does not have to be the same as the class or even a single value. Factories are meant as an alternative way to create instances of the class, and add for instance error notification or internizing mechanisms, but they are in fact general purpose "functions".
+
+Interfaces
+==========
+
