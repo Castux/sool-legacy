@@ -262,8 +262,9 @@ Accessors are methods like any other, except that their code is compiler-provide
 
 A member may have an explicit *initializer* introduced by an equal sign (see instantiation).
 
-Embedded members
-----------------
+Classes cannot recursively contain members of their own class, through a chain of value class members or non-optional object members, as this would lead to infinite recursion in initialization.
+
+### Embedded members ###
 
 A member can also be declared as an *embedded* member:
 
@@ -313,16 +314,14 @@ Constructors and explicit member initializers follow additional constraints:
 
 Thanks to default initializers, this leaves only value members without argumentless constructors and non-optional object members to be explicitly initialized.
 
-Implicit constructors
----------------------
+### Implicit constructors ###
 
 The compiler provides the following constructors, if they are not explicitly implemented:
 
 - the argumentless constructor with an empty body, if that does not result in an invalid constructor according to the previous rules
 - a *trivial constructor* which maps its arguments' types to the class members, in the order they are defined, and proceeds to assign each passed value to the corresponding member
 
-Factories
----------
+### Factories ###
 
 The constructor syntax with the addition of return types is used to declare *factories*. No two factories or constructors can have the same set of arguments.
 
@@ -334,8 +333,94 @@ A factory is not exactly a method in that it is not executed by an instance. It 
 
 When a factory is invoked through the instanciation syntax, its body is executed, and the return values are returned as the result of the instantiation expression.
 
-Note that the return type does not have to be the same as the class or even a single value. Factories are meant as an alternative way to create instances of the class, and add for instance error notification or internizing mechanisms, but they are in fact general purpose "functions".
+Note that the return type does not have to be the same as the class or even a single value. Factories are meant as an alternative way to create instances of the class, and add for example error notification or internizing mechanisms, but they can in fact be used as general purpose "functions".
 
 Interfaces
 ==========
 
+Modules may define *interfaces*. An interface is simply a set of prototypes.
+
+	iface-def :=	'interface' Name [ template-def ]
+					{ prototype | 'embed' class-name }
+					'end'
+
+And interface can embed other interfaces, to inherit their prototypes. Two protoypes in an interface can have the same selector only if they are identical (ie. have the same return type).
+
+Interfaces cannot recursively embed themselves.
+
+A class that implements all prototypes of an interface is said to *comply* with this interface.
+
+Generic classes
+---------------
+
+Defining an interface automatically create a *generic class* of the same name, that can be used wherever a regular class could be: class member types, method argument and return types, local variables, template arguments, and so forth. A generic class cannot be instanciated, but any object of a class that complies with it can be *casted* to the generic class and stored in a variable of the generic type.
+
+A generic object then answers to exactly the messages defined in the interface, and runs the implementations that were defined in its original class.
+
+Note that value classes cannot be directly casted to generics: they need to be "boxed" inside objects first. Furthermore, once casted to a generic, there is no way to cast an object back to its original class: it loses all its properties, except the ones defined by the interface.
+
+Code involving generic classes should be implemented as dynamic dispatch: having the same machine code apply to any complying class through the use of method pointers. A compiler may offer optimization options, where code applied to a generic class - but whose actual class is known at compile time - can be specialized for higher execution speed.
+
+Templates
+=========
+
+Classes and interfaces can be defined as *templates*, if they contain template parameters:
+
+	template-def ::=	'|' '(' list-template-param ')'
+	template-param ::=	class-name Name
+
+A template parameter is an interface, the *bound*, followed by a name. Template parameters are unspecified classes, that are only assumed to comply with the interface set as their bound. In particular, instances of the parameter classes can only answer to the messages in their bound. The unspecified classes cannot be instanciated.
+
+The parameters are only assigned actual classes when the template is *specialized*, that is, used with existing class names as template arguments. The arguments are required to comply with the corresponding bounds. Once specialized, a class template is exactly equivalent to a similar class that would have been written directly with the specific classes, and the same rules apply (selector conflicts in particular).
+
+Note that template arguments can be both object and value classes, as long as they comply with the bound. They can also be generic classes.
+
+Class templates should be implemented as actual code duplication, as it is the expected behavior for a compiler: trade execution speed for binary size.
+
+Extensions
+==========
+
+Extending existing classes
+--------------------------
+
+Any existing class can be *extended* by adding new methods to it:
+
+	extend-def :=	'extend' class-name
+					{ method-def }
+					'end'
+
+The new methods must not conflict in selector with those in the class definition, or those defined in other extensions of the same class in the same module.
+
+When looking up for methods, first the original class definition is searched, then the extensions in the current module, then the extensions in the imported modules, then those they import, and so forth. If two methods with the same selector are found at the same depth of importation, an error is produced.
+
+The ambiguity can be lifted by prepending the method name with the path of the module it is defined in.
+
+Non conflicting methods defined in extensions contribute to a class's interface like any other method.
+
+Template extension
+------------------
+
+A class template can be extended as well:
+
+	extend-def :=	'extend' Name template-def
+					{ method-def }
+					'end'
+
+The template parameters bounds and names need not match the original ones, but the bounds must comply with the originals.
+
+A template specialization is extended with the methods of all the extensions for which its arguments are compliant. If this results in selector conflicts from extensions in a same module, it is an error to specialize the template with this set of arguments.
+
+Method lookup and contribution to class interface happen the same way as for regular class extensions.
+
+Generic class extension
+-----------------------
+
+A generic class can be extended like a regular class, in which case objects casted to the generic class can use the methods directly.
+
+Furthermore, implicit casting to a generic type happens when:
+
+- trying to send a message on an object that does not answer to it itself
+- a certain number of generic classes answer to this message
+- the object complies with exactly one of these generic classes, or one generic class is closer in the import depth that the others
+
+If the object complies with more that one generic class that answers to the message and these classes are at the same import depth, the ambiguity is signaled by an error and must be lifted with explicit casting.

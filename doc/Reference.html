@@ -190,8 +190,6 @@
 
 <p>sool is statically and strongly typed, meaning that the type of all variables and expressions is decided at compile time, through explicit declaration or infering. Additionally, all assignments are checked for compatibility, so that a given variable always holds values or object of a same class.</p>
 
-<p>The following describes only the type declaration syntax. The concepts of templates and optionals will be explained later.</p>
-
 <pre><code>class-name ::= item-name [ template-args ] | '#' class-name
 template-args ::= '|' ( class-name | '(' list-class-name ')' )
 </code></pre>
@@ -205,9 +203,15 @@ template-args ::= '|' ( class-name | '(' list-class-name ')' )
 <pre><code>type ::= class-name [ '?' ]
 </code></pre>
 
+<h2>Optional types</h2>
+
+<p>Variable of <em>optional</em> types can either hold an actual value (instance of a value class or reference to an object), or the special value <code>nil</code>.</p>
+
+<p>Optionals cannot be sent messages, or assigned to non optionals. Optionals are converted to they non optional equivalents using boolean evaluation, which is ensured by syntax (see relevant section).</p>
+
 <h1>Classes</h1>
 
-<p>sool is class-based language, meaning that all data is instanciated from classes:</p>
+<p>sool is a class-based language, meaning that all data is instanciated from classes:</p>
 
 <pre><code>class-def ::=   ( 'object' | 'value' ) Name [ template-def ]
                 { member-def | method-def | ctor-def }
@@ -236,11 +240,11 @@ arg-def :=      type [ Name ]
 
 <p>Arguments are normally declared with a type and a name, but only the type information is necessary. If its name is omitted, however, the argument will not be usable in the method's block.</p>
 
-<p>The information of the method name and its arguments' types is called the method's <em>selector</em>. Indeed, when sending a message to an instance, this information is used to <em>select</em> which method to run, and the instance is said to <em>answer</em> to this selector.</p>
+<p>The information of the method name and its arguments' types is called the method's <em>selector</em>. Indeed, when sending a message to an instance, this information is used to <em>select</em> which method to run. If a class implements a method with a certain selector, it is said to <em>answer</em> to this selector.</p>
 
-<p>As such, no two methods in a class can have the same selector.</p>
+<p>In light of this, no two methods in a class can have the same selector.</p>
 
-<p>The information of the method's selector and return types is called its <em>protoype</em>. The set of method prototypes implemented by a class is called its <em>interface</em>. </p>
+<p>The information of the method's selector and return types is called its <em>protoype</em>. The set of method prototypes implemented by a class is called its <em>interface</em>.</p>
 
 <h2>Members</h2>
 
@@ -260,16 +264,18 @@ arg-def :=      type [ Name ]
 
 <p>Accessors are methods like any other, except that their code is compiler-provided. In particular they contribute to the interface of the class, and follow the rule that no two methods can have the same selector. From this follows that no two members in a class can have the same name.</p>
 
-<p>A member may have an initializer introduced by an equal sign. This allows to define the inital value that the member will have at instanciation (see section on instanciation).</p>
+<p>A member may have an explicit <em>initializer</em> introduced by an equal sign (see instantiation).</p>
 
-<h2>Embedded members</h2>
+<p>Classes cannot recursively contain members of their own class, through a chain of value class members or non-optional object members, as this would lead to infinite recursion in initialization.</p>
+
+<h3>Embedded members</h3>
 
 <p>A member can also be declared as an <em>embedded</em> member:</p>
 
 <pre><code>member-def ::= 'embed' class-name [ '=' exp ]
 </code></pre>
 
-<p>An embedded member is in every aspect similar to a regular member, except that its name is exactly its type, and that its type cannot be an optional. From the usual rule about methods, it follows that a class cannot be embedded more than once in another. </p>
+<p>An embedded member is in every aspect similar to a regular member, except that its name is exactly its type, and that its type cannot be an optional. From the usual rule about methods, it follows that a class cannot embed another one more than once. </p>
 
 <p>Additionally, the class provides automatic <em>forwarding</em> of messages to its embedded members. That is, if:</p>
 
@@ -281,34 +287,155 @@ arg-def :=      type [ Name ]
 
 <p>then the message is passed on to the embedded member as if it was the original recipient. If more than one embedded member answers to the message, the ambiguity results in an error.</p>
 
-<p>Note that it is not an error to embed multiple classes that answer to the same message, only to actually send that message to the embedding class. The ambiguity can always be solved by explicitly using the getters of the embedded members.</p>
+<p>Note that it is not an error to embed multiple classes that answer to the same message, only to actually send that message to an instance of the embedding class. The ambiguity can always be solved by explicitly using the getters of the embedded members.</p>
 
-<p>By "forwarding", it is meant the the class actually implements a method with the same prototype as the embedded member's method, that simply sends the same message to the embedded member, and returns its return values. This compiler-provided method is like any other method, and in particular it participates to the interface of the class.</p>
+<p>By "forwarding", it is meant the the class actually implements a method with the same prototype as the embedded member's method, that simply sends the same message to the embedded member, and returns the returned values. This compiler-provided method is like any other method, and in particular it participates to the interface of the class.</p>
 
-<h2>Constructors and factories</h2>
+<h2>Constructors</h2>
 
-<p>Constructors and factories are special methods that are involved in the process of instanciation.</p>
-
-<p>Note: only the syntax and special constraints are described here. The instanciation mechanism and the <code>self</code> variable are explained later.</p>
+<p>Constructors and are special methods that are involved in the process of instanciation.</p>
 
 <pre><code>ctor-def := 'new' '(' [ list-arg-def ] ')'
             block
             'end'
 </code></pre>
 
-<p>Constructors follow additional constraints:</p>
+<p>Constructors do not have names or return values and cannot be called explicitly like other methods. They are run only when invoked using the instanciation expression. Two constructors in the same class cannot have the same set of arguments.</p>
+
+<p>When a constructor is invoked, the class is instanciated as follows:</p>
 
 <ul>
-<li>no message can be sent to <code>self</code>, except the compiler-provided accessors for the members</li>
-<li><code>self</code> cannot be used as argument in a message</li>
-<li>all non-optional object members must be set before returning</li>
+<li>for an object class, dynamic memory is allocated</li>
+<li>members that have an initializer (default, or explicit) are initialized in the order they appear in the class definition</li>
+<li>the constructor is run</li>
+<li>for an object class, a reference to the object is returned. For a value class, the entire instance is returned.</li>
 </ul>
 
-<p>The same syntax with the addition of return types is used to declare <em>factories</em>:</p>
+<p>The default initializer for a member is:</p>
+
+<ul>
+<li>for a non-optional value type: the argumentless constructor for its class, if it exists</li>
+<li>for an optional type: <code>nil</code></li>
+</ul>
+
+<p>Constructors and explicit member initializers follow additional constraints:</p>
+
+<ul>
+<li>a member getter can only be called after the member is initialized</li>
+<li>sending a message to <code>self</code> other than the member accessors, passing <code>self</code> as method argument, or returning from the constructor can only happen once all members have been initialized</li>
+</ul>
+
+<p>Thanks to default initializers, this leaves only value members without argumentless constructors and non-optional object members to be explicitly initialized.</p>
+
+<h3>Implicit constructors</h3>
+
+<p>The compiler provides the following constructors, if they are not explicitly implemented:</p>
+
+<ul>
+<li>the argumentless constructor with an empty body, if that does not result in an invalid constructor according to the previous rules</li>
+<li>a <em>trivial constructor</em> which maps its arguments' types to the class members, in the order they are defined, and proceeds to assign each passed value to the corresponding member</li>
+</ul>
+
+<h3>Factories</h3>
+
+<p>The constructor syntax with the addition of return types is used to declare <em>factories</em>. No two factories or constructors can have the same set of arguments.</p>
 
 <pre><code>ctor-def := 'new' list-type '(' [ list-arg-def ] ')'
             block
             'end'
 </code></pre>
 
-<p>A factory is not exactly a method in that it is not executed by an instance, and as such does not have a <code>self</code> variable. Its return values <em>are</em> the result of the instanciation.</p>
+<p>A factory is not exactly a method in that it is not executed by an instance. It does not have a <code>self</code> variable.</p>
+
+<p>When a factory is invoked through the instanciation syntax, its body is executed, and the return values are returned as the result of the instantiation expression.</p>
+
+<p>Note that the return type does not have to be the same as the class or even a single value. Factories are meant as an alternative way to create instances of the class, and add for example error notification or internizing mechanisms, but they can in fact be used as general purpose "functions".</p>
+
+<h1>Interfaces</h1>
+
+<p>Modules may define <em>interfaces</em>. An interface is simply a set of prototypes.</p>
+
+<pre><code>iface-def :=    'interface' Name [ template-def ]
+                { prototype | 'embed' class-name }
+                'end'
+</code></pre>
+
+<p>And interface can embed other interfaces, to inherit their prototypes. Two protoypes in an interface can have the same selector only if they are identical (ie. have the same return type).</p>
+
+<p>Interfaces cannot recursively embed themselves.</p>
+
+<p>A class that implements all prototypes of an interface is said to <em>comply</em> with this interface.</p>
+
+<h2>Generic classes</h2>
+
+<p>Defining an interface automatically create a <em>generic class</em> of the same name, that can be used wherever a regular class could be: class member types, method argument and return types, local variables, template arguments, and so forth. A generic class cannot be instanciated, but any object of a class that complies with it can be <em>casted</em> to the generic class and stored in a variable of the generic type.</p>
+
+<p>A generic object then answers to exactly the messages defined in the interface, and runs the implementations that were defined in its original class.</p>
+
+<p>Note that value classes cannot be directly casted to generics: they need to be "boxed" inside objects first. Furthermore, once casted to a generic, there is no way to cast an object back to its original class: it loses all its properties, except the ones defined by the interface.</p>
+
+<p>Code involving generic classes should be implemented as dynamic dispatch: having the same machine code apply to any complying class through the use of method pointers. A compiler may offer optimization options, where code applied to a generic class - but whose actual class is known at compile time - can be specialized for higher execution speed.</p>
+
+<h1>Templates</h1>
+
+<p>Classes and interfaces can be defined as <em>templates</em>, if they contain template parameters:</p>
+
+<pre><code>template-def ::=    '|' '(' list-template-param ')'
+template-param ::=  class-name Name
+</code></pre>
+
+<p>A template parameter is an interface, the <em>bound</em>, followed by a name. Template parameters are unspecified classes, that are only assumed to comply with the interface set as their bound. In particular, instances of the parameter classes can only answer to the messages in their bound. The unspecified classes cannot be instanciated.</p>
+
+<p>The parameters are only assigned actual classes when the template is <em>specialized</em>, that is, used with existing class names as template arguments. The arguments are required to comply with the corresponding bounds. Once specialized, a class template is exactly equivalent to a similar class that would have been written directly with the specific classes, and the same rules apply (selector conflicts in particular).</p>
+
+<p>Note that template arguments can be both object and value classes, as long as they comply with the bound. They can also be generic classes.</p>
+
+<p>Class templates should be implemented as actual code duplication, as it is the expected behavior for a compiler: trade execution speed for binary size.</p>
+
+<h1>Extensions</h1>
+
+<h2>Extending existing classes</h2>
+
+<p>Any existing class can be <em>extended</em> by adding new methods to it:</p>
+
+<pre><code>extend-def :=   'extend' class-name
+                { method-def }
+                'end'
+</code></pre>
+
+<p>The new methods must not conflict in selector with those in the class definition, or those defined in other extensions of the same class in the same module.</p>
+
+<p>When looking up for methods, first the original class definition is searched, then the extensions in the current module, then the extensions in the imported modules, then those they import, and so forth. If two methods with the same selector are found at the same depth of importation, an error is produced.</p>
+
+<p>The ambiguity can be lifted by prepending the method name with the path of the module it is defined in.</p>
+
+<p>Non conflicting methods defined in extensions contribute to a class's interface like any other method.</p>
+
+<h2>Template extension</h2>
+
+<p>A class template can be extended as well:</p>
+
+<pre><code>extend-def :=   'extend' Name template-def
+                { method-def }
+                'end'
+</code></pre>
+
+<p>The template parameters bounds and names need not match the original ones, but the bounds must comply with the originals.</p>
+
+<p>A template specialization is extended with the methods of all the extensions for which its arguments are compliant. If this results in selector conflicts from extensions in a same module, it is an error to specialize the template with this set of arguments.</p>
+
+<p>Method lookup and contribution to class interface happen the same way as for regular class extensions.</p>
+
+<h2>Generic class extension</h2>
+
+<p>A generic class can be extended like a regular class, in which case objects casted to the generic class can use the methods directly.</p>
+
+<p>Furthermore, implicit casting to a generic type happens when:</p>
+
+<ul>
+<li>trying to send a message on an object that does not answer to it itself</li>
+<li>a certain number of generic classes answer to this message</li>
+<li>the object complies with exactly one of these generic classes, or one generic class is closer in the import depth that the others</li>
+</ul>
+
+<p>If the object complies with more that one generic class that answers to the message and these classes are at the same import depth, the ambiguity is signaled by an error and must be lifted with explicit casting.</p>
