@@ -34,22 +34,7 @@
 
 <p><em>Variables</em> are used to store and manipulate values and objects. sool is strongly typed, which means that a given variable can only hold instances of a single class. Along with additional information, this constitutes the <em>type</em> of the variable. Type is checked at compile time. In practice, it means that every variable is either declared with a class information, or the class information is inferred from the code by the compiler.</p>
 
-<p>The essential difference between values and objects are how they are stored in variables and manipulated. Values, as their name suggest, are manipulated "by value". The data is actually contained in the variable, and copied at assignment or when passed as argument to a method.</p>
-
-<pre><code>a = 5
-b = a   -- b now contains 5
-a = 10  -- b still contains 5
-</code></pre>
-
-<p>When two variables contain the same value, they are virtually indistinguishible. The number 5 is always equal to the number 5, even if they are stored in different places.</p>
-
-<p>On the other hand, objects are manipulated "by reference". When an object is created, its data is stored in dynamically allocated memory, and the variable recieves only a reference to it. Likewise, an assignment results only in copying the reference. The manipulated object is the same.</p>
-
-<pre><code>a = Object      -- a contains a reference to a newly allocated Object
-a.member = 5    -- data is set in the object
-b = a           -- b now refers to the same object, so b.member == 5
-b.member = 10   -- this modifies the same object, so a.member == 10
-</code></pre>
+<p>The essential difference between values and objects are how they are stored in variables and manipulated. Values, as their name suggest, are manipulated "by value". The data is actually contained in the variable, and copied at assignment or when passed as argument to a method. On the other hand, objects are manipulated "by reference". When an object is created, its data is stored in dynamically allocated memory, and the variable recieves only a reference to it. Likewise, an assignment results only in copying the reference. The manipulated object is the same.</p>
 
 <h2>Built-in classes</h2>
 
@@ -105,7 +90,7 @@ b.member = 10   -- this modifies the same object, so a.member == 10
 
 <p>White space characters are: space, horizontal tab, new line, carriage return.</p>
 
-<p><em>Names</em> are any strings of letters, digits and underscores that do not start with a digit. Expressed as a regular expression: <code>[_a-zA-Z][_a-zA-Z0-9]</code>.</p>
+<p><em>Names</em> are any strings of letters, digits and underscores that do not start with a digit. Expressed as a regular expression: <code>[_a-zA-Z][_a-zA-Z0-9]*</code>.</p>
 
 <p>The following strings are reserved as <em>keywords</em> for the language, and cannot be used as names:</p>
 
@@ -133,7 +118,7 @@ b.member = 10   -- this modifies the same object, so a.member == 10
 "String start [[substring]] end of string"
 </code></pre>
 
-<p>Integral constants are strings of decimal digits (<code>[0-9]+</code>) or <code>0x</code> followed by hexadecimal digits (<code>0x[0-9a-fA-F]+</code>). Numerical constants are strings of decimal digits which contain exactly one dot, in neither first or last position, and optionally followed by <code>e</code> and decimal digits (<code>[0-9]+.[0-9]+(e[0-9]+)?</code>).</p>
+<p>Integral constants are strings of decimal digits (<code>[0-9]+</code>) or <code>0x</code> followed by hexadecimal digits (<code>0x[0-9a-fA-F]+</code>). Numerical constants are strings of decimal digits which contain exactly one dot, in neither first or last position, and optionally followed by <code>e</code> and decimal digits (<code>[0-9]+\.[0-9]+(e[0-9]+)?</code>).</p>
 
 <p>Note that a single dot is a valid token after an integral or numerical constant, even witout separation, because the grammar ensures that outside of a numerical constant, a dot is always followed by a name (which cannot start with a digit):</p>
 
@@ -141,13 +126,18 @@ b.member = 10   -- this modifies the same object, so a.member == 10
 3.6.sin
 </code></pre>
 
-<p>Comments begin with a double hyphen <code>--</code> anywhere except within a string. If the following text is not a long string, the comment is a <em>short</em> comment, and lasts until the end of the line. Otherwise, it is a <em>long comment</em>, which runs until the end of the long string.</p>
+<p>Comments begin with a double hyphen <code>--</code> anywhere except within a string. If the following text is not a long string, the comment is a <em>short comment</em>, and lasts until the end of the line. Otherwise, it is a <em>long comment</em>, which runs until the end of the long string.</p>
 
 <h1>Modules and packages</h1>
 
 <p>sool source code is organized in <em>modules</em> and <em>packages</em>.</p>
 
-<p>A module is a single sool source file. The module name is taken to be the source file name, stripped of its path and <code>.sool</code> extension. A module is composed of <em>first-level items</em>: class definitions, interface definitions, extensions and foreign interface declarations.</p>
+<p>A module is a single sool source file. The module name is taken to be the source file name, stripped of its path and <code>.sool</code> extension. A module is composed of <em>first-level items</em>: class definitions, interface definitions, extensions and foreign interface declarations, and module imports:</p>
+
+<pre><code>module := { module-import | class-def | iface-def | extend-def | foreign-def }
+</code></pre>
+
+<p>Two items in the same module cannot have the same name.</p>
 
 <p>A package is a directory containing sool source files and possibly other packages. Likewise, the package name is the name of its associated directory. Packages are used to group related modules together, and provide namespacing to prevent conflict between modules with the same name.</p>
 
@@ -162,7 +152,7 @@ b.member = 10   -- this modifies the same object, so a.member == 10
 
 <h2>Paths</h2>
 
-<p>The absolute <em>path</em> of a module is its location with respect to the root source location by which it is contained. It is written as the column separated sequence of directories (ie. packages) to follow from the root source location down to the module source file:</p>
+<p>The absolute <em>path</em> of a module is its location with respect to the root source location which contains it. It is written as the colon separated sequence of directories (ie. packages) to follow from the root source location down to the module source file:</p>
 
 <pre><code>module-path ::= { Name ':' } Name
 </code></pre>
@@ -183,17 +173,142 @@ b.member = 10   -- this modifies the same object, so a.member == 10
 <p>A module import has two effects:</p>
 
 <ol>
-<li>bringing the imported module in the <em>compilation context</em>, that is the set of all modules that are compiled and linked together to form the final program</li>
-<li>creating shortcuts to access the imported module's items unqualified</li>
+<li>bringing the imported module in the <em>compilation context</em>, that is the set of all modules that are compiled and linked together to form the final program. The compilation context therefore consists of the main module and all the modules recursively imported from it.</li>
+<li>creating shortcuts to access the imported module's items unqualified.</li>
 </ol>
 
-<p>Indeed, within a module, first-level items can be used by their name alone, and any item in the compilation context can be used by prepending the path of the module it is defined in and a column:</p>
+<p>Indeed, within a module, first-level items can be used by their name alone, and any item in the compilation context can be used by prepending the path of the module it is defined in and a colon:</p>
 
-<pre><code>identifier ::= [ module-path ':' ] Name
+<pre><code>item-name ::= [ module-path ':' ] Name
 </code></pre>
 
-<p>When an item name not preceded by a module path appears in the source, it is first looked for in the current module, then in the imported modules, then in the modules that these import, and so forth. If the symbol is found in multiple modules at the same depth of importation, the ambiguity is signaled as an error by the compiler.</p>
+<p>When an item name not starting with a module path appears in the source, the item is first looked for in the current module, then in the imported modules, then in the modules that these import, and so forth. If the symbol is found in multiple modules at the same depth of importation, the ambiguity is signaled as an error by the compiler.</p>
 
 <p>It is not an error to import modules which define items with the same name, only to use this name unqualified: they can still be accessed without ambiguity using the module paths. It is not an error either to have modules recursively import each other, directly or indirectly. Note also that it is valid to use any of the current module's paths to qualify its own items, albeit never necessary, considering the previous rules.</p>
 
+<h1>Types</h1>
+
+<p>sool is statically and strongly typed, meaning that the type of all variables and expressions is decided at compile time, through explicit declaration or infering. Additionally, all assignments are checked for compatibility, so that a given variable always holds values or object of a same class.</p>
+
+<p>The following describes only the type declaration syntax. The concepts of templates and optionals will be explained later.</p>
+
+<pre><code>class-name ::= item-name [ template-args ] | '#' class-name
+template-args ::= '|' ( class-name | '(' list-class-name ')' )
+</code></pre>
+
+<p>The name of a class - like any other item - can be prefixed by a module path, and can also be followed by template arguments. Template arguments are introduced by a pipe character, followed either by a single class name, or a comma separated list of class names between parentheses.</p>
+
+<p>As a syntactic shortcut, the standard array class can be written with as hash sign followed directly by the template argument, without a pipe.</p>
+
+<p>A type declaration is a class name followed by optionality information, represented by a question mark:</p>
+
+<pre><code>type ::= class-name [ '?' ]
+</code></pre>
+
 <h1>Classes</h1>
+
+<p>sool is class-based language, meaning that all data is instanciated from classes:</p>
+
+<pre><code>class-def ::=   ( 'object' | 'value' ) Name [ template-def ]
+                { member-def | method-def | ctor-def }
+                'end'
+</code></pre>
+
+<p>A class is made of members, methods, and constructors. The members of an instance represent its data: variables that can in turn contain values or references to other objects. The methods are actions that can be performed on this data: they contain the actual code, the instructions that will be executed when the program is run. The constructors are special procedures, used to initialize objects and values at their instanciation.</p>
+
+<h2>Methods</h2>
+
+<pre><code>method-def :=   'method' prototype
+                block
+                'end'
+prototype :=    [ list-type ] method-name '(' [ list-arg-def ] ')'
+method-name :=  Name [ '=' ] |
+                binop | 
+                '[' ']' [ '=' ]
+arg-def :=      type [ Name ]
+</code></pre>
+
+<p>A method takes in any number of arguments, which appear as local variables in its block of code, and returns any number of return values.</p>
+
+<p>Note that "value" in this context doesn't mean that a method can only return instances of value classes, but rather that "returning an object" is actually returning a reference to an object, which is indeed a value. The semantics of passing an argument, returning a value and assignment are equivalent, and will be clarified in the section on assignment.</p>
+
+<p>The name of a method can be a simple identifier, a binary operator, or the brackets representing indexing. Indeed, binary operations and indexing in sool are simply message sending. Likewise, a method name can be followed by an equal sign, as the assignment operation is sometimes sending a message.</p>
+
+<p>Arguments are normally declared with a type and a name, but only the type information is necessary. If its name is omitted, however, the argument will not be usable in the method's block.</p>
+
+<p>The information of the method name and its arguments' types is called the method's <em>selector</em>. Indeed, when sending a message to an instance, this information is used to <em>select</em> which method to run, and the instance is said to <em>answer</em> to this selector.</p>
+
+<p>As such, no two methods in a class can have the same selector.</p>
+
+<p>The information of the method's selector and return types is called its <em>protoype</em>. The set of method prototypes implemented by a class is called its <em>interface</em>. </p>
+
+<h2>Members</h2>
+
+<pre><code>member-def ::= type Name [ '=' exp ]
+</code></pre>
+
+<p>Declaring a member with type <code>T</code> and name <code>n</code> does two things:</p>
+
+<ul>
+<li>reserving room for a variable of type T in the memory layout of the class</li>
+<li>creating the following <em>accessors</em> for the member:
+<ul>
+<li>a <em>getter</em> with prototype <code>T n()</code>, that returns the value of the member</li>
+<li>a <em>setter</em> with prototype <code>n=(T)</code>, that sets the value of the member to that of its unique argument</li>
+</ul></li>
+</ul>
+
+<p>Accessors are methods like any other, except that their code is compiler-provided. In particular they contribute to the interface of the class, and follow the rule that no two methods can have the same selector. From this follows that no two members in a class can have the same name.</p>
+
+<p>A member may have an initializer introduced by an equal sign. This allows to define the inital value that the member will have at instanciation (see section on instanciation).</p>
+
+<h2>Embedded members</h2>
+
+<p>A member can also be declared as an <em>embedded</em> member:</p>
+
+<pre><code>member-def ::= 'embed' class-name [ '=' exp ]
+</code></pre>
+
+<p>An embedded member is in every aspect similar to a regular member, except that its name is exactly its type, and that its type cannot be an optional. From the usual rule about methods, it follows that a class cannot be embedded more than once in another. </p>
+
+<p>Additionally, the class provides automatic <em>forwarding</em> of messages to its embedded members. That is, if:</p>
+
+<ul>
+<li>an instance of the class is sent a message</li>
+<li>the class does not answer itself to the message</li>
+<li>exactly one of its embedded members answers to the message</li>
+</ul>
+
+<p>then the message is passed on to the embedded member as if it was the original recipient. If more than one embedded member answers to the message, the ambiguity results in an error.</p>
+
+<p>Note that it is not an error to embed multiple classes that answer to the same message, only to actually send that message to the embedding class. The ambiguity can always be solved by explicitly using the getters of the embedded members.</p>
+
+<p>By "forwarding", it is meant the the class actually implements a method with the same prototype as the embedded member's method, that simply sends the same message to the embedded member, and returns its return values. This compiler-provided method is like any other method, and in particular it participates to the interface of the class.</p>
+
+<h2>Constructors and factories</h2>
+
+<p>Constructors and factories are special methods that are involved in the process of instanciation.</p>
+
+<p>Note: only the syntax and special constraints are described here. The instanciation mechanism and the <code>self</code> variable are explained later.</p>
+
+<pre><code>ctor-def := 'new' '(' [ list-arg-def ] ')'
+            block
+            'end'
+</code></pre>
+
+<p>Constructors follow additional constraints:</p>
+
+<ul>
+<li>no message can be sent to <code>self</code>, except the compiler-provided accessors for the members</li>
+<li><code>self</code> cannot be used as argument in a message</li>
+<li>all non-optional object members must be set before returning</li>
+</ul>
+
+<p>The same syntax with the addition of return types is used to declare <em>factories</em>:</p>
+
+<pre><code>ctor-def := 'new' list-type '(' [ list-arg-def ] ')'
+            block
+            'end'
+</code></pre>
+
+<p>A factory is not exactly a method in that it is not executed by an instance, and as such does not have a <code>self</code> variable. Its return values <em>are</em> the result of the instanciation.</p>

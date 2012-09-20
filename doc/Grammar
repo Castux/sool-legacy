@@ -4,7 +4,11 @@
 module :=		{ module-import | class-def | iface-def | extend-def |
 				foreign-def }
 
-module-import :=	'import' Name { ',' Name }
+module-path ::=	{ Name ':' } Name
+
+module-import ::= 'import' module-path
+
+item-name ::=	[ module-path ':' ] Name
 
 class-def :=	( 'object' | 'value' )
 				Name
