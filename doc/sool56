@@ -1,0 +1,319 @@
+The great overhaul
+==================
+
+Keep it simple, stupid. Let's see if we can do that: core is simple, add a bit of sugar on top.
+
+Functions
+---------
+
+So we have functions. Let's see how that works.
+
+	function Foo,Bar do_it(Meh arg)
+	end
+
+This makes a function in the module space. To call it:
+
+	do_it(arg)
+	arg.do_it()
+
+You can also put a function inside a class definition, which only adds additional namespacing (must be prefixed with class name from outside the class):
+
+	object Foo
+		function bar() end
+
+		function baz()
+			bar()
+		end
+
+		method blah()
+			bar()
+			baz()
+		end
+	end
+
+	-- elsewhere
+	Foo:bar()
+	Foo:baz()
+
+Note that inside a method's body, we have an implicit `self` so there might be conflicts there:
+
+	object Meh
+		method foo()
+			bar(5)		-- could be functions bar(uint) or bar(Meh,uint)
+		end
+	end
+
+In D, the method of the object shadows the outside function. Makes sense. If you really want the function, you need to use its module's path.
+
+Methods
+-------
+
+Method definitions are a simple syntactic shortcut:
+
+	object Foo
+		method blah()
+		end
+	end
+
+Is exactly the same as:
+
+	object Foo
+		function blah(Foo self)		-- for value classes, `self` is passed by ref
+		end
+	end
+
+Meaning that the method has the hidden `self`, and is defined in the class's namespace. When using `extend`, same story.
+
+Note that I mean "exactly the same" in terms of function prototype. In the body of the method, the `self` keyword can be omitted for methods to `self`.
+
+Constructors and factories
+--------------------------
+
+They are just methods and functions with a special name, `init`, that is called when you use the class name as a function (sugar!):
+
+	object Foo
+		function Foo? init(bool isRaining)
+			if isRaining then
+				return Foo()
+			else
+				return nil
+			end
+		end
+
+		method init()
+			-- do the thing
+		end
+	end
+
+	-- later
+
+	local a = Foo(true)		-- is really Foo:init(true)
+	local b = Foo()			-- is really make a Foo and call method init() on it
+
+Factories and constructors cannot have the same selector, obviously, and a constructor cannot return anything. Also constructors have this special semantic analysis that prevents you from reading from uninitialized members, or pass `self` as parameter (including sending message to `self`).
+
+Interfaces
+----------
+
+Interfaces cannot use "functions", only methods, because the point of interfaces is to test compliance of classes to it.
+
+	interface UintMaker
+		uint make(ArgType arg)
+	end
+
+If there is a function `uint make(Foo,ArgType)`, whatever way it is defined (in the class, outside the class, in extension), then class `Foo` complies to interface `UintMaker`. Period. Nothing changed.
+
+References
+----------
+
+Internally, references are a type, and in low level code they are handled differently than the type they refer to (by dereferencing). However, like in C++, references cannot be re-initialized: once set, they are a perfect alias of the original variable and any operation happening to them happens to the original one.
+
+Question is: do we need a full blown reference type, to be used for members and as template arguments, or is the only reasonable use for passing and returning to and from functions?
+
+If it is a full type, then we need to be able to declare it for locals:
+
+	function foobar()
+		local myRef = ref something.that[might].be["quite"][far]
+
+		myRef.do_this
+		myRef.do_that
+		myRef.dance_a_little_jig
+		myRef = replacement
+	end
+
+Note that "taking the reference" operation is automatic for the first "assignment" to a thing that is declared as reference:
+
+	function fiveIt(ref uint i)
+		i = 5
+	end
+
+	-- later
+
+	local foo = 10
+	fiveIt(foo)		-- no need to write fiveIt(ref foo)
+
+Not sure about members though:
+
+	object
+		ref uint i
+
+		method init(ref uint other)
+			i = other		-- this is the first assignment, but how to know?
+			i = ref other	-- more straightforward
+		end
+	end
+
+Of course, this `ref` operator cannot be applied to things that are not in the heap, like locals, because that would allow horrible horrible things like returning a pointer to a local, which scope is limited.
+
+	function ref uint blah()
+		local i = 5
+		local myRef = ref i
+
+		return myRef		-- EEEEEEK!
+	end
+
+Anyway, a local is a simple name, you never need a shortcut to it from the same function body. I think. Then again, you can definitely pass a local by reference, since it always oulives the inner function. Maybe the forbidden thing is only to *return* a reference to a local.
+
+Now how about having references as template arguments:
+
+	local arr = array|(ref uint)
+	arr.push(somevar)
+
+	arr[1] = otherint		-- are we setting the array cell, or the thing refered by it?
+	arr[1] = ref otherint	-- is it clearer? or even possible?
+
+Even the protoypes would be weird:
+
+	method ref T [](uint)			-- template
+	method ref ref uint [](uint)	-- applied template to uint
+
+Ooops, can reference types be recursive? How can we possibly use the intermediary steps, since they are always autodereferenced?
+
+This seems like a bad idea. The natural use for references is arguments and return values. Both are locals. We can add explicitely declared locals, why not, for nice shortcuts. But no other variables.
+
+But they do participate to the functions' prototypes, and therefore, to interface compliance.
+
+	interface Blah
+		changeAnInt(ref int)
+		ref text getSomeVar()
+	end
+
+Cool stuff could happen for loops and iterators:
+
+	for i, ref v in arr do
+		v = 5		-- no more of the annoying Lua way of reindexing arr[i]
+					-- which also means no boundary check. FAAAST.
+	end
+
+Final note: the name "reference" is well known, especially from C++. But it is a tad confusing that our object variables are also said to be references.
+
+	function(ref MyObject obj)
+		-- obj is a reference to a reference to a MyObject
+	end
+
+Another name could be `alias`. It abstracts the fact that we're using pointers, and says "this is now exactly the same as that other variable". Longer to type though, and "passing/returning an alias" is not exactly as well known as "passing/returning by reference".
+
+	function fiveIt(alias uint i)
+		i = 5
+	end
+
+	object Foo
+		text blah
+		method alias text getText()
+			return blah
+		end
+	end
+
+Maybe.
+
+Promoting values to generic
+---------------------------
+
+Generics use dynamic dispatch, and I always assumed that, like in C++, you could only apply this to pointers, and therefore, to objects. But references/aliases are in fact pointers to data, and it makes them look like objects. With a pointer to a value, and a bunch of method pointers, you could definitely cast a value to a generic.
+
+The only tiny weeny problem is that the pointer has to be valid (obviously), so it would work only for values that are stored in the heap (array elements and object members). However, we know that there is a way to alias a local, by passing it "by reference":
+
+	function a()
+		local i = 50
+		b(i)
+	end
+
+	function b(alias uint i)
+		local gen = i to MyGeneric
+		someobject.save(gen)
+	end
+
+Oooh, bad. Here, `someobject` potentially remembers the address of the local `i` in function `a`, which is destroyed when `a` returns. Very bad. Two solutions: no casting values to generics, or somehow refuse to cast one if you don't know where it comes from. The same way the compiler doesn't let you return a local as alias, it won't let you cast a local to a generic, only one that comes from elsewhere, because that's guarantied to be from the heap.
+
+Anonymous functions
+-------------------
+
+We now have functions. So anonymous ones seem easy. But so far we had used anonymous methods as a shortcut to:
+
+- add a nameless method to a class
+- wrap an object of this class in a generic which demands that prototype
+- pass/save this generic (object pointer plus function pointer)
+
+With plenty of syntactic shortcuts. That doesn't work anymore for functions, which do not have an object. Can't have a generic that acts on nothing.
+
+We would need a new concept: the first level function. Or function pointer. Or "function interfaces", which are just a way to invent a function pointer type.
+
+The whole anonymous method and callback discussion was pretty clunky already. Maybe this needs a rewrite as well.
+
+Note: anonymous methods could really be anonymous functions that close on `self`. Instead of having it as a hidden parameter, it could be a hidden upvalue.
+
+In any case, for anything like this to happen in a clean and simple way, we would need function (pointers) as a primitive type. And a recursive one at that.
+
+	uint function(Foo,function(Bar))
+
+Here's a function that returns a uint, takes a Foo and a function that takes Bar. Also, syntax fun:
+
+	(array|Foo) function(Bar)
+	array|(Foo function(Bar))
+	int function(int) function(bool)	-- woo, a function that returns a function!
+
+Grr. Also, the tiny problem that so far, every *thing* was an instance of a class, with methods, etc. Even arrays, that have a type parameter, interpreted in low level as templates. But functions would need variadic templates, because of their varying number of parameters.
+
+THE HORROR. Is a function an object? Can I call methods on it? The only thing we really want from a function is to call it. So maybe a function is an object with a single method `call` and a bunch of arguments.
+
+Then would function call be a shortcut for calling the method `call` on a function object, which is itself calling a function with the object as hidden `self` and... AAAAH. Madness.
+
+Let's wave this away for now. Maybe sool is not ready for this.
+
+Templates
+---------
+
+So far, templates applied only to whole classes, therefore affecting the member types, the method protoypes, and the methods' code. Since now functions are actually quite independant from classes, could they be templates as well?
+
+	function foo|(any T) ()
+
+	end
+
+With of course an "automatic" template if they are defined in template classes or extensions.
+
+	object Foo|(any T)
+		method blah()
+		end
+	end
+
+	-- is actually
+
+	function Foo:blah|(any T) (Foo|T self)
+	end
+
+The semantic analyzer will have so much fun with these...
+
+	local f = Foo|uint
+	f.blah
+
+Results in:
+
+- look for all functions `blah(Foo|uint)`
+- didn't find any
+- look for templates that might match
+- found `blah(Foo|T)` with `T` is `uint`
+- is `uint` compliant with interface `any`?
+- yes
+- instantiate function template `blah|(any T) (Foo|T self)` for `uint`
+
+Oh lord.
+
+For the fun: can you have templates of templates? I guess so.
+
+	object Foo|(any T)
+		method blah|(any U) ()
+		end
+	end
+
+	-- is actually
+
+	function Foo:blah|(any T, any U) (Foo|T self)
+	end
+
+Oh double lord. On the other hand, separating classes from methods might actually make things easier. When you have a class template, just generate the accessors as templated functions. Then all you have is functions, and the lookup can be the same in every case. Maybe.
+
+In terms of compiler, reading the DMD compiler's source, I noticed a pretty nice way to deal with templates: template declarations are basically just scope declarations, which bind a symbol to a (unknown yet) type. When analyzing the code within, you do type lookup just like for any other class, except that it resolves, in this scope, to the bound of the template parameter. This works transparently for classes, functions, extensions and whatnot.
+
+In the instanciation part, when you use template parameters, you just make a template instance type, which refers to the original symbol (which in our case is always either a type or a function), and keeps a list of argument types to bind to the unresolved symbols.
+
+It probably sounds easier on paper. But one has to start somewhere.

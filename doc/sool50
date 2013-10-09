@@ -1,0 +1,212 @@
+Sitrep
+======
+
+Formal reference: blah
+----------------------
+
+I haven't done much work on sool lately. However, to try and make things more clear, I started writing down a reference of the language, in its current state. It turns out to be a fairly difficult task, because it should be:
+
+- formal: like a math textbook
+- minimal: do not give a rule twice, especially in different forms
+- sufficient: rules and definitions must be clear and describe the language entirely
+- not based on examples: examples are for tutorials
+
+And that is far from trivial, because the limit between implied common knowledge and specific meaning to be defined is thin. Can I use a term before I define it? Should I first define all the terms in a definition? Where does the formalism stop?
+
+I realized that reference manuals for some other languages (Lua, Rust, D, Go among others) are actually quite vague and informal. They rely on the fact that programers already know most concepts, and are familiar with the language.
+
+Furthermore, it is quite hard to decide in what order should concepts be introduced, because many depend on each other (the grammar is highly recursive). For instance a type is made of a class name and possibly a question mark to make it optional, and a class name can contain template parameters. But templates are naturally described after classes, and classes contain members and methods, which contains types.
+
+Maybe I am trying too hard. The reference might not need be that formal, it could simply be a summary of the language grammar, and the semantic rules that go with it. Maybe it is not necessary to strictly define everything down to the smallest details, or even give general explanations about the big concepts. Some things are obvious from the grammar. And more importantly, I am not writing an ISO standard.
+
+The tutorial can be just as complete (cover every aspect of the language) and much more friendly. And also much more fun to write.
+
+Namespaces and extensions
+-------------------------
+
+The main problem I met when trying to formalize the language was because of the recent addition of namespaces. Currently, they work like this:
+
+- the compiler is invoked on a main module
+- each module can explicitly "import" other modules
+- the set of modules recursively imported from the main module is called the "compilation context"
+- any module can use any symbol in the compilation context by prefixing it with the module path
+- if a symbol is not preceded by a path, it is first looked for in the current module, then in those it imported, and those these imported, and so forth
+- if the symbol is defined in two modules at the same depth of importation, the compiler gives an error about ambiguity
+
+This is quite fine, because it allows you to easily import the whole program without having millions of import commands in each module, but also provides namespacing to avoid conflicts. Ambiguities can always be resolved by using full paths.
+
+However, one problem arose: extensions have no name. Before modules, the entire program shared a global namespace, and a class was extended with *all* the extensions in the compilation context.
+
+Now this might pose a problem: what if two different libraries extend a certain class with the same method?
+
+	-- module A
+
+	extend num
+		method num double()
+			return self*2
+		end
+	end
+
+	-- module B
+
+	extend num
+		method num double()
+			return 2*self
+		end
+	end
+
+	-- module C
+	import A
+	import B
+
+	object main
+		new()
+			local a = 2.double
+		end
+	end
+
+Hmm. Is it an error to import both modules? But you might not control which modules these import, etc. The writer of a library might have its own collection of extensions, that conflict with those in another library.
+
+Or is it an error to call the method, since it is ambiguous which one we want? But it sucks, because you might really want to use these useful extensions.
+
+Since the extensions have no name, and anyway methods are not first level items, there is no apparent way to "select" a method from a specific extension.
+
+However, we can assume that in a single module, the conflicts between methods are checked. So in a way, the module name uniquely identifies an extension method. You could use the module path somehow:
+
+	obj.path:to:module:dothat()
+
+That seems tremendously weird and ugly. However, it is fairly close to the low level stuff. When you write a class Foo, and a method bar, you actually write a function:
+
+	-- module mod1
+
+	object Foo
+		method uint bar(text arg)
+		end
+	end
+	
+	-- is really:
+	uint mod1:bar(mod1:Foo f, text arg)
+
+And writing an extension is really the same:
+
+	-- module mod2
+
+	extend mod1:Foo
+		method num babar(num i) end
+	end
+
+	-- is really:
+	num mod2:babar(mod1:Foo f, num i)
+
+Methods kind of live in the global space of the modules they are defined in. So it would sort of make sense to be able to select methods according to modules. With that god awful syntax:
+
+	local foo = Foo
+	foo.bar("meh")		-- is also foo.mod1:bar("meh")
+	foo.babar(2)		-- is also foo.mod2:babar(2)
+
+Of course the method lookup would be done first in the original class definition, then in extensions. And the order of lookup for extensions would naturally be the import depth, since that is the general way of looking for symbols.
+
+That way you can always naturally use the extensions "closest" to you (and bring the ones you want closer by explicitly importing the modules they are defined in), without interfering with other parts of the code.
+
+There is an ambiguity only if the method is defined in extensions at the same import depth. You can lift the ambiguity by explicitly importing the module you want (if possible), or using the path on the method's name.
+
+Autocasting to generic classes
+------------------------------
+
+A similar problem occurs with generic classes. If an object complies with two interfaces, and both interfaces have been extended with a same method, the automatic casting to generic does not work.
+
+However, now we can also add the priority lookup by import depth. But should it be the import depth of the generic class, or that of the extension? Duh.
+
+Well, it should probably be the extension's. Like I just realized above, a module can be seen as a list of functions (which is what methods are in low level). The first argument tells which class it belongs to, sure, but we can focus on the selector.
+
+When a message sending occurs in code, the analyzer looks for an implementation in this order:
+
+- original class
+- embedded members
+- extensions to the class, by order of import depth
+- extensions to the generic classes with which the original class complies, by order of import depth
+
+At each step, a conflict can occur if the embedded members, or extensions define the same method at the same embed/import depth. So practically, for the generic methods, the analyzer just goes to the modules one by one, checks if there are *any* generic methods with the right selector, and if there are, the compliance with interface is checked.
+
+The interesting thing is that a class is not anymore an absolute concept. A class is relative to the module in which it is used: its extensions, therefore its own interface, therefore its compliance to interfaces, therefore the generic extensions it can use. Only the members of a class are absolute, its data.
+
+Extending generic class templates
+---------------------------------
+
+One more level of tough. If you have a template interface, which is extended:
+
+	interface DoesFoo|(any T)
+		foo(T)
+	end
+
+	extend DoesFoo|(any T)
+		method foo_twice(T t)
+			foo(t)
+			foo(t)
+		end
+	end
+
+And some instance that complies with the interface (for a certain argument):
+
+	object Bar
+		method foo(num i) end
+	end
+
+Can you do:
+
+	local bar = Bar
+	bar.foo_twice(5)
+
+I mentioned earlier that it would force the analyzer to "solve" the problem: is there a type `T` for which `Bar` complies with `DoesFoo|T`? And it seemed a bit far fetched.
+
+But is it? In this newly realized vision where methods are simply listed in a module's global space, the previous generic method would appear as:
+
+	foo_twice(any T) -- for class DoesFoo|(any T)
+
+You are looking for selector `foo_twice(uint)`, you find method `foo_twice(any T)`. There is no "solving" to do, just check if `uint` complies to `any`. It does. Then you can bind `T` to `uint` and realize that this method is from class `DoesFoo|uint`. Finally, check that your `bar` object complies with `DoesFoo|uint`.
+
+It's definitely not trivial, but it's straightforward. No system solving. When you call the method, all its arguments' types are known, and therefore the selector is fully known as well. Matching it with "method templates" is simply a matter of binding arguments and checking compliance. The template specialization is then deduced by simple application of the arguments.
+
+It might be a bit of work for the analyzer, but it is definitely straightforward.
+
+Now on the other hand if you have:
+
+	interface Fooer|(any T)
+		foo(T)
+	end
+
+	extend Fooer|(any T)
+		method blah(SomeClass|T t) end
+	end
+
+	object Foo
+		method foo(uint i) end
+	end
+
+	-- elsewhere:
+
+	local foo = Foo
+	local meh = SomeClass|uint
+	foo.blah(meh)
+
+That one is tougher: we are calling method `blah(SomeClass|uint)` on object `foo`, which doesn't implement it directly. We go through the list of methods with name `blah`, and we find one `blah(SomeClass|T)` with `T` an `any`.
+
+Can the analyzer match `SomeClass|uint` to `SomeClass|T` with `T` binded to `uint`? And then check that `uint` is an `any`, and then that `Foo` complies with `Fooer|uint`?
+
+Should be ok. The template name is explicit, it's easy to see if you try to fit something that does not specialize it. It does not seem to be a logical problem. Only an implementation difficulty. I say it's ok.
+
+And these might seem like extreme cases, but not that much. Think of the native array, which is declared `#|(any T)`, or all sorting stuff, that would use interface templates and extensions to these. You really want to be able to write:
+
+	import sool:sorting
+
+	local foo = {1,3,2,4,3,5}					
+	local bar = {"blah","meh","lol","duh"}
+
+	foo.sort
+	bar.sort
+
+without have to cast `foo` or `bar` to anything, and without having to duplicate the sorting code. It should feel like a high-level dynamic language, while actually being a fairly low-level language behind the scenes.
+
+Having to go through imported modules in a certain order might actually make this process more efficient: instead of having to check *all* extensions, go by import depth and stop as soon as you find a single match in a given depth.
+
+Of course, it's all "left as an exercise to the compiler's implementer."

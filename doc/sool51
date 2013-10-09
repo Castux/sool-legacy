@@ -1,0 +1,212 @@
+The art of callbacks
+====================
+
+I've been learning quite a lot of Flash recently, and therefore, of ActionScript 3. It's an interesting language, and I might make a small review of the features I like. Today however, I'll focus on the library part of Flash, and in particular its event system.
+
+One of the original goal of sool was to make a general purpose language, but that would be particularly fitted to developing games, in particular prototypes or gamejams. Hence the emphasis on easy to use and fast to write. And necessarily, the idea that a game library (not to say "engine") will probably have to be written partly in sool at some point. And one particular thing in high level game libraries is that they often rely on the availability of callbacks for event systems.
+
+When using a low level multimedia library like SDL, the typical game loop is:
+
+- poll events (raw input such as mouse and keyboard)
+- treat events
+- update game state
+- draw
+
+In higher level libraries such as Flash, it's more a matter registering event listeners. If an object needs to react to certain events, they need to tell Flash "oh hai, please let me know any time this happens". For instance, a click, a mouse move, or even every time a frame starts.
+
+	addEventListener(Event.ENTER_FRAME, update);
+	addEventListener(MouseEvent.CLICK, onClick);
+
+And the "let me know" part is done through a *callback*. Of course, Flash didn't invent callbacks. The C standard function `sort` uses a callback for comparing elements in an array. In C, the callback is a function pointer. In higher level languages they might have other names or not be exact equivalents, but they exist often.
+
+What about sool? Firstly, we don't have functions, only methods, but that's almost the same. Let's see first if we can do without.
+
+Don't call me back!
+-------------------
+
+We could of course rely simply on polymorphism. If we take the example of the hypothetical MouseEvent, the library could define an interface `MouseEventListener` and force you to comply to it:
+
+	interface MouseEventListener
+		onMouseEvent(MouseEvent e)
+	end
+
+	-- and you'd use it:
+
+	local game = Game
+	system.registerMouseEventListener(game)
+
+Then every time the low-level system detects a mouse click, it will call generate an event `event` and call `game.onMouseEvent(event)`.
+
+That certainly works. But it's quite restrictive. It forces you to use a certain method name (that could collide with your own), and more importantly, it means that a given object can only have one particular method used as callback for this specific back-caller. Since the point of event systems is to be able to swap callbacks at runtime to achieve complex state machines, that's a bit limited.
+
+Certainly, we can define helper classes that simply wrap the other method:
+
+	object Helper
+		Game helpee
+		method onMouseEvent(MouseEvent e)
+			helpee.onOtherMouseEvent(e)
+		end
+	end
+
+But that's definitely horrible.
+
+Real callbacks
+--------------
+
+Furthermore, callbacks can be used for a variety of things that may require many callbacks on a single object. With the object and message metaphor, callbacks fit in perfectly: "send me this message when you're done". "Call `foo` on me in five minutes." "If a keypress comes, tell me to `handleKeyPress`", and so forth.
+
+To do that, we need a syntax to give the information of which method to call later on. In C, where parentheses are mandatory for a function call, the function name is itself a pointer to the function. In sool, the naked method name is already a call to the method. We need an additional token to mean "literal method name". We don't have many symbols left.
+
+	timer.registerCB(@my_method)	-- or &, $, `
+	
+And on the caller side
+
+	object Timer
+		Callback cb 	-- problem 1
+		method registerCB(Callback cb)
+			self.cb = cb
+		end
+
+		method update()
+			// assume timer timed out
+			cb.call() 	-- problem 2
+		end
+	end
+	
+Whatever the syntax, several questions are raised.
+
+Problem 1. In C, the function pointer is a complex recursive type that embeds the arguments and return types. `foo` might be a pointer to a function taking an int, a uint and returning a pointer to char. Since sool is fully typed we would need something similar: a type that includes arguments and return type. Suppose something like:
+
+	@uint(text,num)		-- a method that takes a text and a num, and returns a uint
+
+This "method type" could be used to declare method arguments and class members. We need to store the callback before we can call it. But everything in sool is an instance of a class. So we would have objects (or values) which contain callbacks and themselves answer to methods, can be assigned, etc. So `@text(uint)` would be in fact a class, the class of callbacks that take a uint and return a text.
+
+But beware, methods are not functions, they need a receiver. Is it automatically the one who emitted the callback object? Is that information included inside the callback object? Probably.
+
+	method text my_method(uint i) end
+	
+	-- later
+	local cb = @my_method
+
+would create a callback object of class `@text(uint)`, passing it the information of `self` and of where to find the actual method.
+
+Wait, that sounds suspiciously close to defining an interface and casting `self` to the corresponding generic type. Except that interfaces require fixed method names while this allows you to pick any method you like, as long as the types match.
+
+In these examples, using type `@Foo(Bar)` and letting an object Object write `@my_method` is somewhat equivalent to defining:
+
+	interface Anonymous123
+		Foo call(Bar)
+	end
+
+	object Wrapper123
+		Object receiver
+		method Foo call(Bar b)
+			receiver.my_method(b)
+		end
+	end
+
+	-- later
+	local wrap = Wrapper123(myobject)
+	local cb = wrap to Anonymous123
+
+	-- and somewhere else
+	cb.call(Bar)
+
+Of course it sucks to have to write it, but the mechanism is already in the language. Dynamic dispatch is nothing more than object pointers stuck with method pointers to them. Except that interfaces require not only matching types but also matching names ("can you do `uint foo(Bar)`", versus "can do you anything with a `Bar` that returns an uint?")
+
+Interfaces with renaming
+------------------------
+
+Inside a generic type, the original name of the method in the non generic type doesn't matter, it's just a function pointer. What if the casting syntax could be enriched with a way of selecting the method you want?
+
+	interface Callback
+		uint call(Foo)
+	end
+
+	object Meh
+		method uint my_method(Foo f)
+		end
+	end
+
+	-- later
+	local meh = Meh
+	local cb = meh to Callback with my_method as call
+
+Lulz. "When casting, map `my_method` to the one supposed to be `call` in the interface". Could even have more than one:
+
+	meh to Callback with
+		my_method: call,
+		another: something_else
+	end
+
+It seems that it would work, but it's not very satisfactory either.
+
+What would others do?
+---------------------
+
+The D language has "delegates", which are pretty much what I've been describing: a sort of "method reference", that contains a receiver and a method to execute.
+
+	int delegate(int) dg;	// declare a delegate to a method that takes an int and returns an int
+	dg = &obj.meth;			// set dg to refer to method meth on object o
+	dg(5);					// call obj.meth(5);
+
+And of course you can pass delegates around, store them, call them, etc.
+	
+	my_lib.registerCB(&this.onClick)
+
+A delegate is really just an object reference and a function pointer. It's clean and nice, but requires to have a new recursive type. In sool, the only type we have is the class, that can be templated with parameters. Even the array `#num` is just `sool:array|num`. We could have some standard `sool:delegate`, that would be a template as well. Unfortunately our templates have fixed numbers of arguments, so we'd need to have a different class for combination of numbers of arguments and return values:
+
+	object delegate2_1|(any ret1, any ret2, any arg1)
+		method ret1,ret2 call(arg1 a)
+		end
+	end
+
+Unacceptable, (just like in my discussion of functors we had Predicate, BinaryOperation, etc.) And if we can't provide these in standard (can't really write an infinite number of combinations), it means the user would have to write his own delegate class when needed, thus doing a very low-level wrapping job.
+
+Having the delegate as a language feature would imply having variadic templates. Oh lord.
+
+Compromise
+----------
+
+Since the low-level mechanism exists already (dynamic dispatch through interfaces), and that is needed to make it work is glue, maybe the compiler can fill in the glue. Syntactic sugar, whatever.
+
+1. When you need to store "method pointers" or "delegates", write an interface with a single method `call` and the appropriate types. Or use the few standard ones (interface templates with up to two inputs, two outputs, for instance).
+2. Ask the user to provide this delegate as a generic instance of that interface.
+3. Have a syntax that lets you select an instance and a method, such as `&self.foo` or `deleg(obj,meth)`. This has to be stored immediately as a generic instance of a compliant interface.
+
+Semantically, what the compiler does is make a wrapper class that statically wraps the given method in the `call` method. In reality, it can bypass the actual wrapper class, and simply store the instance reference and the method pointer, exactly as when casting an object to a generic. That way, if your object already has the `call` method, it's strictly just a cast (and you can pass `self` or any other object that complies). Otherwise you do the "cast to interface with remapping", to select another method than `call`. Being able to remap several methods would be nice too, if you need multiple callbacks on the same objects (`onStart` and `onFinish`, or something). Plus, the general mechanism of being able to comply with interfaces by simply changing your method names is powerful. Interfaces which were sets of prototypes, become sets of arguments types and return types. Even more generic.
+
+The final syntax, I don't know. It should be an extension of the casting syntax, obviously.
+
+	cb = obj to Callback with
+		onStart = handleStart,
+		onFinish = killPlayer
+	end
+
+Doesn't look so bad after all. And it could be shortened. If the expression is assigned immediately to a variable of the generic class (for instance also passed as argument), you don't need to indicate it, it's inferred:
+
+	lib.registerCB(obj with
+		onStart = handleStart,
+		onFinish = killPlayer
+	end)
+
+And if there is no ambiguity (interface inferred, and the interface only has one method with matching types, or one possible mapping of the methods):
+
+	obj with handleStuff end
+	obj with doThis,doThat end
+
+That's quite short, and that would be the common case, for callbacks. It could be even shorter if `self` is implied, using one of our free tokens:
+
+	cb = !handleStuff	-- is actually "self to SomeCallback with call = handleStuff end". Not bad for sugar :)
+
+Or maybe:
+
+	cb = &handleStuff	-- reminiscent of function address, is also D's syntax
+	cb = `handleStuff	-- huh?
+	cb = @handleStuff	-- at does mean "it's there". Does it actually make sense?
+
+Could even give a different object than self, for free:
+	
+	cb = obj!handleStuff
+
+Coolio, finally used my `with` keyword!

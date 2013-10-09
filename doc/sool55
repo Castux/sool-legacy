@@ -1,0 +1,148 @@
+sool's identity crisis
+======================
+
+Pun intended. Yes, really.
+
+What's the problem? Not a problem, really, just a time to sit back, and figure out what sool has become, albeit conceptually. It started as "Lua with static typing". And this lead to a waterfall of consequences that greatly increased complexity.
+
+Static typing leads to named constructs: objects. An object centric design is nice to think of as "every thing is an object, every action is a method call". Every thing is an object leads to awkward performance for primitive types and "small objects". We create structs with value semantics. Every action is a method (including member access), combined with structs, leads to the necessity of still being able to manipulate structs by reference. With the compromise between: explicitely, which adds more syntax and features, or implicitely, which add more "behind the scene" stuff.
+
+Also, every action is a method rules out simple functions, makes factory methods special cases of constructors, and external C functions as well.
+
+Plus, on top of that, we want interfaces for elegant generic programing and polymorphism. And templated classes for containers (plus more efficiency on critical algorithms).
+
+Not so simple anymore.
+
+Initial goal
+------------
+
+Lua is a beautiful language, in great parts thanks to its simplicity. Of course, being dynamic in nature makes that quite easy: delay every kind of semantic checks to runtime. In fact almost everything is allowed in Lua, thanks to metamethods. Very few operations fail, and they usually come down to trying to call or index nil.
+
+But its simplicity doesn't mean it's not a rich language. Thanks to very flexible core elements, and a handful of smart syntactic sugar, Lua looks *almost* like a fully blown object-oriented language, with functional programming capacities.
+
+The problem - to me at least - is that amount of freedom. When everything is allowed, it's just too easy to take shortcuts that eventually turn out to be self-foot-shooting. If my brain cannot be rigorous and disciplined enough, then the language must force me. It's fine for small scripts, but as the codebase grows, the discipline diminishes and spaghetti occurs.
+
+That lead to this new language idea, in which I'd toss the features I want to see in a "stricter Lua that can be compiled to machine code". Let's see what went "wrong" on the way.
+
+Object centric language
+-----------------------
+
+It's hard to avoid the concept of "objects". It doesn't have to be fully compliant to the principles of object-orientation (I abandoned inheritance already), but basically everything you do (or *I* do at least) when programming is defining data structures, and actions that can be taken on them.
+
+Hence, objects and methods.
+
+But methods are, fundamentally, just syntactic sugar for functions with a hidden argument. If you write object-centric code in C, you make structs, and functions that take pointers to this struct as a first argument. Why sugar? Because with language supported "methods", you hide the hidden `self` argument in function prototype and body, and the method call syntax is more natural. It also makes natural namespacing for methods.
+
+That's great. But it's just syntactic sugar. The core is still just structs/objects and functions. Maybe we could go back there.
+
+Values and functions
+--------------------
+
+Suppose we build the language from scratch again. The very basis is primitive types, undivisible. Most of them are value classes, so the next thing we build is composite types, that group other values. That's C structs.
+
+Then we have functions that take in values, compute stuff, have side effects, and return more values.
+
+But then very fast we realize that copying structs all the time is not very practical, in term of performance and semantics. So we invent the object, which doesn't live in a variable, but in a magical space that can be accessed from anywhere. No need to copy objects around, only their *identity*. That's what pointers and references contain.
+
+The only difference, in C++ terms (which I adopted here), is that pointers need to be dereferenced explicitely, while references are automatically treated "as if" they where the object itself (except for assignment and identity comparison).
+
+In C++, everything is explicit. Classes define values, but you can choose to create them in the heap to make objects, and you manipulate them through differently typed variables (pointers). Every function or method specifies the exact type of its arguments, pointers or plain types. The hidden `self` argument is always a pointer.
+
+In Rust or Go, same deal, only with a bit of syntactic sugar to automatically dereference pointers or take pointers to values. Methods are also written for specific receivers (plain type or pointer to it).
+
+In D, you decide when writing a class whether it's going to be only values or only objects, so the syntax for using them is almost identical. But arguments can have a `ref` keyword to be able to modify the outside variable, practically allowing you to have pointers to structs. The hidden `this` argument for structs is itself a `ref`.
+
+And there you have it. The more flexibility you want, the more syntax you need (dragging those pointer types around for instance). It's also more explicit, you always know what is what (pointer or not). On the other hand, if you want something simpler and less verbose (value/object-ness decided by class writer, manipulation of both with identical syntax), then you have less flexibility and transparency.
+
+Full disclosure is - for sool - too much information. I discussed this before, but I think the D way is the sool way, because it's simple and in most cases sufficient. And when really necessary, it's easy to box a value in an object. The only thing you cannot ever do is use an object as a true value. But you can semantically reproduce the behavior by doing copy assignment, content comparison, and even internizing. Close enough.
+
+For the deep struct access and return issue, we only need the `ref` passing and returning. And all our problems are solved. Yes they are.
+
+Methods
+-------
+
+One last thing left. In the grand "every action is a method call" scheme, we force every function to be attached to a class and have a `self`. This gave us two problems:
+
+- no void or object-less functions possible (but they're nice for factory methods and static class functions, not to mention anonymous functions, especially callbacks)
+- struct methods must be sent to `ref self`, but object methods don't need to, so which is it?
+
+Also, in low level, methods are really just functions in class namespaces, with hidden `self` arguments, and nice call syntax.
+
+Lua only has functions, but syntactic sugar to make them look like methods if you put them in tables.
+
+	function Foo:bar() end		-- is really:
+	function Foo.bar(self) end
+
+	obj:bar(arg)				-- is really:
+	obj.bar(obj,arg)
+
+And D actually lets you call functions like methods, transforming their first argument into a receiver:
+
+	void do_the_foo(Foo f, int arg)
+	{
+	}
+
+	// later:
+
+	Foo f;
+	do_the_foo(f,20);	-- is exactly the same as:
+	f.do_the_foo(20);
+
+Oh see how beautiful this is! Can we design a system that follows the beautiful Lua tradition of simple core concepts, and syntactic sugar?
+
+Classes
+-------
+
+The first and foremost purpose of writing a class in sool is to name a type with a specific data layout (the members). But in the same block, we can also add methods. How about saying that writing methods is really just writing functions with the hidden `self` argument. *Litteraly*. Instead of conceptually and in hidden form.
+
+	object Foo
+		uint i
+
+		method uint add_it(uint meh)
+			return i + meh
+		end
+	end
+
+Would be strictly equivalent to:
+
+	object Foo
+		uint i
+	end
+
+	function uint add_it(Foo self, uint meh)
+		return self.i + meh
+	end
+
+Thanks to the fact that argument types are part of the function's selector, there is no inter-class collision risk. If the first argument is a `Foo`, this is conceptually part of the `Foo` class.
+
+Of course, that requires having functions as a language feature. Say we do. They are local to the current module, so no name collision there either, but they are exported just like classes.
+
+Remember extensions, to add methods to classes? Ha, again, they are just here to help with the syntax:
+
+	extend Foo
+		method print_your_i()
+			print(i)
+		end
+	end
+
+	function print_your_i(Foo self)
+		self.print(i)
+	end
+
+Exactly the same! And so transparent! This is what happens at low level. Why hide it? You never *have* to write functions, if you prefer the "method" syntax. But it's the same!
+
+Also: choose if your `self` is `ref` or not:
+
+	function blah(ref Foo self)
+		self = Foo()	-- haha, changed self!
+	end
+
+	-- later
+	local f = Foo()
+	local f2 = f
+	f.blah
+	assert(f is f2)		-- FAIL
+
+It's transparent and nice.
+
+Let's move the rest to a new article.

@@ -1,0 +1,94 @@
+Arrays and slices
+=================
+
+Arrays in sool, like in many modern languages, should be a little bit smarter than C arrays. C arrays are just a chunk of contiguous memory, with a pointer to the first element. All the rest is pointer arithmetics. The biggest issue with these is that the length of the array is not known, so you always need to keep it around and make sure your accesses are valid.
+
+sool has to be memory safe, and as much as possible, prevent logical bugs as well. Therefore, sool arrays must know about their length, and accesses rendered safe via compiler enforced rules. On the top of my head, there are two main ways to do so.
+
+Length + data
+-------------
+
+The first obvious way to have an array know its length, is to stick the length at the beginning of the array, in the chunk of dynamic memory. The runtime can easily check the length before any element access and generate appropriate errors.
+
+That's a reasonable way to do things. The array is manipulated by reference, just like a regular array. You can have functions to duplicate, resize, insert, etc. Every reference to the array sees the same array.
+
+One particular downside is that you can't use the same data type to refer to sub-arrays. All the arrays must be "unique" and their reference point at their beginning, where the length can be found.
+
+However, you could share a subarray by giving the reference to the array, and an offset inside of it. It's a bit convoluted, but would work. And more importantly, it would have to be a different type.
+
+Slices
+------
+
+What if the length information was not included in the array, but in the reference to it? When you allocate the memory, return a pointer to it, and the length, bundled together in a special type called slice.
+
+Now imagine you'd advance the pointer by 10 elements, and reduce the length by 10. Woo, subarray! They point at the same data, and they both have a valid length information. We assume that we are in a garbage collected environment, so as long as any part of the array is accessible, the whole chunk will exist.
+
+Slices are pretty convenient for subarrays, and if they have fancy semantics, they can make some operations very easy. Anything is possible:
+	
+	s = #uint(100)		-- s is a slice representing an array of 100 uints
+	sub = s[3,6]		-- sub is a subslice of s
+	s[1,4] = foo		-- assign foo to elements 1 to 4
+	s[1,2] = s2[6,7]	-- copy a slice to another
+	s[] = 0				-- init entire array
+	lol = s[2,6] + 4	-- apply operation to entire slice
+
+All of this can be figured out when making the library, as long as the base semantics are well defined.
+
+Of course, you have to remember that slices actually share the same data, they are just different views of the same chunk of memory, so modifying through one will have consequences for others. But that's called aliasing, and it's nothing new.
+
+And note that we don't need a separate type for the full array. We just remember that the first slice returned at allocation actually spans the entire array.
+
+Growable arrays
+---------------
+
+A modern language wouldn't be called dynamic if its arrays weren't resizable. You can always fake it by creating a new array with the desired size, copying the elements that fit into it, and delete the old array. But we all know that it leads to terrible performance for even the simplest operations like pushing N elements at the end of the array, the dreaded `O(N*N)` complexity.
+
+The "proper" approach is to do what C++ does with its `std::vector`s, that is, always allocate more than the requested size, and pretend that the array is smaller than it actually is. When pushing new elements, you then magically find room right here at the end of the array, and just increase the `length` field accordingly. When reaching the *actual* end of the array, *actually* resize, and add a lot of free space at the end. Rinse and repeat.
+
+Science tells us that the most efficient way to do this is to double the array's size when reaching full capacity. This leads to the so called "amortized constant" complexity for pushing at the end. That is, pushing N elements at the end of the array will take, on average, N operations. Which is, on average, pretty cool.
+
+One way to do that is on the language side, a wrapper around the basic array, just like `std::vector`. Add a "capacity" field, which gives you the actual size of the array, and handle the logic of resizing only when your full capacity is reached.
+
+Or you can do it the D way: be a smartass, and *always* allocate chunks in power-of-2 sizes. That way, if your array is 10 elements long (it's actually 16), and you push something at the end, the system tries to resize to 11, which is really 16, and no realloc occurs. The length is returned as 11, and you had a constant time insertion. Only when you step over a power of two will an actual realloc occur. Magical built-in amortized constant time appending!
+
+Slices and realloc
+------------------
+
+That's all very nice, but what happens with slices? How do these "vector-like" operations work with a slice that refers to only a part of a chunk?
+
+The problem is that we don't really know when an array will be resized in place, or when it will be copied to a fresh new chunk. Assuming the "power of 2" allocation rule:
+
+	a = {1,2,3,4,5,6,7,8}
+	b = a
+		
+	a.push(9)	-- this triggers actual realloc
+
+Here, `a` is given a reference to the new chunk, but `b` still refers to the old one. They are now separate arrays. If you intended to use `b` as a shortcut to `a` in an another part of the program, you will have problems. `a` might be your list of game objects, and you can't allow different parts of the program to see unsychronized lists of game objects. Darn.
+
+Of course, you can always box the slice and use this everywhere. Make sure that everyone uses the slice inside the box, instead of their own slice. That's one more level of indirection, and that is how Lua arrays probably work.
+
+Note that semantically, we could make sure that no function modifies (grows) a slice in place. By forcing you to take a return value, it makes clear that it might be something else than what you passed:
+
+	a = a ~ elem	-- and not a.push(elem)
+
+But then we lose the "array as an object" semantics that Lua has, and convenient methods like in-place concatenation, appending, insertion and deletion. These additional methods would have to either return a new slice, or act upon a boxed slice only (an *actual* object).
+
+Slices and growth
+-----------------
+
+D somehow manages to still have the slice as the main (only!) way to manipulate arrays, and do appending and concatenation directly on the slices. Best of both worlds? We know that for performance reasons, D always tries grow/reallocate in place. But wouldn't that be a huge mess if many slices referred to different, possibly overlapping parts of arrays?
+
+Yes. However, the D semantics add the condition that "It will always do a copy if [...] resizing in place would overwrite valid data in the array". Valid meaning being part of another slice. Yikes. The D runtime keeps metadata about all slices to check what pieces of array are actually used and which are free to overwrite. That sounds like a lot of overhead.
+
+According to [this](https://raw.github.com/youkei/dlang-ref-jp/master/d-array-article.dd) article, it's a tad less systematic than that. The only information kept by the runtime about an array is the number of used bytes in it, dividing it into two contiguous parts: the valid data, and the unused data. If a slice ends at the end of the valid data and tries to expand, it will expand into the unused data. Any other growth operation will trigger a reallocation and a copy.
+
+So the D arrays actually have a "used length" field at their beginning, and thanks to the garbage collector, we can always find, from a pointer/slice, the base object to which it points. But this is apparently is fairly costly operation (log(N), according to the same article), so the D runtime caches the last few lookups to speed things up, resulting in a convenient and efficient system.
+
+Final note: all the D library operations for inserting into arrays actually act on slice *references*, thus allowing to modify them in place, in the likely case that reallocation will be triggered. In sool terms, this would mean writing methods on boxed slices. The alternative is of course having methods that return a new slice.
+
+What to do?
+-----------
+
+The D slice seems to me like the ideal system. It's lightweight and efficient. And as long as we have the exact semantics in mind, very clear and simple.
+
+Both Go and Rust have somewhat equivalent systems, except that there, the array itself is a base value type (and can be stored on the stack), and the slice is a reference to a boxed version of it. But quite the same.

@@ -1,0 +1,238 @@
+Structs and references (again)
+==============================
+
+Structs, or value classes, have been a problem since I decided I wanted them. Their only raison d'être has been performance, as functionally they can be entirely replaced by objects. And additionally, the value type semantics is inherent to some of the built-in classes (number, boolean, text, etc.), so it's a feature that we'll need at low level no matter what. Might as well make it available to the user.
+
+Reminder: the struct problem
+----------------------------
+
+Structs were originally defined semantically as "exactly like objects, but always copied at assignment". And implementation wise, allocated on the stack (or even registers if the compiler sees it fit).
+
+This comes with two major problems:
+
+1. The `self` parameter for methods defined on structs would be itself a copy of the original, therefore making every struct immutable.
+2. Even assuming the first problem solved, member access is a method call, and therefore in case of struct members, would return copies, making struct members immutable.
+
+After several rounds of self discussion, I had come up with the solution that the `self` parameter would be actually a reference, and that some methods (in particular member accessors) would also return references, which could be returned immediately as references as well. Every other use would be a copy.
+
+This solution was utterly unsatisfying, because of all the hidden shenanigans used to make "expected behavior" work:
+
+	obj.structMember.foo = 5
+	someStruct.modify()
+
+What would Jesus do?
+--------------------
+
+When in doubt, steal. Both C++ and D have structs and methods on structs. Assembly analysis reveals that they (obviously) pass the `this` parameter as a pointer, and access it as a pointer (`this->` in C++, and `this.` in D).
+
+However, since both languages also have pointer and reference syntaxes, any other plain struct argument or return value will be copied unless stated otherwise.
+
+Go and Rust, however, have an interesting twist on this: methods are defined not in classes, but for specific receivers. In other words, the `self` or `this` parameter is explicit. And it can be of either type: the plain struct, or a pointer to it.
+
+The method syntax there is a very thin wrapper over the low level reality, which is that methods are functions. And if you can decide to pass parameters by copy or reference to a function, why not also the not-so-special `self`?
+
+If you define a method on a plain struct, then it will be copied, or equivalently, read only. If you define a method on a reference to a struct, then obviously, the struct can be modified in place.
+
+And in a funny manner, it works also for primitive value types. With our extension syntax, we could very well have (assuming passing by reference):
+
+	extend num
+		method doubleIt()
+			self = self * 2
+		end
+	end
+
+	-- somewhere
+	local a = 5.0
+	a.doubleIt
+	assert(a == 10.0)
+
+In any case, it seems that `self` *must* be passed by reference, always. This was already our earlier conclusion. What about problem 2?
+
+Return by reference
+-------------------
+
+The second problem is linked to the fact that sool has member access done through methods and therefore returning a member (or an array element, too) would return a copy, making it impossible to modify without reassigning a whole new struct.
+
+In C and others, member access through the dot is really, in low level, returning a reference (the address of the field inside the struct), which is then used to read or write info.
+
+What if sool always returned structs by reference?
+
+	-- obj.struct is "a reference"
+
+	obj.struct.doThing		-- or obj.struct.foo = 1
+	local copy = obj.struct
+	return obj.struct
+
+Look at the three things we did there:
+
+1. calling a method on the returned struct
+2. assigning the struct to a local (or something else)
+3. returning the struct
+
+The first one would, as expected, call the method on the remote struct, by forwarding directly the reference we just received from `obj`.
+
+The second one would copy the struct, because the reference is not a type (like a pointer), you can't store it or modify. It's always automatically dereferenced.
+
+The third one would return the reference directly, as expected for chaining accesses.
+
+So far so good.
+
+What happens with:
+
+	method Struct giveStruct()
+		local foo = Struct()
+		return foo
+	end
+
+We're supposed to return `foo` by reference, but it's a local, it's living on the stack, its life ends when the method returns. It's a classic error in C.
+
+Rust allows it, in the form of the "borrowed pointer" a general purpose pointer that can point at anything of the right type. Even locals from inner functions. How does it work? Simple, the local is boxed into a heap allocated memory chunk, and a reference to that is returned. Of course, garbage collection takes care of the details after use.
+
+Wow, wait, isn't that horrible performance? Allocating memory for a return value? Well, it can probably be optimized somehow. First if the method is inlined, the whole allocation step can be bypassed. Also, the calling method might reserve some stack space and have the callee fill it with the value. The compiler might be doing that anyway, when returning "normal" structs.
+
+What matters is that the semantics at high level are respected. If you return a local struct, all that can happen to it is calling a method on it, in which case it works, or be copied somewhere else, which works as well.
+
+Are there downsides to always return structs by reference? It can be a tad confusing that value objects are always copied at assignment, except the "special assignment" that is returning a value. Then again:
+
+	local foo = obj.member
+
+`obj.member` is the return value, it's a hidden temporary local variable. We might argue that it hasn't been assigned yet. Only the presence of the `=` sign could be considered as an "assignment" in the rule that struct are copied at assignment. That and when passed as arguments, because they get a new local name in the function.
+
+Again, as long as the semantics are clearly defined, everything is allowed. But it's still not very satisfying. It feels like an added hack, for something that should be a core feature.
+
+Finding the culprit
+-------------------
+
+The second problem was based on the fact that member access in sool is done through methods.
+
+	foo = obj.member	-- is really method: Type member()
+	obj.member = foo	-- is really method: member=(Type)
+
+This is always fine with objects, because they are stored as references already. The problem arose with structs.
+
+So why did we have this in the first place?
+
+1. So that member access and method call have the same apparent semantics (encapsulation, from the outside it doesn't matter if it's an actual member or if you computed the result, or set something elsewhere than in a member)
+2. So that member access participates in the class's interface (for dynamic dispatch)
+
+Earlier, we still had inheritance and the idea was that you could override a member with methods. Now we have interfaces and the idea is that an object with a member `Foo foo` works just the same as an object with a method `Foo foo()`.
+
+So I decided, members only define the memory layout of the object, but they are accessed with compiler provided methods, the getter and the setter. And you can also define methods that looks like getters and setters, and make the object look like it has another member.
+
+First point: can be waved by just allowing it in the grammar. `obj.foo` can be either accessing member `foo` or calling method `foo`, whichever happens to exist.
+
+Second point: the compiler can provide glue methods, used specifically when casting an object to a generic, to access its members as if they were methods. No fuss required.
+
+And then define "member access" as this magical operation that brings the desired nested variable to first level, to be used as right or left value.
+
+To be fair, documentations don't always explain what member access is. D just tells you what the syntax for it. Lua has a fuzzy explanation about variables being location where values can be stored. Rust is quite formal though, about lvalues, rvalues, and what they mean in different contexts.
+
+Anyway, the result is that these rules - explicit or not - involve the fact that an expression is used:
+
+1. as a value as rvalue
+2. as a location as lvalue
+
+Even the most evident thing, assignment, is actually quite confusing when you think about it.
+
+Even then...
+------------
+
+Assume we define member and array access as the magical thing that always works, and is separate from method call. We still want the glue accessors, and the glue indexing so that we can build wrapper objects that look like containers (especially when embedding):
+
+	object Foo
+		method Elem [](uint index)
+			return Elem()	-- dummy
+		end
+
+		method []=(uint index, Elem e)
+			-- discard
+		end
+
+		method Elem fakeMember()
+			return Elem()	-- dummy
+		end
+
+		method fakeMember=(Elem e)
+			-- discard
+		end
+	end
+
+	-- later
+	local foo = Foo
+	foo[19].modify()
+	foo[50] = Elem()
+	foo.fakeMember.modify()
+	foo.fakeMember = Elem()
+
+Looks cool. Except that for this particular Foo class, the syntaxes for field access and indexing will not be the magically defined low-level ones, but resolve as simple method calls.
+
+In particular, the `modify()` calls would happen on the variables that were returned. If we don't have a syntax to return a reference (ie. an address), we can't extend the "expected behavior" to manually defined accesses and indexings.
+
+Explicit references
+-------------------
+
+So it's clear, we need references. Maybe not as a full blown recursive type, but at least for the matter at hand: return values.
+	
+	-- suppose foo is a member or in an array we know of
+
+	method ref Elem fake()
+		return foo		-- return the address, not the value
+	end
+
+	-- elsewhere
+
+	local foo = obj.fake	-- dereference, copy
+	obj.fake.modify()		-- modify original!
+	obj.fake = haha			-- yep, we know where it is!
+
+Huh, we don't even need the setter methods anymore. Any method that returns a single reference can be used as if it was a member. Thus we can even come back to the original concept that member access is method call. A method call that returns a ref, and can be used both as left and right value!
+
+Same goes for indexing. Same goes for anything. Would that be the magical solution? We needed the reference at least at low level anyway for the `self` param, so why not for return values.
+
+Note that it's necessary to have them for objects as well, now that the `fake=` style setters are gone. But when they'll be used in rvalues, the compiler will happily bypass the whole "return a ref and deref it immediately" part.
+
+We lose the ability to use `foo=` setters for doing anything else than actually setting a real variable, like doing input validation. Maybe it wasn't a killer feature anyway.
+
+Conclusion: it's actually pretty simple
+---------------------------------------
+
+- for value classes methods, the `self` hidden argument is passed by reference
+- any method with a single return value can be declared to return by reference
+- a reference (as returned by such method) cannot be stored, it must be either:
+	- the recipient of a message
+	- assigned to a variable, which copies the original variable
+	- returned as a reference
+	- used as left value in an assignment
+- each member `Class name` in a class has a compiler provided accessor method `ref Class name()` that returns a reference to it
+
+And I think that's it...
+
+Fun stuff
+---------
+
+- `obj.foo(1,2,3) = 4` is completely valid and simplifies the grammar. Every method call can be a left value, the validity is determined by semantic analysis (is it a reference?)
+- built-in read-only variables: make an accessor wrapper. Return normally, it's a copy, return by reference, the caller can modify it (whether it's a struct and all its content, or an object reference)
+- return by ref or not is now part of the method's prototype, and participates to interfaces, for binary compatibility between methods in dynamic dispatch. Compiler could automatically wrap by-ref into normal, though.
+- the word "reference" is getting a tad confusing, given that it's the one we use for these object pointers that are automatically dereferenced
+
+A change of words
+-----------------
+
+Since it can be confusing to have "reference" mean two different things (albeit related or even similar), maybe we can slightly hide this concept in a higher-level point of view. But still explicit, because we don't want to hide things too much.
+
+We now know that this new "return by reference" concept is essentially meant to wrap containers and provide accessors to internal (or in any way remote) variables. And that the most natural accessors are these that the compiler provides for the class members. Why not call this an "accessor method", and make it even clearer:
+
+	object Wrapper
+		Struct struct
+		#Struct array
+
+		accessor Struct fake()
+			return struct
+		end
+
+		accessor Struct [](uint index)
+			return array[index]
+		end
+	end
+
+They're still methods, but they return a "magical thing" that makes the expression a left value, and makes you modify the original returned thing, not a copy.

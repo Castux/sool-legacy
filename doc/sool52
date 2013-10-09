@@ -1,0 +1,119 @@
+The art of closures
+===================
+
+In the previous episode we talked about callbacks, and more generally, of method delegates, which we decided would be only casting to interfaces with remapping of the method names. A concept often associated with callbacks is the anonymous function. In Lua or AS3, functions are first-class elements, can be stored, and called later.
+
+	local fun = function(i) return i*2 end
+	print(fun(2))	-- prints 4
+
+This is especially useful for callbacks
+
+	lib.registerCB(function() print "done" end)
+
+In our approach in sool, there are no functions, only methods on an object, and methods are always named: "when you're done, call my method `onCallback`":
+
+	object Foo
+		method initLibrary(Library lib)
+			lib.registerCB(!onCallback)
+		end
+
+		method onCallback()
+			io:print "done"
+		end
+	end
+
+But sometimes it's quite cumbersome to make a whole new method just for one meager instruction. And you might end up encumbering the method name space (`callback1`, `callback2`, etc).
+
+What would be the equivalent of the anonymous function in sool?
+
+Anonymous method
+----------------
+
+Well, obviously. All objects can do is send messages to each other and run methods. So any piece of code has to be a method on an object. No problem. Let's make anonymous methods:
+
+	lib.registerCB(method() io:print "done" end)
+
+This would create a method on the current class, without a name, and the expression would directly return `self` casted to the generic class required as a callback.
+
+This also means that this floating `method` block can only appear where an interface can be inferred, or something is explicitly casted:
+
+	local cb = self to Callback with method(uint i) return i*2 end
+
+Hey, it's not even that bad! Obviously, these are real methods and can use the members and methods of the object they're added to:
+
+	object Foo
+		uint i
+		method init(Library lib)
+			lib.registerCB(method() i = i*2 end)
+		end
+	end
+
+To close or not to close
+------------------------
+
+So far, these anonymous methods are exactly like named methods, except they have no name and are defined in the middle of other methods. But languages often associate the concept of *closures* with anonymous functions. Simply, it means that anonymous functions can access local variables in the scope in which they are defined. Every time the code is called, the environment is "closed" and a new closure is created: a pointer to the function, and a bit of data representing the environment when it was closed. Example in Lua:
+
+	local funcs = {}
+	for i = 1,10 do
+		local tmp = function() io.write(i, ' ') end
+		funcs[i] = tmp
+	end
+
+	for i,func in ipairs(funcs) do
+		func()
+	end
+
+	-- prints: 1 2 3 4 5 6 7 8 9 10 
+
+And the "upvalues", the outside locals, are modifiable. Different functions can even share the same closure :
+
+	do
+		local i
+
+		set = function()
+			i = 10
+		end
+
+		read = function()
+			print(i)
+		end
+	end
+
+	print(i)	-- prints nil	
+	set()
+	read()	-- prints 10
+
+Outside the `do ... end` bloc, the variable `i` does not exist anymore. The functions work on an anonymous hidden object that initially contains a copy of `i`. But if the original variable is still in scope when calling the functions, it is the one that gets changed:
+
+	local i = 1
+
+	set = function()
+		i = 10
+	end
+
+	read = function()
+		print(i)
+	end
+
+	print(i)	-- prints 1
+	set()
+	print(i)	-- prints 10
+	i = 20
+	read()		-- prints 20
+
+The ability of functions to "close" on their environment is super powerful. A closure is like a function with state. It's quite equivalent to a functor with members, except it's all anonymous. We could have things like this:
+
+	local arr = {1,2,3,4,5}
+	local sum = 0
+	arr.apply(method(uint v) sum = sum + v end)
+	sum.print 	-- prints 15
+
+And things like return types could even be inferred.
+
+In terms of implementation, full closures as described are a little bit complicated, because they force to determine which local variables are going to be upvalues in a closure, and these need to be allocated on the heap, so that the closure can still access them once the original went out of scope. But heh, it's not that bad. And with our syntax, nothing prevents you to also write anonymous methods on objects other than self:
+
+	register(obj with method()
+		-- do obj things
+	end)
+
+I like this. I fear feature creep, but remember the original goal of sool: a language as usable and dynamic as Lua in appearance, with an object system and strong typing. Anonymous functions are a must for dynamic behaviors, and anonymous functions are quite crippled without closures.
