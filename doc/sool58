@@ -1,0 +1,132 @@
+Unified member access and interfaces
+====================================
+
+This last article told us that there is now two ways to read a member (or element in an array): through a method that returns the value directly, or through a method that returns an alias to it. As for setting, there is also two ways: an alias, or a setter method.
+
+How does that work with interfaces? They work only with methods, which is fine because member access is (still) always done through methods.
+
+Reading
+-------
+
+Now suppose an interface describes objects that have a "color" member, real or fake. If we only need to read it, we can always do:
+
+	interface Colored
+		Color color()
+	end
+
+First issue: objects with *actual* `Color` member will only have the compiler-provided accessor, which returns an alias to `Color`. On the other hand, objects that expose a fake `color` member will probably *not* have an alias to return, if it is procedurally generated. Also, some object might not *want* to expose an alias, as it would allow the outside world to modify it.
+
+The most general case must win: in a read-only scenario, the vanilla non-alias method should be all that is needed. But then how can we cast an object with only the alias method to a generic that expect a return value of the actual type?
+
+	object Pumpkin
+		Color color
+
+		-- automatic:
+		method alias Color color()
+		end
+	end
+
+If we just gave a pointer to a Pumpkin as a generic Colored, the `color` method would return an alias instead of a `Color`, and the low-level code would fail by not deferencing the alias. Easy solution: a magical hidden read-only method that is used when casting to an interface that needs a non-alias!
+
+	-- automatic:
+	method Color color_hidden()
+		return color
+	end
+
+That's a bit of inside magic, but it's still acceptable. To make it less magic, that automatic method could be called `get_member` (so as to not conflict with the alias accessor called `member`), and be exposed by the compiler as a perfectly valid method, only it returns a non-alias.
+
+Writing
+-------
+
+The same issue exists for writing to members, real or fake. Here too, real members will have only alias methods, while fake members will be setter methods, and an interface that can use both will have to accept the most general one:
+
+	interface WritableColor
+		set_color(Color)
+	end
+
+And here too, we can have automatic wrappers made for real members:
+
+	-- automatic:
+	method set_color(Color value)
+		color = value
+	end
+
+For the setter, we don't even have a name conflict with the alias accessor method (`member` vs. `set_member`).
+
+Reading and writing
+-------------------
+
+If the interface describe a member that can be both written and read, we can simply combine both:
+
+	interface RWColored
+		Color color()
+		set_color(Color)
+	end
+
+and both objects with a real member or a fake one would work.
+
+What if we'd like to force the use of objects with real members, and aliases? After all, even if this is semantically equivalent, using this with a struct Color would mean copying a struct, doing stuff with it (including modifying it) and then copying it back entirely using the setter method. Even with objects, it's two dynamically dispatched method calls where it could be two direct read/writes from memory.
+
+Additionally, it might get annoying to have to write both getter and setter in an interface, if read-write is a common requirement. The straight-forward (and legal) idea is:
+
+	interface RWColored
+		alias Color color()
+	end
+
+But it does seem to go completely against the idea of generics, to restrict cool algorithms to real variables, when the entire paradigm of the language is to encapsulate members deep inside objects and allow procedural members to be used just the same way as real ones.
+
+(Note that "the same way" here means "by writing the same code", even though at low level it is of course translated to different instructions, which is exactly where generics would fail. The advantages of writing generic methods for aliases only versus set/get methods would come down to the previous discussion of having automatic template-like instanciation of generic code, which is an interesting prospect but largely out of scope for now).
+
+So even though we can't prevent coders to restrict their interface to alias methods, we can always facilitate the transparent use of real and fake members. For instance with something like:
+
+	interface Colored
+		Color color		-- OMG, is this a member in an interface? Wuut?
+	end
+
+This would be stricly equivalent to asking for `Color color()` and `set_color(Color)`, both of which could be automatically wrapped from the alias accessor of a real member.
+
+Naming convention
+-----------------
+
+Although we insisted from the very beginning that both the member and its getter method should be the same (because of the parentheses-less call), it creates an inelegant asymmetry:
+
+	Color color()
+	set_color(Color)
+
+Wouldn't it be much nicer to have:
+
+	Color get_color()
+	set_color(Color)
+
+And the alias method, which is really neither a getter nor a setter (these operations are done to the result of this method, the alias itself), could have the naked name?
+
+	alias Color color()
+
+In the end, a member would come with three free methods, filled in by the compiler:
+
+	object Foo
+		Bar bar
+
+		-- automatic:
+
+		alias Bar bar()
+		Bar get_bar()
+		set_bar(Bar)
+	end
+
+And therefore every object can be casted out-of-the-box to any generic that requires reading and/or writing of one of its members, whether by alias, or by individual methods. For consistency, any user-made alias accessor method (such as in wrappers) should come with the free setter and getter as well.
+
+	object Bar
+		method alias Foo some_foo()
+			-- ...
+		end
+	end
+
+	-- can also:
+
+	local f = bar.get_some_foo()
+	bar.set_some_foo(f)
+
+For consistency, the indexing methods should now be `Type get_index(args)` and `set_index(Type,args)`, with the alias one being `alias Type index(args)`.
+
+This is beautiful and utterly satisfying. Symmetry, elegance, consistency.

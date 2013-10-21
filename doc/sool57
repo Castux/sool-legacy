@@ -1,0 +1,286 @@
+Unified member access
+=====================
+
+State of sool
+-------------
+
+An early design decision in sool was that member access ans indexing operations were all method calls behind the scenes. On top of that, method call with no arguments can be written without parentheses, which makes it even look like member access:
+
+	foo = meh.bar	-- is really:
+	foo = meh.bar()
+
+At first we had the concept that member setting was also done through a method:
+
+	meh.bar = foo	-- is really:
+	meh.bar=(foo)
+
+where a method can end in `=` to signify it's a setter. Defining a member `Bar bar` asks the compiler to reserve some room in the memory layout of the object, and expose two accessor methods `Bar bar()` and `bar=(Bar)`.
+
+Indexing was done exactly in the same way:
+
+	foo = meh[4]	-- is really method T [](uint)
+	meh[5] = foo	-- is really method []=(uint,T)
+
+We realized later that this cause problems when dealing with structs (or "value classes") because getter methods such as these would return a copy of a member struct, since structs are treated a value types. As such, struct members and elements would be immutable.
+
+To solve this, we introduced the concept of "alias" (or in C++ terms, references). A method could return an alias of a variable, which can be used as left-value to modify the original variable, for instance change its value or call a method on it.
+
+This simplified things, as accessor methods could now be simply returning an alias, used both as right-value (immediately dereferenced) and left-value (as destination address for assignment):
+
+	object Foo
+		Bar bar
+
+		method alias Bar my_bar()
+			return bar
+		end
+	end
+
+This works fine, although it removes the possibility of having special setter methods that processes arguments before setting anything (the old `foo=(Foo)` kind).
+
+What would the others do?
+-------------------------
+
+Many languages have the concept of properties, that is pairs of methods that act as members. They typically have a separate syntax. In C#:
+	
+	class Foo
+	{
+		private int color;
+
+		public int Color 
+		{
+			get
+			{
+				return this.color;
+			}
+			set
+			{
+				this.color = value;
+			}
+		}
+	}
+
+Ruby has, like sool, pairs of `foo` and `foo=` methods. Objective-C 2.0 needs a `@property` keyword on the member, and then a `@synthetize` one on the implementation. ActionScript 3 has a `get` and `set` keyword to sneak in a function declaration for this purpose.
+
+All of these are explicit. D, this beautiful bastard, does what I had in mind for sool: implicit genius. Any method can be used as property, if the prototype matches.
+
+	class Foo
+	{
+		private int m_color;
+
+		public int color()
+		{
+			return m_color;
+		}
+
+		public void color(int value)
+		{
+			m_color = color;
+		}
+	}
+
+	auto foo = new Foo;
+	foo.color = 5;
+	auto blah = foo.color;
+
+In D 2.0, though, these methods have to be marked as `@property`, but sometimes a compiler switch lets you bypass this restriction.
+
+AngelScript has an interesting hybrid system:
+
+	class Obj
+	{
+		private int m_foo;
+		int foo
+		{
+			get const
+			{
+				return m_foo;
+			}
+			set
+			{
+				m_foo = value;
+			}
+		}
+	}
+
+	// so far, nothing new, but it actually generates this:
+
+	class Obj
+	{
+		private int m_foo;
+		void set_foo(int value)
+		{
+			m_foo = value;
+		}
+		int get_foo() const
+		{
+			return m_foo;
+		}
+	}
+
+Accessing `foo` is then converted simply to the `set_` and `get_` methods. Indexing works in a similar way, where calling global `blah[i]` is translated to `get_blah(i)` and `set_blah(i,value)`.
+
+I want it all!
+--------------
+
+If in sool we want all of:
+
+- transparent access of member as methods
+- aliases for modifying structs
+- setters that actually involve processing
+
+then we'll need a generic system where right-values can be:
+
+- methods that take void and return something (alias or not)
+
+and left-values can be:
+
+- methods that return an alias
+- methods that take a value
+
+So that the call `res = foo.bar` could be a call to:
+
+	Res Foo:bar()
+	alias Res Foo:bar(), then dereferencing
+
+and `foo.bar = val` could be a call to:
+	
+	alias Val Foo:bar(), then assignment
+	Foo:bar(Val value)
+
+This brings the immediate problem of ambiguity:
+
+	object Foo
+		method alias Bar bar()
+			-- do something
+		end
+
+		method bar(Bar value)
+		end
+	end
+
+	local foo = Foo
+	foo.bar = Bar	-- which is it? Does one have priority, or is it wrong to call this?
+
+Ambiguity is not lifted by forcing the setter to have a different name, like `bar=` or `set_bar`. We have to decide that, for instance, the alias method has precedence. A careful programer will not, anyway have 36 different accessors for his properties.
+
+Multiple assignments
+--------------------
+
+Let's also think about the neat feature of having multiple assignments in the same statement.
+
+	a,b = c,d
+
+This evaluates `c` and `d`, then assigns the results to `a` and `b`, whatever these are (variables, aliases, setter methods, etc.) This allows nifty swapping without having to write the temporaries. Also, in a language that allows functions to return multiple values, cool things like:
+
+	local a,b,c = foo.bar()
+
+In Lua, if a multiple value is in a list on the right side, it's truncated to its first result, so:
+
+	local a,b,c = foo(),5		-- where foo returns 2 values
+
+actually doesn't do what you'd expect. In sool, it would, so all the values would appear in the right side, and be assigned one by one on the left side.
+
+About the left side, could expressions be *multiple lvalues*?
+
+	foo.bar = 1,2,3
+	-- yes, easy:
+	foo.bar(1,2,3)		
+
+Or using aliases, if a `alias int, alias int, alias int bar()` method exists. We never thought about it, but why not. I'm thinking in particular about things like:
+
+	vec.xy = vec2.yz
+
+Instead of having to create a middle object:
+
+	value Vec3
+		method Vec2 xy()
+			return Vec2(x,y)
+		end
+
+		method xy=(Vec2 other)
+			x = other.x
+			y = other.y
+		end
+
+		-- etc
+	end
+
+you could simply pass values and do direct assignments using aliases:
+
+	value Vec3
+		method alias num, alias num xy()
+			return x,y
+		end
+
+		-- etc
+	end
+
+And of course still create middle objects where needed:
+
+	Vec2(vec.xy) 	-- calls constructor init(num x, num y)
+
+Wrapping it up
+--------------
+
+Right-values are never a problem. Expression `a.b(c,d,e)` is always a direct method call (even when arguments and even parentheses are absent). It can return a value, or an alias, and all is well.
+
+On the left side, we can have, in a generic form:
+
+	a.b(c,d,e) = f,g,h
+
+First we evaluate a.b(c,d,e). If it returns aliases, we gently add them to the lvalues of the assignment, and try to assign the rvalues. If it doesn't, we try `a.b(c,d,e,f,g,h)`. If it exist, we add dummy lvalues to the left expression and go on with our lives.
+
+The question of ambiguities remain. If the setter method has no specific name, it means that a method that takes say 5 values can be used in any of the following ways:
+
+	a.b = c,d,e,f,g
+	a.b() = c,d,e,f,g
+	a.b(c) = d,e,f,g
+	a.b(c,d) = e,f,g
+	a.b(c,d,e) = f,g
+	a.b(c,d,e,f) = g
+	a.b(c,d,e,f,g)
+
+Is it a problem? It might. Consider:
+
+	a.b(1,2), a2.b(1,2,3) = u,v,w,x,y,z
+
+How many rvalues will the first `a.b` eat? Does the compiler try to call `a.b(1,2)`, then `a.b(1,2,u,v,w,x,y,z)` failing both, or does it smartly match the setters to find that only `a.b(1,2,u,v,w)` exists, leaving the second call to be `a2.b(1,2,3,x,y)`, and one r-value hanging? Not very clear. But then again it would be so nice to have a procedural setter that takes several values:
+
+	foo.bounds = 10,20		-- checking that 10 < 20
+
+instead of:
+	foo.set_bounds(10,20)
+
+That especially helps to swap code but keep the same syntax in calling sites, if later you replace this by an unchecked setting with aliases, or vice-versa.
+
+Even without the left-arguments, and regardless of whether the setter has a specific name, we have ambiguity due to overloading:
+
+	object Foo
+		int x,y
+
+		method set_values(int x)
+			self.x = x
+		end
+
+		method set_values(int x, int y)
+			self.x = x
+			self.y = y
+		end
+	end
+
+	-- later
+
+	foo1.values, foo2.values = 1,2,3
+
+Is it `foo1.set_values(1,2); foo2.set_values(3)` or `foo1.set_values(1); foo2.set_values(2,3)`? The guessing of the correct setter works without ambiguity only if all the rvalues go to the one lvalue. Or will the first lvalue try to eat as many rvalues as possible, as a rule? It's also the responsability of the coder to not abuse the flexible systems set in place by the language. If need be, you can always add a few temporary locals.
+
+Conclusion
+----------
+
+Right-values have never been an issue: methods take arguments or not, and returns aliases or values, which add up as a flat list of rvalues.
+
+An expression `a.b(args)` (possibly with no args) as left-value is first evaluated as it is, and must return at least one alias. If that doesn't work, try calling: `a.set_b(args,rvalues)`. If it fails, remove the rvalues from the right until it matches or fails.
+
+As for indexing, an expression `a[args]` (again possibly with no args) is rewritten `a.index(args)`, and then the same rules apply: as is for rvalues, or as is as lvalue if it returns alias(es), or then rewritten `a.set_index(args,rvalues)`.
+
+The automatic accessor written by the compiler for members is one that takes no argument, and returns an alias.
